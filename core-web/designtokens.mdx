@@ -1,0 +1,404 @@
+---
+title: Core Design System
+description: LLM-readable token schema + usage rules
+---
+
+export const coreDesignSystem = {
+  "name": "Core Design System",
+  "mode": "Design System/Mode 1",
+  "colors": {
+    "Brand": {
+      "Primary": "#2E2E2D",
+      "Secondary": "#F4F3F1"
+    },
+    "Text": {
+      "Body": "#2E2E2D",
+      "Danger": "#EA6B6B",
+      "Dark": "#000000",
+      "Info": "#6EAFFF",
+      "Light": "#FFFFFF",
+      "Secondary": "#2E2E2DA8",
+      "Success": "#589F72",
+      "Tertiary": "#2E2E2D54",
+      "Warning": "#F0A442"
+    },
+    "Background": {
+      "Black": "#000000",
+      "DangerLight": "#FCF1F1",
+      "Dark": "#2E2E2D",
+      "Gray": "#F4F3F1",
+      "GrayDark": "#E5E7EB",
+      "InfoLight": "#F0F7FF",
+      "Light": "#FDFDFD",
+      "SuccessLight": "#DEFBE6",
+      "WarningLight": "#FDF4E7",
+      "White": "#FFFFFF"
+    },
+    "Border": {
+      "Dark": "#3D3D3C",
+      "Gray": "#E7E7E6",
+      "GrayDark": "#B1B0AF",
+      "Light": "#EAEAEA"
+    },
+    "Gray": {
+      "50": "#F4F3F1",
+      "100": "#E7E7E6",
+      "200": "#D1D1D0",
+      "300": "#B1B0AF",
+      "400": "#898887",
+      "500": "#6E6D6C",
+      "600": "#5E5D5C",
+      "700": "#504F4E",
+      "800": "#3D3D3C",
+      "900": "#2E2E2D"
+    },
+    "Red": {
+      "50": "#FCF1F1",
+      "100": "#F9E0E0",
+      "200": "#F3BCBC",
+      "300": "#EE9696",
+      "400": "#EA6B6B",
+      "500": "#DE3D3D",
+      "600": "#B32F2F",
+      "700": "#8A2222",
+      "800": "#631616",
+      "900": "#3E0A0A"
+    },
+    "Tan": {
+      "50": "#FDF5F2",
+      "100": "#FBEAE5",
+      "200": "#F7D6CA",
+      "300": "#F4C1AC",
+      "400": "#F1A885",
+      "500": "#EF925B",
+      "600": "#BE7040",
+      "700": "#90542F",
+      "800": "#62371D",
+      "900": "#371D0D"
+    },
+    "Yellow": {
+      "50": "#FDF4E7",
+      "100": "#FCE9D0",
+      "200": "#F8D2A0",
+      "300": "#F4BB71",
+      "400": "#F0A442",
+      "500": "#EF9629",
+      "600": "#D17A10",
+      "700": "#9C5B0C",
+      "800": "#683D08",
+      "900": "#341F04"
+    },
+    "Green": {
+      "50": "#E7FFEE",
+      "100": "#C8FBDA",
+      "200": "#78DA9C",
+      "300": "#67BC86",
+      "400": "#589F72",
+      "500": "#48835D",
+      "600": "#386849",
+      "700": "#2A4E36",
+      "800": "#1B3624",
+      "900": "#0D1F13"
+    },
+    "Blue": {
+      "50": "#F0F7FF",
+      "100": "#E0EEFF",
+      "300": "#A8CFFF",
+      "400": "#8ABEFF",
+      "500": "#6EAFFF",
+      "600": "#2486FF",
+      "700": "#0062DB",
+      "800": "#004294",
+      "900": "#002047"
+    },
+    "Blue 200": {
+      "": "#C7E0FF"
+    },
+    "Indigo": {
+      "50": "#F5F6FF",
+      "100": "#EBECFF",
+      "200": "#D1D5FF",
+      "300": "#BDC3FF",
+      "400": "#A8B0FF",
+      "500": "#919BFF",
+      "600": "#606EFB",
+      "700": "#4857F2",
+      "800": "#1D2EDA",
+      "900": "#0E166F"
+    },
+    "Slate": {
+      "50": "#EBEFF3",
+      "100": "#D4DBE4",
+      "200": "#ACBECD",
+      "300": "#809AB0",
+      "400": "#607E98",
+      "500": "#4B657E",
+      "600": "#3E5266",
+      "700": "#364655",
+      "800": "#313C49",
+      "900": "#1F2731"
+    },
+    "Kale": {
+      "50": "#E2E9E3",
+      "100": "#C7D3CA",
+      "200": "#A0B5A6",
+      "300": "#76917E",
+      "400": "#5A7864",
+      "500": "#415A4A",
+      "600": "#34483B",
+      "700": "#2B3A31",
+      "800": "#233028",
+      "900": "#131B16"
+    },
+    "Ocean": {
+      "50": "#EAF0F4",
+      "100": "#CCDDE3",
+      "200": "#A9C3D1",
+      "300": "#79A3B6",
+      "400": "#5A889D",
+      "500": "#466E83",
+      "600": "#3A596A",
+      "700": "#334C59",
+      "800": "#2E414C",
+      "900": "#1E2B33"
+    },
+    "Wist": {
+      "50": "#E8ECF0",
+      "100": "#D9DDE4",
+      "200": "#BDC6D2",
+      "300": "#ABB5C4",
+      "400": "#8792AA",
+      "500": "#767F9A",
+      "600": "#69708C",
+      "700": "#595E74",
+      "800": "#4A4E5E",
+      "900": "#30313B"
+    },
+    "base": {
+      "color": "#000000"
+    },
+    "Shadow": {
+      "Base.0.color": "#00000000",
+      "Base.1.color": "#00000000",
+      "Base.2.color": "#00000003",
+      "Base.3.color": "#00000005",
+      "Base.4.color": "#00000005"
+    },
+    "exercise": {
+      "": "linear-gradient(180deg, #0e166f 0%, #a8b0ff 100%)"
+    }
+  },
+  "spacing": {
+    "xs": 4,
+    "sm": 8,
+    "md": 16,
+    "lg": 24,
+    "xl": 32,
+    "xxl": 40
+  },
+  "radius": {
+    "sm": 8,
+    "md": 16,
+    "lg": 24,
+    "full": 999
+  },
+  "typography": {
+    "Title": {
+      "fontFamily": "Helvetica Neue",
+      "fontWeight": "Medium",
+      "lineHeight": "AUTO",
+      "fontSize": 32,
+      "letterSpacing": "0%",
+      "paragraphSpacing": 0,
+      "paragraphIndent": "0px",
+      "textCase": "none",
+      "textDecoration": "none"
+    },
+    "Heading1": {
+      "fontFamily": "Helvetica Neue",
+      "fontWeight": "Medium",
+      "lineHeight": "AUTO",
+      "fontSize": 24,
+      "letterSpacing": "0%",
+      "paragraphSpacing": 0,
+      "paragraphIndent": "0px",
+      "textCase": "none",
+      "textDecoration": "none"
+    },
+    "Heading2": {
+      "fontFamily": "Helvetica Neue",
+      "fontWeight": "Medium",
+      "lineHeight": "AUTO",
+      "fontSize": 20,
+      "letterSpacing": "0%",
+      "paragraphSpacing": 0,
+      "paragraphIndent": "0px",
+      "textCase": "none",
+      "textDecoration": "none"
+    },
+    "Heading3": {
+      "fontFamily": "Helvetica Neue",
+      "fontWeight": "Medium",
+      "lineHeight": "AUTO",
+      "fontSize": 16,
+      "letterSpacing": 0,
+      "paragraphSpacing": 0,
+      "paragraphIndent": "0px",
+      "textCase": "none",
+      "textDecoration": "none"
+    },
+    "Button": {
+      "fontFamily": "Helvetica Neue",
+      "fontWeight": "Regular",
+      "lineHeight": "AUTO",
+      "fontSize": 16,
+      "letterSpacing": 0,
+      "paragraphSpacing": 0,
+      "paragraphIndent": "0px",
+      "textCase": "none",
+      "textDecoration": "none"
+    },
+    "Body1 Bold": {
+      "fontFamily": "Helvetica Neue",
+      "fontWeight": "Medium",
+      "lineHeight": "AUTO",
+      "fontSize": 16,
+      "letterSpacing": 0,
+      "paragraphSpacing": 0,
+      "paragraphIndent": "0px",
+      "textCase": "none",
+      "textDecoration": "none"
+    },
+    "Body1": {
+      "fontFamily": "Inter",
+      "fontWeight": "Regular",
+      "lineHeight": "AUTO",
+      "fontSize": 16,
+      "letterSpacing": "0%",
+      "paragraphSpacing": 0,
+      "paragraphIndent": "0px",
+      "textCase": "none",
+      "textDecoration": "none"
+    },
+    "Body2 Bold": {
+      "fontFamily": "Helvetica Neue",
+      "fontWeight": "Medium",
+      "lineHeight": "AUTO",
+      "fontSize": 14,
+      "letterSpacing": 0,
+      "paragraphSpacing": 0,
+      "paragraphIndent": "0px",
+      "textCase": "none",
+      "textDecoration": "none"
+    },
+    "Body2": {
+      "fontFamily": "Helvetica Neue",
+      "fontWeight": "Regular",
+      "lineHeight": "AUTO",
+      "fontSize": 14,
+      "letterSpacing": "0%",
+      "paragraphSpacing": 0,
+      "paragraphIndent": "0px",
+      "textCase": "none",
+      "textDecoration": "none"
+    },
+    "Caption Bold": {
+      "fontFamily": "Helvetica Neue",
+      "fontWeight": "Medium",
+      "lineHeight": "AUTO",
+      "fontSize": 12,
+      "letterSpacing": 0,
+      "paragraphSpacing": 0,
+      "paragraphIndent": "0px",
+      "textCase": "none",
+      "textDecoration": "none"
+    },
+    "Caption": {
+      "fontFamily": "Helvetica Neue",
+      "fontWeight": "Regular",
+      "lineHeight": "AUTO",
+      "fontSize": 12,
+      "letterSpacing": 0,
+      "paragraphSpacing": 0,
+      "paragraphIndent": "0px",
+      "textCase": "none",
+      "textDecoration": "none"
+    },
+    "Footnote": {
+      "fontFamily": "Chivo Mono",
+      "fontWeight": "Regular",
+      "lineHeight": "AUTO",
+      "fontSize": 10,
+      "letterSpacing": "-0.5%",
+      "paragraphSpacing": 0,
+      "paragraphIndent": "0px",
+      "textCase": "uppercase",
+      "textDecoration": "none"
+    },
+    "Mono 2 Bold": {
+      "fontFamily": "ABC Favorit Mono Unlicensed Trial",
+      "fontWeight": "Medium",
+      "lineHeight": "AUTO",
+      "fontSize": 14,
+      "letterSpacing": 0,
+      "paragraphSpacing": 0,
+      "paragraphIndent": "0px",
+      "textCase": "none",
+      "textDecoration": "none"
+    },
+    "Mono 2": {
+      "fontFamily": "ABC Favorit Mono Unlicensed Trial",
+      "fontWeight": "Regular",
+      "lineHeight": "AUTO",
+      "fontSize": 14,
+      "letterSpacing": "0%",
+      "paragraphSpacing": 0,
+      "paragraphIndent": "0px",
+      "textCase": "none",
+      "textDecoration": "none"
+    },
+    "Icon": {
+      "fontFamily": "SF Pro",
+      "fontWeight": "Medium",
+      "lineHeight": "AUTO",
+      "fontSize": 18,
+      "letterSpacing": 0,
+      "paragraphSpacing": 0,
+      "paragraphIndent": "0px",
+      "textCase": "none",
+      "textDecoration": "none"
+    }
+  },
+  "components": {
+    "Button": {
+      "layout": {
+        "display": "flex",
+        "width": "250px",
+        "height": "48px",
+        "padding": "0 16px",
+        "justify-content": "center",
+        "align-items": "center",
+        "gap": "10px"
+      },
+      "style": {
+        "borderRadius": "100px",
+        "variants": {
+          "primary": { "background": "#2E2E2D", "text": "#FFFFFF" },
+          "secondary": { "background": "#F4F3F1", "text": "#FFFFFF" }
+        }
+      }
+    }
+  }
+};
+
+# Core Design System (LLM Rules)
+
+## Hard rules
+1. Never invent values: use `coreDesignSystem.colors`, `spacing`, `radius`, `typography`.
+2. Choose text/background colors by **semantic intent**, not by vibe.
+3. Use only token spacing (`xs/sm/md/lg/xl/xxl`) and radius (`sm/md/lg/full`).
+4. Typography must use the named styles in `coreDesignSystem.typography`.
+
+## Notes
+- Gradient tokens are allowed only where explicitly defined (e.g., `exercise`).
+- Shadow colors include 8-digit hex with alpha.

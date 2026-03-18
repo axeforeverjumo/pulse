@@ -1,0 +1,576 @@
+/* Core Design System Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Chivo+Mono:wght@400;500;600&display=swap');
+
+@import "tailwindcss";
+
+/* Use text-wrap: pretty to avoid orphaned words at end of paragraphs */
+p {
+  text-wrap: pretty;
+}
+
+/* Landing page smooth scroll */
+.landing-scroll-root {
+  scroll-behavior: smooth;
+}
+
+/* Core Design System - Tailwind Theme */
+@theme {
+  /* Brand */
+  --color-brand-primary: #000000;
+  --color-brand-secondary: #F6F5F3;
+
+  /* Text */
+  --color-text-dark: #000000;
+  --color-text-body: #000000;
+  --color-text-secondary: #000000a8;
+  --color-text-tertiary: #00000054;
+  --color-text-light: #FFFFFF;
+  --color-text-info: #6EAFFF;
+  --color-text-success: #589F72;
+  --color-text-danger: #EA6B6B;
+  --color-text-warning: #F0A442;
+
+  /* Background */
+  --color-bg-info-light: #F0F7FF;
+  --color-bg-success-light: #DEFBE6;
+  --color-bg-danger-light: #FCF1F1;
+  --color-bg-warning-light: #FDF4E7;
+  --color-bg-white: #FFFFFF;
+  --color-bg-light: #FDFDFD;
+  --color-bg-gray: #F4F3F1;
+  --color-bg-gray-dark: #E5E7EB;
+  --color-bg-shell: #F6F6F6;
+  --color-bg-main-sidebar: #E8EBF0;
+  --color-bg-mini-app: #EAEAEA;
+  --color-bg-dark: #000000;
+  --color-bg-black: #000000;
+
+  /* Border */
+  --color-border-light: #EAEAEA;
+  --color-border-gray: #E7E7E6;
+  --color-border-gray-dark: #B1B0AF;
+  --color-border-dark: #3D3D3C;
+
+  /* Gray scale */
+  --color-gray-50: #F4F3F1;
+  --color-gray-100: #E7E7E6;
+  --color-gray-200: #D1D1D0;
+  --color-gray-300: #B1B0AF;
+  --color-gray-400: #898887;
+  --color-gray-500: #6E6D6C;
+  --color-gray-600: #5E5D5C;
+  --color-gray-700: #504F4E;
+  --color-gray-800: #3D3D3C;
+  --color-gray-900: #000000;
+
+  /* Red scale */
+  --color-red-50: #FCF1F1;
+  --color-red-100: #F9E0E0;
+  --color-red-200: #F3BCBC;
+  --color-red-300: #EE9696;
+  --color-red-400: #EA6B6B;
+  --color-red-500: #DE3D3D;
+  --color-red-600: #B32F2F;
+  --color-red-700: #8A2222;
+  --color-red-800: #631616;
+  --color-red-900: #3E0A0A;
+
+  /* Yellow scale */
+  --color-yellow-50: #FDF4E7;
+  --color-yellow-100: #FCE9D0;
+  --color-yellow-200: #F8D2A0;
+  --color-yellow-300: #F4BB71;
+  --color-yellow-400: #F0A442;
+  --color-yellow-500: #EF9629;
+  --color-yellow-600: #D17A10;
+  --color-yellow-700: #9C5B0C;
+  --color-yellow-800: #683D08;
+  --color-yellow-900: #341F04;
+
+  /* Green scale */
+  --color-green-50: #E7FFEE;
+  --color-green-100: #C8FBDA;
+  --color-green-200: #78DA9C;
+  --color-green-300: #67BC86;
+  --color-green-400: #589F72;
+  --color-green-500: #48835D;
+  --color-green-600: #386849;
+  --color-green-700: #2A4E36;
+  --color-green-800: #1B3624;
+  --color-green-900: #0D1F13;
+
+  /* Blue scale */
+  --color-blue-50: #F0F7FF;
+  --color-blue-100: #E0EEFF;
+  --color-blue-200: #C7E0FF;
+  --color-blue-300: #A8CFFF;
+  --color-blue-400: #8ABEFF;
+  --color-blue-500: #6EAFFF;
+  --color-blue-600: #2486FF;
+  --color-blue-700: #0062DB;
+  --color-blue-800: #004294;
+  --color-blue-900: #002047;
+
+  /* Indigo scale */
+  --color-indigo-50: #F5F6FF;
+  --color-indigo-100: #EBECFF;
+  --color-indigo-200: #D1D5FF;
+  --color-indigo-300: #BDC3FF;
+  --color-indigo-400: #A8B0FF;
+  --color-indigo-500: #919BFF;
+  --color-indigo-600: #606EFB;
+  --color-indigo-700: #4857F2;
+  --color-indigo-800: #1D2EDA;
+  --color-indigo-900: #0E166F;
+
+  /* Fonts - system stack */
+  --font-sans: system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-display: system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  --font-label: ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+
+  /* Spacing scale */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-xxl: 40px;
+
+  /* Border radius - Tailwind defaults */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-3xl: 24px;
+  --radius-full: 999px;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  position: fixed;
+  font-family: var(--font-sans);
+  color: var(--color-text-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
+#root {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+/* Core Design System - Button Base Styles */
+.btn {
+  height: 48px;
+  padding-left: 16px;
+  padding-right: 16px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s ease;
+  cursor: pointer;
+  border: none;
+}
+
+.btn:hover {
+  opacity: 0.9;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background-color: var(--color-brand-primary);
+  color: var(--color-text-light);
+}
+
+.btn-secondary {
+  background-color: var(--color-bg-gray);
+  color: var(--color-text-body);
+}
+
+/* Typography utilities */
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+.font-label {
+  font-family: var(--font-label);
+}
+
+/* Footnote style - always uppercase per design guide */
+.text-footnote {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* TipTap Editor Styles */
+.tiptap {
+  outline: none;
+}
+
+
+.tiptap p.is-editor-empty:first-child::before {
+  color: var(--color-text-tertiary);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.tiptap h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0.5em 0 0.25em;
+}
+
+.tiptap h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0.5em 0 0.25em;
+}
+
+.tiptap h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0.5em 0 0.25em;
+}
+
+.tiptap p {
+  margin: 0.5em 0;
+  line-height: 1.5;
+}
+
+.tiptap ul {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+  list-style-type: disc;
+}
+
+.tiptap ol {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+  list-style-type: decimal;
+}
+
+.tiptap li {
+  margin: 0.25em 0;
+}
+
+.tiptap blockquote {
+  border-left: 3px solid var(--color-border-gray-dark);
+  padding-left: 1em;
+  margin: 0.5em 0;
+  color: var(--color-text-secondary);
+}
+
+.tiptap code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: var(--color-bg-gray);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+}
+
+.tiptap pre {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: var(--color-bg-gray);
+  padding: 0.75em 1em;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+
+.tiptap pre code {
+  background: none;
+  padding: 0;
+}
+
+.tiptap a {
+  color: var(--color-blue-600);
+  text-decoration: underline;
+}
+
+.tiptap hr {
+  border: none;
+  border-top: 1px solid var(--color-border-gray);
+  margin: 1em 0;
+}
+
+.tiptap img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 0.5em 0;
+}
+
+/* Tables */
+.tiptap table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.75em 0;
+  overflow: hidden;
+  table-layout: fixed;
+}
+
+.tiptap table td,
+.tiptap table th {
+  border: 1px solid var(--color-border-gray);
+  padding: 0.5em 0.75em;
+  vertical-align: top;
+  position: relative;
+  min-width: 80px;
+}
+
+.tiptap table th {
+  font-weight: 600;
+  background: var(--color-bg-gray);
+  text-align: left;
+}
+
+.tiptap table td > *,
+.tiptap table th > * {
+  margin: 0;
+}
+
+/* Selected cell highlight */
+.tiptap table .selectedCell {
+  background: color-mix(in srgb, var(--color-blue-600) 10%, transparent);
+}
+
+/* Column resize handle */
+.tiptap .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px;
+  width: 4px;
+  background: var(--color-blue-600);
+  pointer-events: none;
+}
+
+.tiptap.resize-cursor {
+  cursor: col-resize;
+}
+
+/* Task lists */
+.tiptap ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+  margin: 0.5em 0;
+}
+
+.tiptap ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+  margin: 0.25em 0;
+}
+
+.tiptap ul[data-type="taskList"] li > label {
+  flex-shrink: 0;
+  margin-top: 0.25em;
+  user-select: none;
+}
+
+.tiptap ul[data-type="taskList"] li > label input[type="checkbox"] {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--color-border-gray-dark);
+  border-radius: 3px;
+  cursor: pointer;
+  display: block;
+  transition: all 0.15s ease;
+}
+
+.tiptap ul[data-type="taskList"] li > label input[type="checkbox"]:checked {
+  background: var(--color-blue-600);
+  border-color: var(--color-blue-600);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3E%3C/svg%3E");
+}
+
+.tiptap ul[data-type="taskList"] li > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.tiptap ul[data-type="taskList"] li[data-checked="true"] > div {
+  text-decoration: line-through;
+  color: var(--color-text-tertiary);
+}
+
+/* Nested task lists */
+.tiptap ul[data-type="taskList"] ul[data-type="taskList"] {
+  margin-left: 1.5em;
+}
+
+/* Highlight */
+.tiptap mark {
+  background-color: #fef08a;
+  border-radius: 2px;
+  padding: 0.1em 0.15em;
+  box-decoration-break: clone;
+}
+
+/* Underline */
+.tiptap u {
+  text-decoration: underline;
+}
+
+/* Rendered tiptap content in messages */
+.tiptap-rendered p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.tiptap-rendered p + p {
+  margin-top: 0.25em;
+}
+
+.tiptap-rendered strong {
+  font-weight: 700;
+}
+
+.tiptap-rendered em {
+  font-style: italic;
+}
+
+.tiptap-rendered u {
+  text-decoration: underline;
+}
+
+.tiptap-rendered s {
+  text-decoration: line-through;
+}
+
+.tiptap-rendered code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: var(--color-bg-gray);
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+}
+
+.tiptap-rendered pre {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: var(--color-bg-gray);
+  padding: 0.5em 0.75em;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0.25em 0;
+}
+
+.tiptap-rendered pre code {
+  background: none;
+  padding: 0;
+}
+
+.tiptap-rendered ul {
+  padding-left: 1.25em;
+  margin: 0.25em 0;
+  list-style-type: disc;
+}
+
+.tiptap-rendered ol {
+  padding-left: 1.25em;
+  margin: 0.25em 0;
+  list-style-type: decimal;
+}
+
+.tiptap-rendered li {
+  margin: 0.1em 0;
+}
+
+.tiptap-rendered blockquote {
+  border-left: 3px solid var(--color-border-gray-dark);
+  padding-left: 0.75em;
+  margin: 0.25em 0;
+  color: var(--color-text-secondary);
+}
+
+.tiptap-rendered a {
+  color: var(--color-blue-600);
+  text-decoration: underline;
+}
+
+.mention,
+.tiptap-rendered .mention {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: #e5f7fd;
+  color: #1768a5;
+  border-radius: 6px;
+  padding: 0 5px;
+  font-weight: 500;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.mention:hover,
+.tiptap-rendered .mention:hover {
+  background: #cceef8;
+}
+
+/* Sonner toast animations - slide in from right */
+[data-sonner-toaster][data-x-position="right"] [data-sonner-toast] {
+  --normal-translate-x: 0;
+  animation: toast-slide-in-right 0.3s ease-out forwards;
+}
+
+[data-sonner-toaster][data-x-position="right"] [data-sonner-toast][data-removed="true"] {
+  animation: toast-slide-out-right 0.2s ease-in forwards;
+}
+
+@keyframes toast-slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(var(--normal-translate-x));
+  }
+}
+
+@keyframes toast-slide-out-right {
+  from {
+    opacity: 1;
+    transform: translateX(var(--normal-translate-x));
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}

@@ -1,0 +1,17 @@
+name = "core-image-proxy"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+[images]
+binding = "IMAGES"
+
+[[r2_buckets]]
+binding = "FILES_BUCKET"
+bucket_name = "core-os-files"
+preview_bucket_name = "core-os-files"
+remote = true
+
+[vars]
+ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:3000"
+MAX_AGE = "604800"
+BROWSER_MAX_AGE = "604800"

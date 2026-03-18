@@ -1,0 +1,50 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "index.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "index.py"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/incremental-sync",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/renew-watches",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/setup-missing-watches",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/daily-verification",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/analyze-emails",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-orphaned-uploads",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-orphaned-chat-attachments",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/agent-health",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}
+

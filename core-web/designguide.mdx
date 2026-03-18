@@ -1,0 +1,219 @@
+---
+title: Core Design System — Human Guide
+description: How to design with Core
+---
+
+# Core Design System  
+*A calm, neutral, premium UI language*
+
+This guide explains **how to use the Core Design System in practice**.  
+It is written for humans first — designers, engineers, founders — but remains structured and explicit so an LLM can also follow it reliably.
+
+---
+
+## 1. Core Design Principles
+
+Core is designed to feel:
+
+- **Quiet** — nothing shouts
+- **Intentional** — every choice has a reason
+- **Premium** — restraint over decoration
+- **Editorial** — layouts feel composed, not “UI-ish”
+
+If something feels flashy, trendy, or decorative, it is probably **wrong for Core**.
+
+---
+
+## 2. Color: How to Think About It
+
+### 2.1 Brand Colors
+
+**Brand Primary (`#2E2E2D`)**
+- The most important color in the system
+- Used for:
+  - Primary buttons
+  - Key actions
+  - Anchoring elements that represent “Core itself”
+
+**Brand Secondary (`#F4F3F1`)**
+- A soft neutral
+- Used for:
+  - Cards
+  - Panels
+  - Secondary surfaces
+
+**Guideline:**  
+> If a screen had only one strong color, it should be Brand Primary.
+
+---
+
+### 2.2 Text Colors (Semantic First)
+
+Text color is chosen by **meaning**, not aesthetics.
+
+- **Body Text (`#2E2E2D`)**  
+  Default reading text
+
+- **Dark (`#000000`)**  
+  Headlines or high-contrast moments
+
+- **Secondary (`#2E2E2DA8`)**  
+  Supporting information, descriptions
+
+- **Tertiary (`#2E2E2D54`)**  
+  Metadata, timestamps, hints
+
+- **Light (`#FFFFFF`)**  
+  Text on dark backgrounds
+
+- **Success / Warning / Danger / Info**  
+  Used only when the *meaning* requires it  
+  (never just for color)
+
+**Rule:**  
+> If you’re choosing a color because it “looks nice”, stop and reassess.
+
+---
+
+### 2.3 Backgrounds & Surfaces
+
+Core uses **layering**, not contrast.
+
+- White (`#FFFFFF`) → main canvas
+- Light (`#FDFDFD`) → subtle separation
+- Gray (`#F4F3F1`) → cards, panels
+- Dark (`#2E2E2D`) → inverted sections
+
+Semantic tints (Success / Warning / Danger / Info) are:
+- Soft
+- Low-contrast
+- Never dominant
+
+---
+
+## 3. Spacing & Layout
+
+Spacing is one of Core’s strongest signals of quality.
+
+### Spacing Scale
+
+Only use these values:
+
+- `4` (xs)
+- `8` (sm)
+- `16` (md)
+- `24` (lg)
+- `32` (xl)
+- `40` (xxl)
+
+**Guideline:**
+- Smaller spacing = tighter, informational
+- Larger spacing = calm, important
+
+If something feels crowded, increase spacing before changing color or typography.
+
+---
+
+## 4. Shape & Radius
+
+Core prefers **soft but controlled rounding**.
+
+- Small radius (8): inputs, subtle UI
+- Medium radius (16): cards, modals
+- Large radius (24): large surfaces
+- Full (999): pills, buttons
+
+Buttons are **always pill-shaped**.
+
+---
+
+## 5. Typography: Editorial Hierarchy
+
+Typography should feel **composed**, not busy.
+
+### Fonts
+
+- **Helvetica Neue** → headings, UI labels
+- **Chivo / Favorit Mono** → technical or system text
+- **SF Pro** → icons only
+
+Do not mix fonts inside the same text block.
+
+---
+
+### Text Styles (How to Use Them)
+
+- **Title**  
+  One per screen. Sets the tone.
+
+- **Heading 1–3**  
+  Used sparingly. Create structure, not noise.
+
+- **Body 1**  
+  Primary reading text.
+
+- **Body 2**  
+  Supporting text, descriptions.
+
+- **Caption**  
+  Labels, metadata, helper text.
+
+- **Footnote**  
+  System-level, technical, or low-attention content.  
+  Always uppercase.
+
+**Guideline:**  
+> If everything is bold, nothing is important.
+
+---
+
+## 6. Buttons
+
+Buttons are deliberately simple.
+
+### Structure
+- Height: 48px
+- Horizontal padding: 16px
+- Fully rounded
+- Centered content
+
+### Variants
+
+**Primary Button**
+- Background: Brand Primary
+- Text: White
+- Use for:
+  - Main actions
+  - “Continue”, “Save”, “Create”
+
+**Secondary Button**
+- Background: Background Gray
+- Text: White
+- Use for:
+  - Less important actions
+  - Supporting choices
+
+**Rule:**  
+> Never place two primary buttons next to each other.
+
+---
+
+## 7. Shadows & Elevation
+
+Shadows are:
+- Soft
+- Vertical
+- Subtle
+
+They exist only to express **hierarchy**, not decoration.
+
+If you’re unsure whether something needs a shadow, it probably doesn’t.
+
+---
+
+## 8. Gradients
+
+Gradients are **rare**.
+
+The only standard gradient is used for **exercise / activity contexts**:
+
