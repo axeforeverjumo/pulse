@@ -238,7 +238,7 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="w-full text-lg font-medium text-gray-900 bg-transparent border-0 p-0 focus:outline-none focus:ring-0 placeholder:text-gray-300"
-                placeholder="T√≠tulo de tarjeta"
+                placeholder="TÌtulo de tarjeta"
                 autoFocus
               />
             ) : (
@@ -363,7 +363,7 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
                   <DatePicker
                     value={dueDate}
                     onChange={setDueDate}
-                    placeholder="Sin fecha l√≠mite"
+                    placeholder="Sin fecha lÌmite"
                     buttonClassName="!px-3 hover:bg-gray-50/60"
                   />
                 </div>
@@ -404,7 +404,7 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
               <div className="border-t border-gray-100 pt-5">
                 <div className="flex items-center gap-2 mb-4">
                   <PhotoIcon className="w-4 h-4 text-gray-400" />
-                  <span className="text-[12px] font-medium text-gray-500">Im√°genes</span>
+                  <span className="text-[12px] font-medium text-gray-500">Im·genes</span>
                 </div>
                 <input
                   ref={imageInputRef}
@@ -482,7 +482,7 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
                   {card.description}
                 </p>
               ) : (
-                <p className="text-[13px] text-gray-400 italic">Sin descripci√≥n</p>
+                <p className="text-[13px] text-gray-400 italic">Sin descripciÛn</p>
               )}
 
               {/* Labels */}

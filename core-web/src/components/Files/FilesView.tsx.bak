@@ -354,7 +354,7 @@ function NestedFolderContents({
                       />
                     ) : (
                       <span className="flex-1 text-left truncate">
-                        {item.title || "Sin tÃ­tulo"}
+                        {item.title || "Sin título"}
                       </span>
                     )}
                     {/* Three-dot menu + count overlay in same position */}
@@ -369,7 +369,7 @@ function NestedFolderContents({
                           setOpenMenuId(openMenuId === item.id ? null : item.id);
                         }}
                         className="p-0.5 rounded text-text-tertiary hover:text-text-body hover:bg-bg-gray-light transition-colors opacity-0 group-hover:opacity-100"
-                        title="MÃ¡s opciones"
+                        title="Más opciones"
                       >
                         <EllipsisHorizontalIcon className="w-3 h-3" />
                       </button>
@@ -468,12 +468,12 @@ function NestedFolderContents({
                     onBlur={() => onRenameSubmit(item.id)}
                     onClick={(e) => e.stopPropagation()}
                     autoFocus
-                    placeholder="Sin tÃ­tulo"
+                    placeholder="Sin título"
                     className="flex-1 text-sm bg-transparent px-1 py-0.5 focus:outline-none placeholder:text-text-tertiary"
                   />
                 ) : (
                   <span className="flex-1 text-left truncate">
-                    {item.title || "Sin tÃ­tulo"}
+                    {item.title || "Sin título"}
                   </span>
                 )}
                 {/* Three-dot menu */}
@@ -932,7 +932,7 @@ export default function FilesView() {
   // Track notes awaiting content hydration after loading stripped persisted cache
   const awaitingHydrationNoteIdRef = useRef<string | null>(null);
   const [isHydratingNote, setIsHydratingNote] = useState(false);
-  // Track when we're in the process de creating a new note (to skip loading "Sin tÃ­tulo")
+  // Track when we're in the process de creating a new note (to skip loading "Sin título")
   const isCreatingNoteRef = useRef(false);
   const [isCreatingNote, setIsCreatingNote] = useState(false);
   const [shouldFocusTitle, setShouldFocusTitle] = useState(false);
@@ -1846,9 +1846,9 @@ export default function FilesView() {
             size={48}
             className="mx-auto mb-4 text-text-tertiary"
           />
-          <p className="text-text-secondary">AplicaciÃ³n de archivos no configurada</p>
+          <p className="text-text-secondary">Aplicación de archivos no configurada</p>
           <p className="text-sm text-text-tertiary mt-1">
-            AÃ±ade una aplicaciÃ³n de archivos a tu espacio de trabajo para empezar
+            Añade una aplicación de archivos a tu espacio de trabajo para empezar
           </p>
         </div>
       </div>
@@ -2088,7 +2088,7 @@ export default function FilesView() {
                       className="mx-auto mb-2 opacity-50"
                     />
                     <p className="text-sm">
-                      {searchQuery ? "No matches" : "Sin notas aÃºn"}
+                      {searchQuery ? "No matches" : "Sin notas aún"}
                     </p>
                   </div>
                 </motion.div>
@@ -2221,7 +2221,7 @@ export default function FilesView() {
                                             setOpenItemMenuId(openItemMenuId === item.id ? null : item.id);
                                           }}
                                           className="p-0.5 rounded text-text-tertiary hover:text-text-body hover:bg-bg-gray-light transition-colors opacity-0 group-hover:opacity-100"
-                                          title="MÃ¡s opciones"
+                                          title="Más opciones"
                                         >
                                           <EllipsisHorizontalIcon className="w-3 h-3" />
                                         </button>
@@ -2281,7 +2281,7 @@ export default function FilesView() {
                                     />
                                   ) : (
                                     <span className="flex-1 text-left truncate">
-                                      {item.title || "Sin tÃ­tulo"}
+                                      {item.title || "Sin título"}
                                     </span>
                                   )}
                                   {editingItemId !== item.id && (
@@ -2432,7 +2432,7 @@ export default function FilesView() {
                         ) : (
                           <span className="shrink-0">{getFileIcon(activeDragItem, "w-4 h-4")}</span>
                         )}
-                        <span className="truncate">{activeDragItem.title || "Sin tÃ­tulo"}</span>
+                        <span className="truncate">{activeDragItem.title || "Sin título"}</span>
                       </div>
                     )}
                   </DragOverlay>
@@ -2479,7 +2479,7 @@ export default function FilesView() {
               ) : sharedFileItems.length === 0 ? (
                 <div className="p-6 text-center text-text-tertiary">
                   <UsersIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">Nada compartido contigo aÃºn</p>
+                  <p className="text-sm">Nada compartido contigo aún</p>
                 </div>
               ) : (
                 <div className="px-2 space-y-0.5">
@@ -2700,7 +2700,7 @@ export default function FilesView() {
                         }
                       }}
                       className={`w-full text-[28px] font-semibold text-text-body bg-transparent border-0 focus:outline-none placeholder:text-text-tertiary resize-none overflow-hidden text-balance ${!isNoteEditable ? 'cursor-default' : ''}`}
-                      placeholder="Sin tÃ­tulo"
+                      placeholder="Sin título"
                       style={{ height: 'auto' }}
                     />
                   </div>
@@ -2999,7 +2999,7 @@ export default function FilesView() {
             ? "Eliminar carpeta"
             : "Eliminar nota"
         }
-        message={`Â¿EstÃ¡s seguro de que quieres eliminar "${deleteTarget?.title || "Sin tÃ­tulo"}"? This action no se puede deshacer.`}
+        message={`¿Estás seguro de que quieres eliminar "${deleteTarget?.title || "Sin título"}"? This action no se puede deshacer.`}
         confirmLabel="Eliminar"
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteTarget(null)}
@@ -3032,7 +3032,7 @@ export default function FilesView() {
           const url = URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = url;
-          a.download = `${noteTitle || "Sin tÃ­tulo"}.md`;
+          a.download = `${noteTitle || "Sin título"}.md`;
           a.click();
           URL.revokeObjectURL(url);
         }}

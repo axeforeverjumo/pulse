@@ -58,7 +58,7 @@ function CodeBlock({ language, children }: { language: string | undefined; child
           ) : (
             <>
               <DocumentDuplicateIcon className="w-3.5 h-3.5" />
-              <span>Copiar cÃ³digo</span>
+              <span>Copiar código</span>
             </>
           )}
         </button>

@@ -252,7 +252,7 @@ export function NoteToolbar({
         <ToolbarButton
           onAction={() => editor.chain().focus().toggleBulletList().run()}
           isActive={editor.isActive('bulletList')}
-          title="Lista con viñetas"
+          title="Lista con vi�etas"
         >
           <Icon icon={List} size={16} />
         </ToolbarButton>
@@ -274,7 +274,7 @@ export function NoteToolbar({
         <ToolbarButton
           onAction={() => editor.chain().focus().toggleCode().run()}
           isActive={editor.isActive('code')}
-          title="Código"
+          title="C�digo"
         >
           <Icon icon={Code} size={16} />
         </ToolbarButton>
@@ -545,8 +545,8 @@ function TableFloatingToolbar({ editor }: { editor: Editor }) {
       {btn('+ Row ↑', 'Add row above', () => editor.chain().focus().addRowBefore().run())}
       {btn('+ Row ↓', 'Add row below', () => editor.chain().focus().addRowAfter().run())}
       {divider}
-      {btn('+ Col ←', 'Añadir columna left', () => editor.chain().focus().addColumnBefore().run())}
-      {btn('+ Col →', 'Añadir columna right', () => editor.chain().focus().addColumnAfter().run())}
+      {btn('+ Col ←', 'A�adir columna left', () => editor.chain().focus().addColumnBefore().run())}
+      {btn('+ Col →', 'A�adir columna right', () => editor.chain().focus().addColumnAfter().run())}
       {divider}
       {btn('− Row', 'Delete row', () => editor.chain().focus().deleteRow().run())}
       {btn('− Col', 'Eliminar columna', () => editor.chain().focus().deleteColumn().run())}

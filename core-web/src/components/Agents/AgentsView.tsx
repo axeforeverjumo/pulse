@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, type FormEvent } from "react";
 import { useParams } from "react-router-dom";
-import { Brain, Send, ArrowLeft, Loader2 } from "lucide-react";
+import { Brain, Send, ArrowLeft, Loader2, Users, Building2 } from "lucide-react";
 import { Icon } from "../ui/Icon";
 import { api } from "../../api/client";
 import { SIDEBAR } from "../../lib/sidebar";
@@ -17,6 +17,7 @@ interface OpenClawAgent {
   category: string;
   model: string;
   tools: string[];
+  avatar_url?: string;
 }
 
 interface ChatMessage {
@@ -51,6 +52,84 @@ async function sendChatMessage(
 }
 
 /* ------------------------------------------------------------------ */
+/*  Avatar component                                                   */
+/* ------------------------------------------------------------------ */
+
+function AgentAvatar({
+  agent,
+  size = "md",
+}: {
+  agent: OpenClawAgent;
+  size?: "sm" | "md" | "lg";
+}) {
+  const sizeClasses = {
+    sm: "w-7 h-7 text-xs",
+    md: "w-8 h-8 text-sm",
+    lg: "w-12 h-12 text-lg",
+  };
+  const initials = agent.name.charAt(0).toUpperCase();
+
+  if (agent.avatar_url) {
+    return (
+      <img
+        src={agent.avatar_url}
+        alt={agent.name}
+        className={`${sizeClasses[size]} rounded-full shrink-0 object-cover`}
+      />
+    );
+  }
+
+  return (
+    <div
+      className={`${sizeClasses[size]} rounded-full shrink-0 flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold`}
+    >
+      {initials}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Tab bar component                                                  */
+/* ------------------------------------------------------------------ */
+
+function SidebarTabBar({
+  activeTab,
+  onTabChange,
+}: {
+  activeTab: string;
+  onTabChange: (tab: "agentes" | "oficina") => void;
+}) {
+  return (
+    <div className="px-2 pt-2 pb-1 shrink-0">
+      <div className="flex gap-1 bg-black/5 rounded-lg p-0.5">
+        <button
+          onClick={() => onTabChange("agentes")}
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+            activeTab === "agentes"
+              ? "bg-white text-gray-900 shadow-sm"
+              : "text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <Icon icon={Users} size={13} />
+          Agentes
+        </button>
+        <button
+          onClick={() => onTabChange("oficina")}
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+            activeTab === "oficina"
+              ? "bg-white text-gray-900 shadow-sm"
+              : "text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <Icon icon={Building2} size={13} />
+          Oficina
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Tier badge                                                         */
 /* ------------------------------------------------------------------ */
 
@@ -82,7 +161,6 @@ function AgentCard({
   selected: boolean;
   onClick: () => void;
 }) {
-  const initials = agent.name.charAt(0).toUpperCase();
   return (
     <button
       onClick={onClick}
@@ -91,10 +169,7 @@ function AgentCard({
       }`}
     >
       <div className="flex items-start gap-2.5">
-        {/* Avatar */}
-        <div className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-sm font-bold">
-          {initials}
-        </div>
+        <AgentAvatar agent={agent} size="md" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <span className="text-sm font-medium truncate">{agent.name}</span>
@@ -155,8 +230,6 @@ function AgentChatView({
     }
   };
 
-  const initials = agent.name.charAt(0).toUpperCase();
-
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-white">
       {/* Header */}
@@ -164,9 +237,7 @@ function AgentChatView({
         <button onClick={onBack} className="p-1 rounded hover:bg-black/5 transition-colors lg:hidden">
           <Icon icon={ArrowLeft} size={18} />
         </button>
-        <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-xs font-bold">
-          {initials}
-        </div>
+        <AgentAvatar agent={agent} size="sm" />
         <div className="flex-1 min-w-0">
           <span className="text-sm font-semibold truncate block">{agent.name}</span>
           <span className="text-[10px] text-text-tertiary">{agent.model}</span>
@@ -179,8 +250,8 @@ function AgentChatView({
         {messages.length === 0 && (
           <div className="flex-1 flex items-center justify-center h-full">
             <div className="text-center py-20">
-              <div className="w-12 h-12 mx-auto rounded-full flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-lg font-bold mb-3">
-                {initials}
+              <div className="mx-auto mb-3 flex justify-center">
+                <AgentAvatar agent={agent} size="lg" />
               </div>
               <p className="text-sm text-text-tertiary">{agent.description}</p>
               <p className="text-xs text-text-tertiary mt-2 opacity-60">Escribe un mensaje para comenzar</p>
@@ -248,6 +319,7 @@ export default function AgentsView() {
   const [selectedAgent, setSelectedAgent] = useState<OpenClawAgent | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"agentes" | "oficina">("agentes");
 
   const loadAgents = useCallback(async () => {
     if (!workspaceId) return;
@@ -268,62 +340,90 @@ export default function AgentsView() {
     loadAgents();
   }, [loadAgents]);
 
+  const handleTabChange = (tab: "agentes" | "oficina") => {
+    setActiveTab(tab);
+    if (tab === "oficina") {
+      setSelectedAgent(null);
+    }
+  };
+
+  const isOficina = activeTab === "oficina";
+
   return (
     <div className="flex-1 flex h-full overflow-hidden">
       <div className="flex-1 flex overflow-hidden bg-bg-mini-app">
-        {/* Agent list sidebar */}
+        {/* Sidebar */}
         <div
           className={`w-[260px] shrink-0 flex flex-col overflow-hidden ${SIDEBAR.bg} border-r border-black/5 ${
-            selectedAgent ? "hidden lg:flex" : "flex"
+            !isOficina && selectedAgent ? "hidden lg:flex" : "flex"
           }`}
         >
-          {/* Header */}
-          <div className="h-12 flex items-center pl-4 pr-2 shrink-0">
-            <h2 className="text-base font-semibold text-text-body">Agentes IA</h2>
-          </div>
+          {/* Tab bar */}
+          <SidebarTabBar activeTab={activeTab} onTabChange={handleTabChange} />
 
-          {/* Agents list */}
-          <div className="flex-1 overflow-y-auto px-2">
-            {loading ? (
-              <div className="px-4 py-8 text-center">
-                <Loader2 size={20} className="mx-auto animate-spin text-text-tertiary mb-2" />
-                <p className="text-sm text-text-tertiary">Cargando agentes...</p>
+          {/* Tab content */}
+          {isOficina ? (
+            <div className="flex-1 flex items-center justify-center px-4">
+              <div className="text-center">
+                <Icon icon={Building2} size={32} className="mx-auto text-text-tertiary opacity-50 mb-2" />
+                <p className="text-sm text-text-tertiary">Oficina Virtual</p>
+                <p className="text-[11px] text-text-tertiary opacity-60 mt-1">
+                  Claw3D cargado en el panel principal
+                </p>
               </div>
-            ) : error ? (
-              <div className="px-4 py-8 text-center">
-                <p className="text-sm text-red-500">{error}</p>
-                <button
-                  onClick={loadAgents}
-                  className="mt-3 text-sm text-brand-primary hover:underline font-medium"
-                >
-                  Reintentar
-                </button>
-              </div>
-            ) : agents.length === 0 ? (
-              <div className="px-4 py-8 text-center">
-                <Icon icon={Brain} size={32} className="mx-auto text-text-tertiary opacity-50 mb-2" />
-                <p className="text-sm text-text-tertiary">No hay agentes disponibles</p>
-              </div>
-            ) : (
-              <div className="space-y-0.5">
-                {agents.map((agent) => (
-                  <AgentCard
-                    key={agent.id}
-                    agent={agent}
-                    selected={selectedAgent?.id === agent.id}
-                    onClick={() => setSelectedAgent(agent)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto px-2">
+              {loading ? (
+                <div className="px-4 py-8 text-center">
+                  <Loader2 size={20} className="mx-auto animate-spin text-text-tertiary mb-2" />
+                  <p className="text-sm text-text-tertiary">Cargando agentes...</p>
+                </div>
+              ) : error ? (
+                <div className="px-4 py-8 text-center">
+                  <p className="text-sm text-red-500">{error}</p>
+                  <button
+                    onClick={loadAgents}
+                    className="mt-3 text-sm text-brand-primary hover:underline font-medium"
+                  >
+                    Reintentar
+                  </button>
+                </div>
+              ) : agents.length === 0 ? (
+                <div className="px-4 py-8 text-center">
+                  <Icon icon={Brain} size={32} className="mx-auto text-text-tertiary opacity-50 mb-2" />
+                  <p className="text-sm text-text-tertiary">No hay agentes disponibles</p>
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  {agents.map((agent) => (
+                    <AgentCard
+                      key={agent.id}
+                      agent={agent}
+                      selected={selectedAgent?.id === agent.id}
+                      onClick={() => setSelectedAgent(agent)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Main content: Chat */}
-        <div className={`flex-1 flex min-w-0 overflow-hidden bg-white rounded-r-lg ${
-          !selectedAgent ? "hidden lg:flex" : "flex"
-        }`}>
-          {selectedAgent ? (
+        {/* Main content */}
+        <div
+          className={`flex-1 flex min-w-0 overflow-hidden bg-white rounded-r-lg ${
+            !isOficina && !selectedAgent ? "hidden lg:flex" : "flex"
+          }`}
+        >
+          {isOficina ? (
+            <iframe
+              src="https://openclaw.factoriaia.com"
+              className="w-full h-full border-0"
+              allow="microphone; camera"
+              title="Oficina Virtual"
+            />
+          ) : selectedAgent ? (
             <AgentChatView
               key={selectedAgent.id}
               agent={selectedAgent}
