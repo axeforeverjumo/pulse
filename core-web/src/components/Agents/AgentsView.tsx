@@ -674,7 +674,7 @@ export default function AgentsView() {
         >
           {isOficina ? (
             <iframe
-              src="https://openclaw.factoriaia.com"
+              src="https://oficina.factoriaia.com/office"
               className="w-full h-full border-0"
               allow="microphone; camera"
               title="Oficina Virtual"

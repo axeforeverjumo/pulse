@@ -126,15 +126,7 @@ async def handle_agent_mention(
     profile = await _get_user_profile(user_id)
 
     # Build context for group mention
-    system_context = f"""[Contexto de Pulse]
-Canal: #{request.channel_name}
-Mensaje de: {profile.get('name', 'Usuario')}
-Te han mencionado directamente en un canal de grupo.
-Responde de forma concisa y útil.
-
-[Tu identidad]
-Nombre: {agent['name']}
-Descripción: {agent.get('description', '')}"""
+    # OpenClaw loads agent identity from workspace
 
     # Call OpenClaw bridge
     try:
@@ -144,8 +136,7 @@ Descripción: {agent.get('description', '')}"""
                 json={
                     "model": f"openclaw:{agent['openclaw_agent_id']}",
                     "messages": [
-                        {"role": "system", "content": system_context},
-                        {"role": "user", "content": request.message_content}
+                        {"role": "user", "content": f"[Pulse #{request.channel_name} - {profile.get('name', 'Usuario')}] {request.message_content}"}
                     ]
                 }
             )
@@ -243,24 +234,19 @@ async def chat_with_agent(
     email = await _get_user_email(user_id)
     user_name = profile.get("name", "Usuario")
     
-    # Build system context
-    system_context = f"""[Contexto de Pulse]
-Usuario actual: {user_name} ({email or 'sin email'})
-Conversación: individual
-
-[Tu identidad]
-Nombre: {agent['name']}
-Descripción: {agent.get('description', 'Asistente de IA')}
-"""
+    # OpenClaw loads agent identity from workspace (SOUL.md, IDENTITY.md)
     
     # Build messages for OpenClaw bridge
-    bridge_messages = [
-        {"role": "system", "content": system_context}
-    ]
-    
-    # Add user messages
+    # Don't send system message - OpenClaw already loads SOUL.md + IDENTITY.md
+    # Just prefix the last user message with who is talking
+    bridge_messages = []
     for msg in request.messages:
-        bridge_messages.append({"role": msg.role, "content": msg.content})
+        if msg.role == "user" and msg == request.messages[-1]:
+            # Add user context only to the last message
+            prefix = f"[Pulse: {user_name}] "
+            bridge_messages.append({"role": "user", "content": prefix + msg.content})
+        else:
+            bridge_messages.append({"role": msg.role, "content": msg.content})
     
     # Call OpenClaw HTTP bridge
     try:
