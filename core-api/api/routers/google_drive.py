@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/drive", tags=["google-drive"])
 
 # Shared PULSE folder - everyone sees the same files
-PULSE_FOLDER_ID = "0AM2xjt-QY1G6Uk9PVA"
+PULSE_FOLDER_ID = "1ilVu2oYewGoPMPUVlrF750DQ0ac92XmR"
+SHARED_DRIVE_ID = "0AM2xjt-QY1G6Uk9PVA"
 SA_KEY_FILE = "/home/claude/.openclaw/google-sa.json"
 
 _service = None
@@ -60,10 +61,12 @@ async def list_files(
             q=" and ".join(query_parts),
             pageSize=50,
             pageToken=page_token,
-            fields="nextPageToken, files(id, name, mimeType, iconLink, webViewLink, thumbnailLink, modifiedTime, size, parents, shared)",
+            fields="nextPageToken, files(id, name, mimeType, iconLink, webViewLink, thumbnailLink, modifiedTime, size, parents, shared, owners)",
             orderBy="folder,modifiedTime desc",
             supportsAllDrives=True,
             includeItemsFromAllDrives=True,
+            corpora="drive",
+            driveId=SHARED_DRIVE_ID,
         ).execute()
         
         return {

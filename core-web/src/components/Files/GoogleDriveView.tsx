@@ -309,7 +309,7 @@ export default function GoogleDriveView() {
           spreadsheet: "application/vnd.google-apps.spreadsheet",
           presentation: "application/vnd.google-apps.presentation",
         };
-        await api<{ file: DriveFile }>("/drive/files", {
+        const result = await api<{ file: DriveFile }>("/drive/files", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -318,6 +318,10 @@ export default function GoogleDriveView() {
             parent_id: parentId,
           }),
         });
+        // Open the new file immediately
+        if (result.file?.webViewLink) {
+          window.open(result.file.webViewLink, "_blank", "noopener");
+        }
       }
       fetchFiles(currentFolderId, searchQuery || undefined);
     } catch (err: unknown) {
