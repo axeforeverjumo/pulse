@@ -1,5 +1,5 @@
 """
-AI-powered email analysis using Groq API.
+AI-powered email analysis using Anthropic Claude API.
 Analyzes emails to generate summaries and determine importance.
 """
 
@@ -7,24 +7,24 @@ import json
 import logging
 import traceback
 from typing import Dict, Optional
-from groq import Groq
+import anthropic
 from pydantic import BaseModel
 from api.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Initialize Groq client
-groq_client = None
+# Initialize Anthropic client
+anthropic_client = None
 
-def get_groq_client():
-    """Get or initialize Groq client."""
-    global groq_client
-    if groq_client is None:
-        api_key = settings.groq_api_key
+def get_anthropic_client():
+    """Get or initialize Anthropic client."""
+    global anthropic_client
+    if anthropic_client is None:
+        api_key = settings.anthropic_api_key
         if not api_key:
-            raise ValueError("GROQ_API_KEY not set in configuration")
-        groq_client = Groq(api_key=api_key)
-    return groq_client
+            raise ValueError("ANTHROPIC_API_KEY not set in configuration")
+        anthropic_client = anthropic.Anthropic(api_key=api_key)
+    return anthropic_client
 
 
 # Pydantic model for structured output
@@ -40,7 +40,7 @@ def analyze_email_with_ai(
     snippet: Optional[str]
 ) -> Dict[str, any]:
     """
-    Analyze an email using Groq AI to generate a summary and determine importance.
+    Analyze an email using Anthropic Claude AI to generate a summary and determine importance.
     
     Args:
         subject: Email subject line
@@ -72,8 +72,8 @@ def analyze_email_with_ai(
             "important": False
         }
     
-    # Create the prompt for Groq
-    system_prompt = """You are an email organization assistant. Analyze emails and respond with JSON.
+    # System prompt for Anthropic
+    system_prompt = """You are an email organization assistant. Analyze emails and respond with JSON ONLY. No extra text.
 
 Your JSON response must have exactly these fields:
 - "summary": A specific 3-12 word description of what the email is actually about. Be SPECIFIC, not generic.
@@ -114,42 +114,35 @@ Mark as NOT important (false) if:
 - Spam or bulk mail
 - Social media notifications
 
-Always respond with valid JSON only."""
+You MUST respond with valid JSON only. No markdown, no code fences, no explanation. Just the JSON object."""
 
-    user_prompt = f"""Analyze this email and respond with JSON:
+    user_prompt = f"""Analyze this email and respond with a JSON object containing "summary" and "important" fields ONLY:
 
 {email_content}"""
 
     try:
-        client = get_groq_client()
+        client = get_anthropic_client()
         
-        # Call Groq API with proper structured output using Pydantic schema
-        response = client.chat.completions.create(
-            model="openai/gpt-oss-120b",  # Supports structured JSON output
+        # Call Anthropic API
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=200,
+            system=system_prompt,
             messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt
-                },
                 {
                     "role": "user",
                     "content": user_prompt
                 }
             ],
             temperature=0.1,
-            max_tokens=2000,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "email_analysis",
-                    "schema": EmailAnalysis.model_json_schema()
-                }
-            }
         )
+        
+        # Parse response from Anthropic format
+        result_text = response.content[0].text
         
         # Parse and validate the response using Pydantic
         email_analysis = EmailAnalysis.model_validate(
-            json.loads(response.choices[0].message.content)
+            json.loads(result_text)
         )
         
         # Clean up the summary
@@ -260,4 +253,3 @@ def analyze_unanalyzed_emails(user_id: str = None, limit: int = 50) -> int:
         logger.error(f"Error in analyze_unanalyzed_emails: {str(e)}")
         logger.debug(traceback.format_exc())
         return 0
-
