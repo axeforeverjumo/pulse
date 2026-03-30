@@ -55,6 +55,8 @@ const GOOGLE_OAUTH_SCOPES = [
   'profile',
   'https://www.googleapis.com/auth/calendar',
   'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/drive',
+  'https://www.googleapis.com/auth/drive.file',
 ];
 
 const MICROSOFT_OAUTH_SCOPES = [
