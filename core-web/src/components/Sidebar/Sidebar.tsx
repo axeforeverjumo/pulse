@@ -577,11 +577,11 @@ export default function Sidebar() {
       const invitedEmail = inviteEmail.trim();
       setInviteEmail("");
       setInviteRole("member");
-      setInviteSuccess(`Invitation sent to ${invitedEmail} as ${inviteRole}`);
+      setInviteSuccess(`Invitación enviada a ${invitedEmail} como ${inviteRole}`);
       setTimeout(() => setInviteSuccess(""), 3000);
     } catch (err) {
       setInviteError(
-        err instanceof Error ? err.message : "Failed to send invitation",
+        err instanceof Error ? err.message : "Error al enviar la invitación",
       );
     } finally {
       setInviting(false);
@@ -602,11 +602,11 @@ export default function Sidebar() {
         invitation.role,
       );
       await loadPendingInvites(selectedWorkspaceId);
-      setInviteSuccess(`Invitation resent to ${invitation.email}`);
+      setInviteSuccess(`Invitación reenviada a ${invitation.email}`);
       setTimeout(() => setInviteSuccess(""), 3000);
     } catch (err) {
       setInviteError(
-        err instanceof Error ? err.message : "Failed to resend invitation",
+        err instanceof Error ? err.message : "Error al reenviar la invitación",
       );
     } finally {
       setInviteActionBusyId(null);
@@ -621,11 +621,11 @@ export default function Sidebar() {
     try {
       const result = await getWorkspaceInvitationShareLink(invitationId);
       await copyTextToClipboard(result.invite_url);
-      setInviteSuccess("Invite link copied");
+      setInviteSuccess("Enlace de invitación copiado");
       setTimeout(() => setInviteSuccess(""), 3000);
     } catch (err) {
       setInviteError(
-        err instanceof Error ? err.message : "Failed to copy invite link",
+        err instanceof Error ? err.message : "Error al copiar enlace de invitación",
       );
     } finally {
       setInviteActionBusyId(null);
@@ -642,11 +642,11 @@ export default function Sidebar() {
     try {
       await revokeWorkspaceInvitation(invitationId);
       await loadPendingInvites(selectedWorkspaceId);
-      setInviteSuccess("Invitation revoked");
+      setInviteSuccess("Invitación revocada");
       setTimeout(() => setInviteSuccess(""), 3000);
     } catch (err) {
       setInviteError(
-        err instanceof Error ? err.message : "Failed to revoke invitation",
+        err instanceof Error ? err.message : "Error al revocar la invitación",
       );
     } finally {
       setInviteActionBusyId(null);
@@ -805,12 +805,12 @@ export default function Sidebar() {
             }
             title={
               activeProductType === 'ai_builder'
-                ? "AI App Builder"
+                ? "Constructor de Apps IA"
                 : activeProductType === 'website_builder'
-                ? "Website Builder"
+                ? "Constructor de Sitios Web"
                 : selectedView === "dashboard"
                 ? "Personal"
-                : currentWorkspace?.name || "Select workspace"
+                : currentWorkspace?.name || "Seleccionar espacio de trabajo"
             }
             className={`w-10 h-10 flex items-center justify-center rounded-lg transition-all ${
               openMenu === "view-selector"
@@ -835,8 +835,8 @@ export default function Sidebar() {
                   <Icon icon={ExternalLink} size={20} className="text-text-body" />
                 ) : selectedView === "dashboard" ? (
                   <img
-                    src="/CoreLogo.png"
-                    alt="Personal"
+                    src="/pulse-icon.svg"
+                    alt="Pulse"
                     className="w-5 h-5"
                   />
                 ) : currentWorkspace?.icon_url ? (
@@ -916,7 +916,7 @@ export default function Sidebar() {
                     : "hover:bg-bg-gray"
                 }`}
               >
-                <img src="/CoreLogo.png" alt="Personal" className="w-5 h-5" />
+                <img src="/pulse-icon.svg" alt="Pulse" className="w-5 h-5 rounded" />
                 <span className="font-semibold">Personal</span>
               </button>
               <div className="mx-1 my-0.5 border-t border-border-light" />
@@ -1013,7 +1013,7 @@ export default function Sidebar() {
                       <span className="flex-1 font-semibold">{ws.name}</span>
                       {ws.isShared && (
                         <span className="text-xs uppercase tracking-wide text-text-tertiary border border-border-gray rounded px-1.5 py-0.5">
-                          Shared
+                          Compartido
                         </span>
                       )}
                       {hasUnreads && (
@@ -1037,7 +1037,7 @@ export default function Sidebar() {
                 className="w-full px-2.5 py-2 text-left text-sm flex items-center gap-2.5 text-text-secondary hover:bg-bg-gray rounded-lg"
               >
                 <Icon icon={Plus} size={18} />
-                <span>New workspace</span>
+                <span>Nuevo espacio de trabajo</span>
               </button>
             </div>
           </Dropdown>
@@ -1094,7 +1094,7 @@ export default function Sidebar() {
           <div className="flex-1 flex flex-col items-center gap-2 overflow-y-auto px-1 pt-1">
             <button
               onClick={() => navigate('/builder')}
-              title="AI Apps"
+              title="Apps IA"
               className={`${iconBtn} ${location.pathname.startsWith('/builder') ? iconBtnActive : iconBtnInactive}`}
             >
               <Icon icon={Code} size={20} />
@@ -1107,7 +1107,7 @@ export default function Sidebar() {
           <div className="flex-1 flex flex-col items-center gap-2 overflow-y-auto px-1 pt-1">
             <button
               onClick={() => navigate('/sites')}
-              title="My Sites"
+              title="Mis Sitios"
               className={`${iconBtn} ${location.pathname.startsWith('/sites') ? iconBtnActive : iconBtnInactive}`}
             >
               <Icon icon={ExternalLink} size={20} />
@@ -1126,7 +1126,7 @@ export default function Sidebar() {
                 <button
                   onClick={() => navigate(targetWorkspace && !targetWorkspace.isDefault ? `/workspace/${targetWorkspace.id}/email` : '/email')}
                   onMouseEnter={() => prefetchView('email', 'email', targetWorkspace?.id)}
-                  title="Email"
+                  title="Correo"
                   className={`${iconBtn} ${isEmailActive ? iconBtnActive : iconBtnInactive}`}
                 >
                   <Icon icon={Mail} size={20} active={isEmailActive} />
@@ -1134,7 +1134,7 @@ export default function Sidebar() {
                 <button
                   onClick={() => navigate(targetWorkspace && !targetWorkspace.isDefault ? `/workspace/${targetWorkspace.id}/calendar` : '/calendar')}
                   onMouseEnter={() => prefetchView('calendar', 'calendar', targetWorkspace?.id)}
-                  title="Calendar"
+                  title="Calendario"
                   className={`${iconBtn} ${isCalendarActive ? iconBtnActive : iconBtnInactive}`}
                 >
                   <Icon icon={Calendar} size={20} active={isCalendarActive} />
@@ -1146,7 +1146,7 @@ export default function Sidebar() {
           {activeProductType === 'workspace' && targetWorkspace && (
             <button
               onClick={() => openWorkspaceSettingsModal(targetWorkspace.id, "members")}
-              title="Workspace Settings"
+              title="Configuración del espacio de trabajo"
               className={`${iconBtn} ${iconBtnInactive}`}
             >
               <Icon icon={Settings} size={20} />
@@ -1189,7 +1189,7 @@ export default function Sidebar() {
                   className="w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 hover:bg-bg-gray rounded-lg"
                 >
                   <Icon icon={Settings} size={20} />
-                  User Settings
+                  Configuración de usuario
                 </button>
                 {isAuthenticated ? (
                   <button
@@ -1200,7 +1200,7 @@ export default function Sidebar() {
                     className="w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 hover:bg-bg-gray rounded-lg"
                   >
                     <Icon icon={LogOut} size={20} />
-                    Log out
+                    Cerrar sesión
                   </button>
                 ) : (
                   <button
@@ -1211,7 +1211,7 @@ export default function Sidebar() {
                     className="w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 hover:bg-bg-gray rounded-lg"
                   >
                     <Icon icon={LogIn} size={20} />
-                    Sign in
+                    Iniciar sesión
                   </button>
                 )}
               </div>
@@ -1224,19 +1224,19 @@ export default function Sidebar() {
       <Modal
         isOpen={modalType === "createWorkspace"}
         onClose={closeModal}
-        title="Create Workspace"
+        title="Crear espacio de trabajo"
       >
         <div className="flex flex-col gap-4">
           <div>
             <label className="block text-xs text-text-secondary mb-1.5">
-              Name
+              Nombre
             </label>
             <input
               type="text"
               value={formName}
               onChange={(e) => setFormName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !isCreatingWorkspace && handleCreateWorkspace()}
-              placeholder="Workspace name"
+              placeholder="Nombre del espacio de trabajo"
               autoFocus
               className="w-full bg-bg-gray border border-border-light rounded-lg px-3 py-2 text-sm outline-none focus:border-border-gray"
             />
@@ -1246,14 +1246,14 @@ export default function Sidebar() {
               onClick={closeModal}
               className="px-4 py-2 text-sm text-text-secondary hover:bg-bg-gray rounded-lg"
             >
-              Cancel
+              Cancelar
             </button>
             <button
               onClick={handleCreateWorkspace}
               disabled={!formName.trim() || isCreatingWorkspace}
               className="px-4 py-2 text-sm bg-brand-primary text-white rounded-lg disabled:opacity-50"
             >
-              {isCreatingWorkspace ? "Creating..." : "Create"}
+              {isCreatingWorkspace ? "Creando..." : "Crear"}
             </button>
           </div>
         </div>
@@ -1280,7 +1280,7 @@ export default function Sidebar() {
                   : "text-gray-500 hover:text-gray-700"
               }`}
             >
-              Members
+              Miembros
               {workspaceSettingsTab === "members" && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-900 rounded-full" />
               )}
@@ -1293,7 +1293,7 @@ export default function Sidebar() {
                   : "text-gray-500 hover:text-gray-700"
               }`}
             >
-              Apps
+              Aplicaciones
               {workspaceSettingsTab === "apps" && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-900 rounded-full" />
               )}
@@ -1306,7 +1306,7 @@ export default function Sidebar() {
                   : "text-gray-500 hover:text-gray-700"
               }`}
             >
-              Workspace Settings
+              Configuración
               {workspaceSettingsTab === "settings" && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-900 rounded-full" />
               )}
@@ -1321,14 +1321,14 @@ export default function Sidebar() {
               {canManageWorkspaceMembers ? (
                 <>
                   <label className="block text-xs text-text-secondary">
-                    Invite members
+                    Invitar miembros
                   </label>
                   <form onSubmit={handleInviteMember} className="flex gap-2">
                     <input
                       type="email"
                       value={inviteEmail}
                       onChange={(e) => setInviteEmail(e.target.value)}
-                      placeholder="Enter email to invite"
+                      placeholder="Introduce email para invitar"
                       className="flex-1 bg-white border border-border-gray rounded-lg px-3 py-2.5 text-xs outline-none focus:border-text-tertiary"
                     />
                     <select
@@ -1337,21 +1337,21 @@ export default function Sidebar() {
                       className="bg-white border border-border-gray rounded-lg px-2 py-2.5 text-xs outline-none focus:border-text-tertiary"
                       aria-label="Invite role"
                     >
-                      <option value="member">Member</option>
-                      <option value="admin">Admin</option>
+                      <option value="member">Miembro</option>
+                      <option value="admin">Administrador</option>
                     </select>
                     <button
                       type="submit"
                       disabled={inviting || !inviteEmail.trim()}
                       className="px-4 py-2 text-sm bg-black text-white rounded-lg disabled:opacity-50"
                     >
-                      {inviting ? "Sending..." : "Invite"}
+                      {inviting ? "Enviando..." : "Invitar"}
                     </button>
                   </form>
                 </>
               ) : (
                 <p className="text-xs text-text-secondary">
-                  Only workspace admins and owners can manage invites.
+                  Solo los administradores y propietarios pueden gestionar invitaciones.
                 </p>
               )}
               {inviteError && (
@@ -1363,12 +1363,12 @@ export default function Sidebar() {
 
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-text-tertiary mb-1.5">
-                  Pending invites
+                  Invitaciones pendientes
                 </p>
                 {pendingInvitesLoading ? (
-                  <p className="text-xs text-text-secondary">Loading...</p>
+                  <p className="text-xs text-text-secondary">Cargando...</p>
                 ) : pendingInvites.length === 0 ? (
-                  <p className="text-xs text-text-secondary">No pending invites</p>
+                  <p className="text-xs text-text-secondary">No hay invitaciones pendientes</p>
                 ) : (
                   <div className="flex flex-col gap-1.5">
                     {pendingInvites.map((invitation) => (
@@ -1379,7 +1379,7 @@ export default function Sidebar() {
                         <div className="min-w-0">
                           <p className="text-sm truncate">{invitation.email}</p>
                           <p className="text-[10px] text-text-secondary capitalize">
-                            {invitation.role} • Pending
+                            {invitation.role} • Pendiente
                           </p>
                         </div>
                         <div className="flex items-center gap-1.5">
@@ -1390,21 +1390,21 @@ export default function Sidebar() {
                                 disabled={inviteActionBusyId === invitation.id}
                                 className="text-xs px-2 py-1 rounded bg-bg-gray hover:bg-bg-gray/80 disabled:opacity-60"
                               >
-                                Copy link
+                                Copiar enlace
                               </button>
                               <button
                                 onClick={() => handleResendInvite(invitation)}
                                 disabled={inviteActionBusyId === invitation.id}
                                 className="text-xs px-2 py-1 rounded bg-bg-gray hover:bg-bg-gray/80 disabled:opacity-60"
                               >
-                                Resend
+                                Reenviar
                               </button>
                               <button
                                 onClick={() => handleRevokeInvite(invitation.id)}
                                 disabled={inviteActionBusyId === invitation.id}
                                 className="text-xs px-2 py-1 rounded text-red-500 hover:bg-red-50 disabled:opacity-60"
                               >
-                                Revoke
+                                Revocar
                               </button>
                             </>
                           )}
@@ -1417,13 +1417,13 @@ export default function Sidebar() {
 
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-text-tertiary mb-1.5">
-                  Current members
+                  Miembros actuales
                 </p>
                 <div className="flex flex-col gap-1.5">
                   {membersLoading ? (
-                    <p className="text-xs text-text-secondary">Loading...</p>
+                    <p className="text-xs text-text-secondary">Cargando...</p>
                   ) : members.length === 0 ? (
-                    <p className="text-xs text-text-secondary">No members</p>
+                    <p className="text-xs text-text-secondary">Sin miembros</p>
                   ) : (
                     members.map((member) => {
                       const isSelf = member.user_id === user?.id;
@@ -1460,7 +1460,7 @@ export default function Sidebar() {
                           <div className="relative group/member min-w-0">
                             <p className="text-sm truncate">
                               {member.name || member.email || member.user_id}
-                              {isSelf && <span className="text-text-tertiary ml-1">(you)</span>}
+                              {isSelf && <span className="text-text-tertiary ml-1">(tú)</span>}
                             </p>
                             {canChangeRole ? (
                               <select
@@ -1468,8 +1468,8 @@ export default function Sidebar() {
                                 onChange={(e) => void handleMemberRoleChange(member, e.target.value as 'member' | 'admin')}
                                 className="text-[10px] text-text-secondary capitalize bg-transparent border-none p-0 cursor-pointer hover:text-text-body focus:outline-none"
                               >
-                                <option value="member">Member</option>
-                                <option value="admin">Admin</option>
+                                <option value="member">Miembro</option>
+                                <option value="admin">Administrador</option>
                               </select>
                             ) : (
                               <p className="text-[10px] text-text-secondary capitalize">
@@ -1490,7 +1490,7 @@ export default function Sidebar() {
                             }
                             className="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                           >
-                            Remove
+                            Eliminar
                           </button>
                         )}
                       </div>
@@ -1513,7 +1513,7 @@ export default function Sidebar() {
                 {editingApps.length > 0 && (
                   <div>
                     <label className="block text-xs text-text-secondary mb-2">
-                      Current Apps
+                      Aplicaciones actuales
                     </label>
                     <div className="flex flex-col gap-0.5">
                       {editingApps.map((app, index) => {
@@ -1565,7 +1565,7 @@ export default function Sidebar() {
                 ).length > 0 && (
                   <div>
                     <label className="block text-xs text-text-secondary mb-2">
-                      Add Apps
+                      Añadir aplicaciones
                     </label>
                     <div className="flex flex-col gap-0.5">
                     {availableAppTypes
@@ -1605,7 +1605,7 @@ export default function Sidebar() {
                   onClick={closeModal}
                   className="px-4 py-2 text-sm text-text-secondary hover:bg-bg-gray rounded-lg"
                 >
-                  Cancel
+                  Cancelar
                 </button>
                 <button
                   onClick={async () => {
@@ -1673,14 +1673,14 @@ export default function Sidebar() {
                       closeModal();
                     } catch (err) {
                       console.error("Failed to save apps:", err);
-                      setSaveError("Failed to save changes.");
+                      setSaveError("Error al guardar los cambios.");
                       setIsSaving(false);
                     }
                   }}
                   disabled={isSaving}
                   className="px-4 py-2 text-sm bg-brand-primary text-white rounded-lg disabled:opacity-50"
                 >
-                  {isSaving ? "Saving..." : "Save"}
+                  {isSaving ? "Guardando..." : "Guardar"}
                 </button>
               </div>
             </div>
@@ -1692,7 +1692,7 @@ export default function Sidebar() {
               {/* Workspace Title */}
               <div>
                 <label className="block text-xs text-text-secondary mb-2">
-                  Workspace Title
+                  Título del espacio de trabajo
                 </label>
                 <div className="flex items-center gap-3">
                 <input
@@ -1727,7 +1727,7 @@ export default function Sidebar() {
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleEditWorkspace()}
-                  placeholder="Workspace name"
+                  placeholder="Nombre del espacio de trabajo"
                   className="flex-1 bg-white border border-border-gray rounded-lg px-3 py-2.5 text-xs outline-none focus:border-text-tertiary"
                 />
                 </div>
@@ -1764,12 +1764,12 @@ export default function Sidebar() {
                   {showDangerZone && (
                     <div className="mt-3">
                       <p className="text-xs text-text-tertiary mb-3">
-                        Deleting this workspace will permanently remove all data associated with it. This action cannot be undone.
+                        Eliminar este espacio de trabajo borrará permanentemente todos los datos asociados. Esta acción no se puede deshacer.
                       </p>
                       <button
                         onClick={async () => {
                           if (
-                            confirm("Delete this workspace? This cannot be undone.")
+                            confirm("¿Eliminar este espacio de trabajo? Esta acción no se puede deshacer.")
                           ) {
                             try {
                               await removeWorkspace(selectedWorkspaceId);
@@ -1783,7 +1783,7 @@ export default function Sidebar() {
                         }}
                         className="px-3 py-1.5 text-xs text-red-600 border border-red-200 rounded-md hover:bg-red-50 transition-colors"
                       >
-                        Delete workspace
+                        Eliminar espacio de trabajo
                       </button>
                     </div>
                   )}
@@ -1796,14 +1796,14 @@ export default function Sidebar() {
                   onClick={closeModal}
                   className="px-4 py-2 text-sm text-text-secondary hover:bg-bg-gray rounded-lg"
                 >
-                  Cancel
+                  Cancelar
                 </button>
                 <button
                   onClick={handleEditWorkspace}
                   disabled={!formName.trim()}
                   className="px-4 py-2 text-sm bg-brand-primary text-white rounded-lg disabled:opacity-50"
                 >
-                  Save
+                  Guardar
                 </button>
               </div>
             </div>
@@ -1815,11 +1815,11 @@ export default function Sidebar() {
       <Modal
         isOpen={modalType === "dashboardSettings"}
         onClose={closeModal}
-        title="Manage Dashboards"
+        title="Gestionar paneles"
       >
         <div className="flex flex-col gap-4">
           <p className="text-xs text-text-secondary">
-            Drag to reorder or remove dashboards from your sidebar.
+            Arrastra para reordenar o eliminar paneles de tu barra lateral.
           </p>
 
           <div className="flex flex-col gap-0.5">
@@ -1843,7 +1843,7 @@ export default function Sidebar() {
                     </span>
                   )}
                   <span className="flex-1 text-sm">{ws.name}</span>
-                  <span className="text-[10px] text-text-tertiary uppercase tracking-wide">Workspace</span>
+                  <span className="text-[10px] text-text-tertiary uppercase tracking-wide">Espacio de trabajo</span>
                   <button
                     onClick={async () => {
                       if (confirm(`Delete "${ws.name}"? This cannot be undone.`)) {
@@ -1873,7 +1873,7 @@ export default function Sidebar() {
               onClick={closeModal}
               className="px-4 py-2 text-sm text-text-secondary hover:bg-bg-gray rounded-lg"
             >
-              Done
+              Hecho
             </button>
           </div>
         </div>

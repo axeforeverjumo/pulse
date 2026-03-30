@@ -82,7 +82,7 @@ export default function ProjectsSettingsModal({
       >
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-5">
-          <h2 className="text-lg font-semibold text-gray-900">Projects</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Proyectos</h2>
           <button
             onClick={handleClose}
             className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
@@ -153,7 +153,7 @@ export default function ProjectsSettingsModal({
                   <textarea
                     value={editingDescription}
                     onChange={(e) => setEditingDescription(e.target.value)}
-                    placeholder="What's this board about?"
+                    placeholder="¿De qué trata este tablero?"
                     rows={2}
                     className="w-full px-3 py-2.5 bg-white border border-border-gray rounded-lg text-sm outline-none focus:border-text-tertiary resize-none"
                   />
@@ -179,7 +179,7 @@ export default function ProjectsSettingsModal({
                   {showAdvancedOptions && (
                     <div className="mt-3">
                       <p className="text-xs text-text-tertiary mb-3">
-                        Deleting this board will permanently remove all cards and data. This action cannot be undone.
+                        Deleting this board will permanently remove all cards and data. This action no se puede deshacer.
                       </p>
                       <button
                         onClick={() => {
@@ -209,7 +209,7 @@ export default function ProjectsSettingsModal({
                 disabled={!editingName.trim() || isSaving}
                 className="px-4 py-2 text-sm bg-black text-white rounded-lg disabled:opacity-50"
               >
-                {isSaving ? "Saving..." : "Save"}
+                {isSaving ? "Guardando..." : "Guardar"}
               </button>
             </div>
           </>

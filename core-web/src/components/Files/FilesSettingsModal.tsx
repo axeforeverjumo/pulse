@@ -52,7 +52,7 @@ export default function FilesSettingsDropdown({
               className={itemClass}
             >
               <Icon icon={Pencil} size={16} className="text-text-secondary" />
-              <span>Rename</span>
+              <span>Renombrar</span>
             </button>
           )}
 
@@ -66,7 +66,7 @@ export default function FilesSettingsDropdown({
               className={itemClass}
             >
               <Icon icon={Copy} size={16} className="text-text-secondary" />
-              <span>Duplicate</span>
+              <span>Duplicar</span>
             </button>
           )}
 
@@ -80,7 +80,7 @@ export default function FilesSettingsDropdown({
               className={itemClass}
             >
               <Icon icon={FolderOutput} size={16} className="text-text-secondary" />
-              <span>Move to</span>
+              <span>Mover a</span>
             </button>
           )}
 
@@ -101,7 +101,7 @@ export default function FilesSettingsDropdown({
                   size={16}
                   className="text-text-secondary"
                 />
-                <span>Full width</span>
+                <span>Ancho completo</span>
               </div>
               <div
                 className={`relative w-8 h-[18px] rounded-full transition-colors shrink-0 ${
@@ -127,7 +127,7 @@ export default function FilesSettingsDropdown({
               className={itemClass}
             >
               <Icon icon={Download} size={16} className="text-text-secondary" />
-              <span>Download as Markdown</span>
+              <span>Descargar como Markdown</span>
             </button>
           )}
 
@@ -141,7 +141,7 @@ export default function FilesSettingsDropdown({
               className={itemClass}
             >
               <Icon icon={Clock} size={16} className="text-text-secondary" />
-              <span>Version history</span>
+              <span>Historial de versiones</span>
             </button>
           )}
 
@@ -157,7 +157,7 @@ export default function FilesSettingsDropdown({
                 className={itemClass}
               >
                 <Icon icon={Share} size={16} className="text-text-secondary" />
-                <span>Sharing</span>
+                <span>Compartir</span>
               </button>
             </>
           )}
@@ -174,7 +174,7 @@ export default function FilesSettingsDropdown({
                 className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-red-600 hover:bg-red-50 transition-colors text-left"
               >
                 <Icon icon={Trash2} size={16} className="text-red-500" />
-                <span>Delete file</span>
+                <span>Eliminar archivo</span>
               </button>
             </>
           )}

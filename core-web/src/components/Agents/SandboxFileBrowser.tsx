@@ -116,7 +116,7 @@ export default function SandboxFileBrowser({ agentId, sandboxStatus }: SandboxFi
       const content = await readSandboxFile(agentId, path);
       setFileContent(content);
     } catch {
-      setFileContent("Failed to load file");
+      setFileContent("Error al cargar archivo");
     } finally {
       setFileLoading(false);
     }
@@ -189,7 +189,7 @@ export default function SandboxFileBrowser({ agentId, sandboxStatus }: SandboxFi
           disabled={loading}
           className="text-[11px] px-2.5 py-1 rounded-md border border-border-gray text-text-secondary hover:bg-white disabled:opacity-50 transition-colors"
         >
-          {loading ? "Loading..." : "Browse VM"}
+          {loading ? "Cargando..." : "Browse VM"}
         </button>
       </div>
     );
@@ -212,7 +212,7 @@ export default function SandboxFileBrowser({ agentId, sandboxStatus }: SandboxFi
       <div className="border border-border-light rounded-lg bg-white overflow-hidden">
         <div className="max-h-[200px] overflow-y-auto py-1">
           {entries.length === 0 ? (
-            <p className="text-[11px] text-text-tertiary italic px-2 py-1">Empty directory</p>
+            <p className="text-[11px] text-text-tertiary italic px-2 py-1">Directorio vacío</p>
           ) : (
             renderEntries(entries, "/home/user")
           )}
@@ -234,7 +234,7 @@ export default function SandboxFileBrowser({ agentId, sandboxStatus }: SandboxFi
             </button>
           </div>
           <pre className="p-2 text-[11px] text-text-body font-mono whitespace-pre-wrap break-words max-h-[300px] overflow-y-auto">
-            {fileLoading ? "Loading..." : fileContent}
+            {fileLoading ? "Cargando..." : fileContent}
           </pre>
         </div>
       )}

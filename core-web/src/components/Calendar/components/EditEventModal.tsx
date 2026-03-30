@@ -168,7 +168,7 @@ export default function EditEventModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between px-6 pt-6 pb-0">
-          <h2 className="text-lg font-medium text-gray-900">Edit Event</h2>
+          <h2 className="text-lg font-medium text-gray-900">Editar evento</h2>
           <button
             onClick={onClose}
             className="p-1.5 -mr-1 text-gray-300 hover:text-gray-500 rounded-lg transition-colors"
@@ -185,13 +185,13 @@ export default function EditEventModal({
           )}
 
           <div>
-            <label className="block text-xs text-text-secondary mb-1.5">Title</label>
+            <label className="block text-xs text-text-secondary mb-1.5">Título</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="w-full bg-white border border-border-gray rounded-lg px-3 py-2.5 text-sm text-gray-900 placeholder:text-text-tertiary outline-none focus:border-text-tertiary transition-colors"
-              placeholder="Event title"
+              placeholder="Título del evento"
               autoFocus
               required
             />
@@ -200,7 +200,7 @@ export default function EditEventModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div className="space-y-4">
               <div>
-                <label className="block text-xs text-text-secondary mb-1.5">Meeting Link</label>
+                <label className="block text-xs text-text-secondary mb-1.5">Enlace de reunión</label>
                 {(() => {
                   const safeMeetingLink = getSafeMeetingLink(meetingLink);
                   if (safeMeetingLink && isGoogleMeetUrl(safeMeetingLink)) {
@@ -212,7 +212,7 @@ export default function EditEventModal({
                         className="flex items-center gap-2 px-3 py-2.5 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-600 font-medium hover:bg-blue-100 transition-colors"
                       >
                         <Icon icon={Video} size={14} className="text-blue-600 shrink-0" />
-                        Join with Google Meet
+                        Unirse con Google Meet
                       </a>
                     );
                   }
@@ -236,7 +236,7 @@ export default function EditEventModal({
                       onChange={(e) => setMeetingLink(e.target.value)}
                       onBlur={() => { if (meetingLink.trim()) setIsEditingLink(false); }}
                       className={inputStyles}
-                      placeholder="Add link"
+                      placeholder="Añadir enlace"
                       autoFocus={isEditingLink && !!event.meeting_link}
                     />
                   );
@@ -244,7 +244,7 @@ export default function EditEventModal({
               </div>
 
               <div>
-                <label className="block text-xs text-text-secondary mb-1.5">Start</label>
+                <label className="block text-xs text-text-secondary mb-1.5">Inicio</label>
                 <div className="flex gap-2">
                   <input
                     type="date"
@@ -268,18 +268,18 @@ export default function EditEventModal({
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs text-text-secondary mb-1.5">Location</label>
+                <label className="block text-xs text-text-secondary mb-1.5">Ubicación</label>
                 <input
                   type="text"
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
                   className={inputStyles}
-                  placeholder="Add location"
+                  placeholder="Añadir ubicación"
                 />
               </div>
 
               <div>
-                <label className="block text-xs text-text-secondary mb-1.5">End</label>
+                <label className="block text-xs text-text-secondary mb-1.5">Fin</label>
                 <div className="flex gap-2">
                   {!isAllDay && (
                     <div className="w-32 shrink-0">
@@ -311,18 +311,18 @@ export default function EditEventModal({
               className="w-4 h-4 rounded border-border-gray text-gray-900 focus:ring-gray-900/20"
             />
             <label htmlFor="editAllDay" className="text-xs text-text-secondary">
-              All day event
+              Evento de todo el día
             </label>
           </div>
 
           <div>
-            <label className="block text-xs text-text-secondary mb-1.5">Description</label>
+            <label className="block text-xs text-text-secondary mb-1.5">Descripción</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
               className={`${inputStyles} resize-none min-h-[100px]`}
-              placeholder="Add description..."
+              placeholder="Añadir descripción..."
             />
           </div>
 
@@ -339,7 +339,7 @@ export default function EditEventModal({
               disabled={isLoading || !title.trim()}
               className="px-4 py-2 bg-black text-white rounded-lg text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {isLoading ? 'Saving...' : 'Save Changes'}
+              {isLoading ? 'Guardando...' : 'Guardar cambios'}
             </button>
           </div>
         </form>

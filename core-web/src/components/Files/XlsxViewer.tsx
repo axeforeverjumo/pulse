@@ -169,7 +169,7 @@ export default function XlsxViewer({ url, title, onClose }: XlsxViewerProps) {
                 cursor: 'pointer',
                 textDecoration: 'none',
               }}
-              title="Download Spreadsheet"
+              title="Descargar hoja de cálculo"
             >
               <ArrowDownTrayIcon className="w-5 h-5" />
             </a>
@@ -188,7 +188,7 @@ export default function XlsxViewer({ url, title, onClose }: XlsxViewerProps) {
                 borderRadius: 8,
                 cursor: 'pointer',
               }}
-              title="Close (Esc)"
+              title="Cerrar (Esc)"
             >
               <XMarkIcon className="w-5 h-5" />
             </button>
@@ -209,7 +209,7 @@ export default function XlsxViewer({ url, title, onClose }: XlsxViewerProps) {
         >
           {error ? (
             <div style={{ color: 'white', textAlign: 'center', padding: 24 }}>
-              <p style={{ fontSize: 16, marginBottom: 8 }}>Failed to load spreadsheet</p>
+              <p style={{ fontSize: 16, marginBottom: 8 }}>Error al cargar hoja de cálculo</p>
               <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)' }}>{error}</p>
             </div>
           ) : isLoading ? (
@@ -219,7 +219,7 @@ export default function XlsxViewer({ url, title, onClose }: XlsxViewerProps) {
             </div>
           ) : rows.length === 0 ? (
             <div style={{ color: 'white', textAlign: 'center', padding: 24 }}>
-              <p>This sheet is empty</p>
+              <p>Esta hoja está vacía</p>
             </div>
           ) : (
             <table

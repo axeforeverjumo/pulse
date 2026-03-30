@@ -270,7 +270,7 @@ export default function EventPopover({
 
   function formatDisplayDate(isoString: string): string {
     const date = new Date(isoString);
-    return date.toLocaleDateString('en-US', {
+    return date.toLocaleDateString('es-ES', {
       weekday: 'long',
       month: 'long',
       day: 'numeric'
@@ -279,7 +279,7 @@ export default function EventPopover({
 
   function formatDisplayTime(isoString: string): string {
     const date = new Date(isoString);
-    return date.toLocaleTimeString('en-US', {
+    return date.toLocaleTimeString('es-ES', {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true
@@ -484,7 +484,7 @@ export default function EventPopover({
             {/* Temp event indicator */}
             {isTempEvent && (
               <div className="mx-4 mt-4 p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-600">
-                Saving event...
+                Guardando evento...
               </div>
             )}
             {/* Error state */}
@@ -527,7 +527,7 @@ export default function EventPopover({
                   <button
                     onClick={handleDelete}
                     className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                    title="Delete"
+                    title="Eliminar"
                     disabled={isSaving}
                   >
                     <Icon icon={Trash2} size={16} />
@@ -609,7 +609,7 @@ export default function EventPopover({
                           className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900/20"
                         />
                         <label htmlFor="allDayEdit" className="text-sm text-gray-700">
-                          All day event
+                          Todo el día event
                         </label>
                       </div>
 
@@ -625,7 +625,7 @@ export default function EventPopover({
                           disabled={isSaving}
                           className="px-3 py-1 text-xs bg-gray-900 text-white rounded hover:bg-gray-800 disabled:opacity-50 transition-colors"
                         >
-                          {isSaving ? 'Saving...' : 'Save'}
+                          {isSaving ? 'Guardando...' : 'Guardar'}
                         </button>
                       </div>
                     </div>
@@ -644,7 +644,7 @@ export default function EventPopover({
                             <>
                               <p className="text-sm text-gray-900">{formatDisplayDate(storeEvent.start_time)} – {formatDisplayDate(storeEvent.end_time)}</p>
                               {storeEvent.all_day ? (
-                                <p className="text-xs text-gray-500">All day</p>
+                                <p className="text-xs text-gray-500">Todo el día</p>
                               ) : (
                                 <p className="text-xs text-gray-500">
                                   {formatDisplayTime(storeEvent.start_time)} – {formatDisplayTime(storeEvent.end_time)}
@@ -657,7 +657,7 @@ export default function EventPopover({
                             <>
                               <p className="text-sm text-gray-900">{formatDisplayDate(storeEvent.start_time)}</p>
                               {storeEvent.all_day ? (
-                                <p className="text-xs text-gray-500">All day</p>
+                                <p className="text-xs text-gray-500">Todo el día</p>
                               ) : (
                                 <p className="text-xs text-gray-500">
                                   {formatDisplayTime(storeEvent.start_time)} – {formatDisplayTime(storeEvent.end_time)}
@@ -685,7 +685,7 @@ export default function EventPopover({
                         onClick={(e) => e.stopPropagation()}
                         className="inline-flex items-center gap-1.5 text-sm text-blue-600 font-medium hover:text-blue-700 hover:underline"
                       >
-                        Join with Google Meet
+                        Unirse con Google Meet
                       </a>
                     ) : (
                       <a
@@ -732,7 +732,7 @@ export default function EventPopover({
                         onBlur={handleLocationBlur}
                         onKeyDown={handleKeyDown}
                         autoFocus
-                        placeholder="Add location"
+                        placeholder="Añadir ubicación"
                         className="w-full px-2 py-1 text-sm bg-gray-50 border border-gray-200 rounded text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
                         disabled={isSaving}
                       />
@@ -768,7 +768,7 @@ export default function EventPopover({
                       onBlur={handleDescriptionBlur}
                       onKeyDown={handleKeyDown}
                       autoFocus
-                      placeholder="Add description"
+                      placeholder="Añadir descripción"
                       rows={3}
                       className="w-full px-2 py-1 text-sm bg-gray-50 border border-gray-200 rounded text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10 resize-none"
                       disabled={isSaving}

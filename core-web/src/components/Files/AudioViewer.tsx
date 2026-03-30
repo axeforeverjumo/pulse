@@ -85,7 +85,7 @@ export default function AudioViewer({ url, title, onClose }: AudioViewerProps) {
                 cursor: 'pointer',
                 textDecoration: 'none',
               }}
-              title="Download Audio"
+              title="Descargar audio"
             >
               <ArrowDownTrayIcon className="w-5 h-5" />
             </a>
@@ -104,7 +104,7 @@ export default function AudioViewer({ url, title, onClose }: AudioViewerProps) {
                 borderRadius: 8,
                 cursor: 'pointer',
               }}
-              title="Close (Esc)"
+              title="Cerrar (Esc)"
             >
               <XMarkIcon className="w-5 h-5" />
             </button>

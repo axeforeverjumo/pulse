@@ -42,7 +42,7 @@ export default function CreateProjectModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="New Project">
+    <Modal isOpen={isOpen} onClose={onClose} title="Nuevo proyecto">
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Name Input */}
         <div>
@@ -67,7 +67,7 @@ export default function CreateProjectModal({
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="What is this project about?"
+            placeholder="¿De qué trata este proyecto?"
             rows={3}
             className="w-full px-3 py-2 text-[14px] text-gray-900 bg-transparent border border-gray-200 rounded-lg focus:outline-none focus:border-gray-300 placeholder:text-gray-400 resize-none"
           />

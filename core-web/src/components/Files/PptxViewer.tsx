@@ -57,7 +57,7 @@ export default function PptxViewer({ url, title, onClose }: PptxViewerProps) {
 
         if (cancelled) return;
 
-        // Convert PPTX to HTML - returns array of slide HTML strings
+        // Convert PPTX to HTML - returns array de slide HTML strings
         const slideHtmlArray = await pptxToHtml(arrayBuffer, {
           width: 960,
           height: 540,
@@ -67,7 +67,7 @@ export default function PptxViewer({ url, title, onClose }: PptxViewerProps) {
 
         if (cancelled) return;
 
-        // The library returns an array of HTML strings, one per slide
+        // The library returns an array de HTML strings, one per slide
         if (Array.isArray(slideHtmlArray) && slideHtmlArray.length > 0) {
           setSlides(slideHtmlArray);
         } else if (typeof slideHtmlArray === 'string') {
@@ -216,7 +216,7 @@ export default function PptxViewer({ url, title, onClose }: PptxViewerProps) {
               </button>
               <button
                 onClick={resetZoom}
-                title="Reset zoom"
+                title="Restablecer zoom"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -313,7 +313,7 @@ export default function PptxViewer({ url, title, onClose }: PptxViewerProps) {
                 cursor: 'pointer',
                 textDecoration: 'none',
               }}
-              title="Download Presentation"
+              title="Descargar presentación"
             >
               <ArrowDownTrayIcon className="w-5 h-5" />
             </a>
@@ -333,7 +333,7 @@ export default function PptxViewer({ url, title, onClose }: PptxViewerProps) {
                 borderRadius: 8,
                 cursor: 'pointer',
               }}
-              title="Close (Esc)"
+              title="Cerrar (Esc)"
             >
               <XMarkIcon className="w-5 h-5" />
             </button>
@@ -361,7 +361,7 @@ export default function PptxViewer({ url, title, onClose }: PptxViewerProps) {
                 padding: 24,
               }}
             >
-              <p style={{ fontSize: 16, marginBottom: 8 }}>Failed to load presentation</p>
+              <p style={{ fontSize: 16, marginBottom: 8 }}>Error al cargar presentación</p>
               <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)' }}>{error}</p>
             </div>
           ) : isLoading ? (
@@ -387,7 +387,7 @@ export default function PptxViewer({ url, title, onClose }: PptxViewerProps) {
             />
           ) : (
             <div style={{ color: 'white', textAlign: 'center' }}>
-              <p>No slides found in presentation</p>
+              <p>No se encontraron diapositivas en la presentación</p>
             </div>
           )}
         </div>

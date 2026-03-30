@@ -125,8 +125,8 @@ function SignInModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void
                 <path d="M18 6L6 18M6 6l12 12" />
               </svg>
             </button>
-            <h2 className="text-xl font-semibold text-text-body mb-2">Sign in to Core</h2>
-            <p className="text-text-tertiary text-sm mb-6">Choose your account to continue</p>
+            <h2 className="text-xl font-semibold text-text-body mb-2">Sign in to Pulse</h2>
+            <p className="text-text-tertiary text-sm mb-6">Elige tu cuenta para continuar</p>
             <div className="space-y-3">
               <button
                 onClick={() => handleSignIn("google")}
@@ -134,7 +134,7 @@ function SignInModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void
                 className="w-full inline-flex items-center justify-center gap-3 px-4 py-3 bg-text-body text-white rounded-xl text-base font-medium hover:bg-black/80 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <GoogleIcon />
-                Continue with Google
+                Continuar con Google
               </button>
               <button
                 onClick={() => handleSignIn("microsoft")}
@@ -142,7 +142,7 @@ function SignInModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void
                 className="w-full inline-flex items-center justify-center gap-3 px-4 py-3 border border-black/20 text-text-body rounded-xl text-base font-medium hover:bg-black/5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <MicrosoftIcon />
-                Continue with Microsoft
+                Continuar con Microsoft
               </button>
             </div>
             {hasTurnstile && (
@@ -177,14 +177,14 @@ export default function LandingPage() {
       {/* ────────── Header ────────── */}
       <nav className="shrink-0 px-6 sm:px-12 lg:px-40 h-16 flex items-center justify-between max-w-[1400px] mx-auto w-full">
         <div className="flex items-center gap-2.5">
-          <img src="/CoreLogo.png" alt="Core" className="w-7 h-7" />
-          <span className="font-semibold text-[17px] text-text-body tracking-tight">Core</span>
+          <img src="/pulse-logo.svg" alt="Pulse - Factoría IA" className="h-8 w-auto" />
+          <span className="font-semibold text-[17px] text-text-body tracking-tight">Pulse</span>
         </div>
         <button
           onClick={() => setShowSignInModal(true)}
           className="px-4 py-2 bg-text-body text-white rounded-sm text-sm font-medium hover:bg-black/80 transition-all active:scale-[0.98]"
         >
-          Get started
+          Comenzar
         </button>
       </nav>
 
@@ -194,7 +194,7 @@ export default function LandingPage() {
           {/* Left: Text */}
           <div style={{ "--delay": "80ms" } as React.CSSProperties}>
             <h1 className="text-3xl font-medium text-text-body tracking-tight leading-[1.1] mb-4 whitespace-nowrap">
-              {["Everything", "in", "one", "place."].map((word, i) => (
+              {["Todo", "en", "un", "solo", "lugar."].map((word, i) => (
                 <span
                   key={word}
                   style={{ "--stagger": i } as React.CSSProperties}
@@ -208,14 +208,14 @@ export default function LandingPage() {
               style={{ "--stagger": 5 } as React.CSSProperties}
               className="text-base text-text-tertiary mb-6 animate-enter"
             >
-              The workspace for people who value productivity.
+              El espacio de trabajo para quienes valoran la productividad.
             </p>
             <button
               style={{ "--stagger": 6 } as React.CSSProperties}
               onClick={() => setShowSignInModal(true)}
               className="px-4 py-2 bg-text-body text-white rounded-sm text-sm font-medium hover:bg-black/80 transition-all active:scale-[0.98] animate-enter"
             >
-              Get started
+              Comenzar
             </button>
           </div>
 
@@ -294,7 +294,7 @@ export default function LandingPage() {
                               </div>
                               <div className="px-6 pb-2 shrink-0">
                                 <div className="border border-[#E7E7E6] rounded-lg px-2.5 py-1.5 flex items-center gap-1.5">
-                                  <span className="text-[8px] text-text-tertiary flex-1">Message Core...</span>
+                                  <span className="text-[8px] text-text-tertiary flex-1">Mensaje a Pulse...</span>
                                   <div className="w-3.5 h-3.5 bg-black/8 rounded flex items-center justify-center">
                                     <svg className="w-2 h-2 text-text-tertiary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
                                   </div>
@@ -593,7 +593,7 @@ export default function LandingPage() {
       {/* ────────── Footer ────────── */}
       <footer className="shrink-0 px-6 sm:px-12 lg:px-40 py-4 max-w-[1400px] mx-auto w-full">
         <span className="text-text-tertiary text-sm">
-          Core &copy; 2026
+          Pulse by Factoría IA &copy; 2026
         </span>
       </footer>
 

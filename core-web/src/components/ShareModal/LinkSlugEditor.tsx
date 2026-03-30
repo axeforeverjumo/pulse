@@ -207,7 +207,7 @@ export default function LinkSlugEditor({ link, onUpdateSlug }: LinkSlugEditorPro
         <p className="text-[11px] text-red-500">{availabilityReason}</p>
       )}
       {!error && availability === 'available' && hasChanges && (
-        <p className="text-[11px] text-green-600">Slug is available</p>
+        <p className="text-[11px] text-green-600">El slug está disponible</p>
       )}
 
       <p className="text-[11px] text-text-tertiary">Custom links are easier to guess than random links.</p>

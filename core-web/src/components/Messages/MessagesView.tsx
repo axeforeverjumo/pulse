@@ -694,7 +694,7 @@ function Message({
             }}
             role="button"
             tabIndex={0}
-            title="Go to original message"
+            title="Ir al mensaje original"
           >
             {replyData.original_user_avatar ? (
               <img
@@ -765,7 +765,7 @@ function Message({
             {formatMessageTime(message.created_at)}
           </span>
           {message.is_edited && (
-            <span className="text-xs text-text-tertiary">(edited)</span>
+            <span className="text-xs text-text-tertiary">(editado)</span>
           )}
         </div>
 
@@ -887,7 +887,7 @@ function Message({
             ref={reactionButtonRef}
             onClick={handleShowEmojiPicker}
             className="p-1 text-text-tertiary hover:text-text-body hover:bg-bg-gray rounded"
-            title="Add reaction"
+            title="Añadir reacción"
           >
             <FaceSmileIcon className="w-4 h-4" />
           </button>
@@ -895,7 +895,7 @@ function Message({
             <button
               onClick={onReply}
               className="p-1 text-text-tertiary hover:text-text-body hover:bg-bg-gray rounded"
-              title="Reply in thread"
+              title="Responder en hilo"
             >
               <ChatBubbleOvalLeftIcon className="w-4 h-4" />
             </button>
@@ -903,7 +903,7 @@ function Message({
           <button
             onClick={onShare}
             className="p-1 text-text-tertiary hover:text-text-body hover:bg-bg-gray rounded"
-            title="Reply"
+            title="Responder"
           >
             <ArrowUturnLeftIcon className="w-4 h-4" />
           </button>
@@ -997,8 +997,8 @@ function CachedChannelMessages({
       date.getDate(),
     );
 
-    if (msgDate.getTime() === today.getTime()) return "Today";
-    if (msgDate.getTime() === yesterday.getTime()) return "Yesterday";
+    if (msgDate.getTime() === today.getTime()) return "Hoy";
+    if (msgDate.getTime() === yesterday.getTime()) return "Ayer";
     return date.toLocaleDateString("en-US", {
       weekday: "long",
       month: "long",
@@ -1105,7 +1105,7 @@ function ForwardPreviewBar({
       <button
         onClick={onCancel}
         className="p-1 text-text-tertiary hover:text-text-body rounded transition-colors shrink-0"
-        title="Cancel"
+        title="Cancelar"
       >
         <XMarkIcon className="w-4 h-4" />
       </button>
@@ -1996,14 +1996,14 @@ export default function MessagesView() {
   };
 
   const handleDeleteChannel = async (channelId: string) => {
-    if (confirm("Are you sure you want to delete this channel?")) {
+    if (confirm("¿Estás seguro de que quieres eliminar este canal?")) {
       await removeChannel(channelId);
     }
   };
 
   const handleLeaveChannel = async () => {
     if (!currentChannel || !user?.id) return;
-    if (confirm("Are you sure you want to leave this channel?")) {
+    if (confirm("¿Estás seguro de que quieres salir de este canal?")) {
       try {
         await removeChannelMember(currentChannel.id, user.id);
       } catch (err) {
@@ -2013,7 +2013,7 @@ export default function MessagesView() {
   };
 
   const handleDeleteMessage = async (messageId: string) => {
-    if (confirm("Delete this message?")) {
+    if (confirm("¿Eliminar este mensaje?")) {
       await removeMessage(messageId);
     }
   };
@@ -2284,12 +2284,12 @@ export default function MessagesView() {
         >
           {/* Header */}
           <div className="h-12 flex items-center justify-between pl-4 pr-2 shrink-0">
-            <h2 className="text-base font-semibold text-text-body">Messages</h2>
+            <h2 className="text-base font-semibold text-text-body">Mensajes</h2>
             <button
               onClick={() => setShowCreateChannel(true)}
               className="p-1 rounded bg-white border border-black/10 hover:border-black/20 text-text-secondary hover:text-text-body transition-colors focus-visible:ring-2 focus-visible:ring-brand-primary"
-              title="New channel"
-              aria-label="New channel"
+              title="Nuevo canal"
+              aria-label="Nuevo canal"
             >
               <Icon icon={Plus} size={16} aria-hidden="true" />
             </button>
@@ -2313,7 +2313,7 @@ export default function MessagesView() {
                 aria-expanded={showChannelsExpanded}
                 className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-text-tertiary cursor-pointer group"
               >
-                <span>Channels</span>
+                <span>Canales</span>
                 <ChevronRightIcon className={`w-3 h-3 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-all ${showChannelsExpanded ? 'rotate-90' : ''}`} aria-hidden="true" />
                 <div className="flex-1" />
                 <div className="relative">
@@ -2324,8 +2324,8 @@ export default function MessagesView() {
                       setShowChannelsSectionMenu(!showChannelsSectionMenu);
                     }}
                     className="p-1 rounded text-text-tertiary hover:text-text-body hover:bg-bg-gray-light transition-colors opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-brand-primary"
-                    title="More options"
-                    aria-label="Channels section options"
+                    title="Más opciones"
+                    aria-label="Opciones de sección de canales"
                   >
                     <EllipsisHorizontalIcon className="w-3.5 h-3.5" aria-hidden="true" />
                   </button>
@@ -2398,7 +2398,7 @@ export default function MessagesView() {
                             handleOpenChannelDetails("channel", channel.id);
                           }}
                           className="p-1 rounded text-text-tertiary hover:text-text-body hover:bg-black/10 transition-colors opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-brand-primary"
-                          title="Channel settings"
+                          title="Configuración del canal"
                           aria-label={`Settings for ${channel.name}`}
                         >
                           <EllipsisHorizontalIcon className="w-4 h-4" aria-hidden="true" />
@@ -2431,7 +2431,7 @@ export default function MessagesView() {
                   aria-expanded={showDMsExpanded}
                   className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-text-tertiary cursor-pointer group"
                 >
-                  <span>Direct Messages</span>
+                  <span>Mensajes directos</span>
                   <ChevronRightIcon className={`w-3 h-3 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-all ${showDMsExpanded ? 'rotate-90' : ''}`} aria-hidden="true" />
                   <div className="flex-1" />
                   <div className="relative">
@@ -2442,8 +2442,8 @@ export default function MessagesView() {
                         setShowDMsSectionMenu(!showDMsSectionMenu);
                       }}
                       className="p-1 rounded text-text-tertiary hover:text-text-body hover:bg-bg-gray-light transition-colors opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-brand-primary"
-                      title="More options"
-                      aria-label="Direct messages section options"
+                      title="Más opciones"
+                      aria-label="Opciones de mensajes directos"
                     >
                       <EllipsisHorizontalIcon className="w-3.5 h-3.5" aria-hidden="true" />
                     </button>
@@ -2882,7 +2882,7 @@ export default function MessagesView() {
                 placeholder={
                   isInDM
                     ? `Message ${getDMDisplayName(currentDM!)}`
-                    : `Message #${currentChannel!.name}`
+                    : `Mensaje en #${currentChannel!.name}`
                 }
                 onSend={(blocks) => {
                   handleSendMessage(blocks);
@@ -2916,7 +2916,7 @@ export default function MessagesView() {
               <div className="h-12 border-b border-border-gray px-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <ChatBubbleOvalLeftIcon className="w-4.5 h-4.5 text-text-secondary" />
-                  <h3 className="font-medium text-text-body">Thread</h3>
+                  <h3 className="font-medium text-text-body">Hilo</h3>
                 </div>
                 <button
                   onClick={clearThread}
@@ -3018,7 +3018,7 @@ export default function MessagesView() {
                   onChange={handleThreadFileInputChange}
                 />
                 <MessageComposer
-                  placeholder="Reply..."
+                  placeholder="Responder..."
                   onSend={(blocks) => handleSendThreadReply(blocks)}
                   workspaceId={workspaceId || ""}
                   channelId={activeThreadId || ""}
@@ -3034,7 +3034,7 @@ export default function MessagesView() {
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center text-text-tertiary bg-white rounded-r-lg relative">
-          <p>Select a channel or start a conversation</p>
+          <p>Selecciona un canal o inicia una conversación</p>
         </div>
       )}
       </div>
@@ -3088,7 +3088,7 @@ export default function MessagesView() {
                     value={newChannelName}
                     onChange={(e) => setNewChannelName(e.target.value)}
                     className="w-full px-3 py-2 text-[14px] text-gray-900 bg-transparent border border-gray-200 rounded-lg focus:outline-none focus:border-gray-300 placeholder:text-gray-400"
-                    placeholder="e.g. project-updates"
+                    placeholder="ej. actualizaciones-proyecto"
                     autoFocus
                     required
                   />
@@ -3106,7 +3106,7 @@ export default function MessagesView() {
                     value={newChannelDescription}
                     onChange={(e) => setNewChannelDescription(e.target.value)}
                     className="w-full px-3 py-2 text-[14px] text-gray-900 bg-transparent border border-gray-200 rounded-lg focus:outline-none focus:border-gray-300 placeholder:text-gray-400"
-                    placeholder="What's this channel about?"
+                    placeholder="¿De qué trata este canal?"
                   />
                 </div>
 
@@ -3369,7 +3369,7 @@ export default function MessagesView() {
                             type="text"
                             value={editingChannelName}
                             onChange={(e) => setEditingChannelName(e.target.value)}
-                            placeholder="e.g. marketing"
+                            placeholder="ej. marketing"
                             className="w-full pl-7 pr-3 py-2.5 bg-white border border-border-gray rounded-lg text-xs outline-none focus:border-text-tertiary"
                           />
                         </div>
@@ -3384,7 +3384,7 @@ export default function MessagesView() {
                         <textarea
                           value={editingChannelDescription}
                           onChange={(e) => setEditingChannelDescription(e.target.value)}
-                          placeholder="What's this channel about?"
+                          placeholder="¿De qué trata este canal?"
                           rows={1}
                           className="w-full px-3 py-2.5 bg-white border border-border-gray rounded-lg text-xs outline-none focus:border-text-tertiary resize-none"
                         />
@@ -3631,7 +3631,7 @@ export default function MessagesView() {
                       disabled={!editingChannelName.trim() || isSavingChannel}
                       className="px-4 py-2 text-sm bg-black text-white rounded-lg disabled:opacity-50"
                     >
-                      {isSavingChannel ? "Saving..." : "Save"}
+                      {isSavingChannel ? "Guardando..." : "Guardar"}
                     </button>
                   </div>
                 </>
@@ -3700,7 +3700,7 @@ export default function MessagesView() {
             <button
               onClick={() => setLightboxImageUrl(null)}
               className="absolute top-4 right-4 p-2 text-white/80 hover:text-white transition-colors"
-              aria-label="Close"
+              aria-label="Cerrar"
             >
               <XMarkIcon className="w-6 h-6" />
             </button>

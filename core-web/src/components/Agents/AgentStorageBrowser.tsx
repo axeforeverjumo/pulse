@@ -122,13 +122,13 @@ export default function AgentStorageBrowser({ agentId, label, rootPath, emptyMes
         .from("agent-data")
         .download(`${agentId}/${rootPath}/${storagePath}`);
       if (error || !data) {
-        setFileContent("Failed to load file");
+        setFileContent("Error al cargar archivo");
         return;
       }
       const text = await data.text();
       setFileContent(text);
     } catch {
-      setFileContent("Failed to load file");
+      setFileContent("Error al cargar archivo");
     } finally {
       setFileLoading(false);
     }
@@ -199,7 +199,7 @@ export default function AgentStorageBrowser({ agentId, label, rootPath, emptyMes
       )}
       {loaded && entries.length === 0 && !error ? (
         <p className="text-[11px] text-text-tertiary italic">
-          {emptyMessage || "No files yet."}
+          {emptyMessage || "Sin archivos aún."}
         </p>
       ) : (
         <div className="border border-border-light rounded-lg bg-white overflow-hidden">
@@ -223,7 +223,7 @@ export default function AgentStorageBrowser({ agentId, label, rootPath, emptyMes
             </button>
           </div>
           <pre className="p-2 text-[11px] text-text-body font-mono whitespace-pre-wrap break-words max-h-[300px] overflow-y-auto">
-            {fileLoading ? "Loading..." : fileContent}
+            {fileLoading ? "Cargando..." : fileContent}
           </pre>
         </div>
       )}

@@ -141,7 +141,7 @@ export default function VersionHistoryPanel({
             <button
               onClick={() => setOpen(false)}
               className="p-1.5 text-text-tertiary hover:text-text-body hover:bg-bg-gray rounded-lg transition-colors"
-              title="Close"
+              title="Cerrar"
             >
               <XMarkIcon className="w-4 h-4 stroke-2" />
             </button>
@@ -170,7 +170,7 @@ export default function VersionHistoryPanel({
                     />
                   </svg>
                 </div>
-                <h3 className="text-sm font-medium text-text-body mb-1">No versions yet</h3>
+                <h3 className="text-sm font-medium text-text-body mb-1">Sin versiones aún</h3>
                 <p className="text-xs text-text-tertiary">
                   Versions are saved automatically every few minutes when you make significant edits
                 </p>

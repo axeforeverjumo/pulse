@@ -120,7 +120,7 @@ export default function AgentConfigPanel({ agent, onAgentUpdate, onAgentDelete }
     }, 1000);
   };
 
-  // Auto-save system prompt with debounce
+  // Auto-save prompt del sistema with debounce
   const handlePromptChange = (value: string) => {
     setSystemPrompt(value);
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -130,7 +130,7 @@ export default function AgentConfigPanel({ agent, onAgentUpdate, onAgentDelete }
         const updated = await updateAgent(agent.id, { system_prompt: value });
         onAgentUpdate(updated);
       } catch (err) {
-        console.error("Failed to save system prompt:", err);
+        console.error("Failed to save prompt del sistema:", err);
       } finally {
         setIsSaving(false);
       }
@@ -226,18 +226,18 @@ export default function AgentConfigPanel({ agent, onAgentUpdate, onAgentDelete }
         {identity && (
           <div>
             <div className="flex items-center justify-between mb-1">
-              <p className="text-[11px] uppercase tracking-wide text-text-tertiary">Identity</p>
+              <p className="text-[11px] uppercase tracking-wide text-text-tertiary">Identidad</p>
               {identitySaving && <span className="text-[10px] text-text-tertiary">Saving...</span>}
             </div>
             <div className="space-y-2.5">
               {identity.role && (
                 <div>
-                  <p className="text-[10px] text-text-tertiary mb-0.5">Role</p>
+                  <p className="text-[10px] text-text-tertiary mb-0.5">Rol</p>
                   <p className="text-xs text-text-body">{identity.role}</p>
                 </div>
               )}
               <div>
-                <p className="text-[10px] text-text-tertiary mb-0.5">Backstory</p>
+                <p className="text-[10px] text-text-tertiary mb-0.5">Historia</p>
                 <textarea
                   value={identity.backstory || ""}
                   onChange={(e) => saveIdentity({ ...identity, backstory: e.target.value })}
@@ -246,7 +246,7 @@ export default function AgentConfigPanel({ agent, onAgentUpdate, onAgentDelete }
                 />
               </div>
               <div>
-                <p className="text-[10px] text-text-tertiary mb-0.5">Objective</p>
+                <p className="text-[10px] text-text-tertiary mb-0.5">Objetivo</p>
                 <textarea
                   value={identity.objective || ""}
                   onChange={(e) => saveIdentity({ ...identity, objective: e.target.value })}
@@ -255,7 +255,7 @@ export default function AgentConfigPanel({ agent, onAgentUpdate, onAgentDelete }
                 />
               </div>
               <div>
-                <p className="text-[10px] text-text-tertiary mb-0.5">Personality</p>
+                <p className="text-[10px] text-text-tertiary mb-0.5">Personalidad</p>
                 <input
                   type="text"
                   value={identity.personality || ""}
@@ -271,10 +271,10 @@ export default function AgentConfigPanel({ agent, onAgentUpdate, onAgentDelete }
         {/* Memories */}
         {memories !== null && (
           <div>
-            <p className="text-[11px] uppercase tracking-wide text-text-tertiary mb-1">Memories</p>
+            <p className="text-[11px] uppercase tracking-wide text-text-tertiary mb-1">Memorias</p>
             <div className="border border-border-light rounded-lg bg-white p-2.5 max-h-[200px] overflow-y-auto">
               <pre className="text-[11px] text-text-body whitespace-pre-wrap break-words font-sans leading-relaxed">
-                {memories || "No memories yet."}
+                {memories || "Sin memorias aún."}
               </pre>
             </div>
           </div>
@@ -321,7 +321,7 @@ export default function AgentConfigPanel({ agent, onAgentUpdate, onAgentDelete }
                   disabled={lifecycleLoading}
                   className="text-[11px] px-2.5 py-1 rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
                 >
-                  {lifecycleLoading ? "..." : "Confirm"}
+                  {lifecycleLoading ? "..." : "Confirmar"}
                 </button>
                 <button
                   onClick={() => setShowDeleteConfirm(false)}
@@ -334,9 +334,9 @@ export default function AgentConfigPanel({ agent, onAgentUpdate, onAgentDelete }
           </div>
         </div>
 
-        {/* Model */}
+        {/* Modelo */}
         <div>
-          <p className="text-[11px] uppercase tracking-wide text-text-tertiary mb-1">Model</p>
+          <p className="text-[11px] uppercase tracking-wide text-text-tertiary mb-1">Modelo</p>
           <p className="text-xs text-text-body font-mono">{model}</p>
         </div>
 
@@ -360,33 +360,33 @@ export default function AgentConfigPanel({ agent, onAgentUpdate, onAgentDelete }
         {/* Agent's Personal Data */}
         <AgentStorageBrowser
           agentId={agent.id}
-          label="Personal Data"
+          label="Datos personales"
           rootPath="personal"
-          emptyMessage="No personal files yet. The agent will create files as it works."
+          emptyMessage="Sin archivos personales aún. El agente creará archivos a medida que trabaje."
         />
 
         {/* Workspace Data */}
         <AgentStorageBrowser
           agentId={agent.id}
-          label="Workspace Data"
+          label="Datos del espacio de trabajo"
           rootPath="workspace"
-          emptyMessage="No workspace data synced yet."
+          emptyMessage="Sin datos del espacio de trabajo sincronizados aún."
         />
 
         {/* Sandbox Files */}
         <SandboxFileBrowser agentId={agent.id} sandboxStatus={agent.sandbox_status} />
 
-        {/* System prompt */}
+        {/* Prompt del sistema */}
         <div>
           <div className="flex items-center justify-between mb-1">
-            <p className="text-[11px] uppercase tracking-wide text-text-tertiary">System Prompt</p>
+            <p className="text-[11px] uppercase tracking-wide text-text-tertiary">Prompt del sistema</p>
             {isSaving && <span className="text-[10px] text-text-tertiary">Saving...</span>}
           </div>
           <textarea
             value={systemPrompt}
             onChange={(e) => handlePromptChange(e.target.value)}
             className="w-full h-48 text-xs text-text-body bg-white border border-border-light rounded-lg p-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-brand-primary"
-            placeholder="System prompt for this agent..."
+            placeholder="Prompt del sistema for this agent..."
           />
         </div>
       </div>

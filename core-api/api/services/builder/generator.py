@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 _anthropic_client = None
 
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-haiku-4-5-20251001"
 
 
 def get_anthropic_client() -> anthropic.AsyncAnthropic:

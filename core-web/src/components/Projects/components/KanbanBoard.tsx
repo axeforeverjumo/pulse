@@ -222,7 +222,7 @@ export default function KanbanBoard() {
   if (!project) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-text-tertiary">Select a project to view the board</p>
+        <p className="text-text-tertiary">Selecciona un proyecto para ver el tablero</p>
       </div>
     );
   }
@@ -485,7 +485,7 @@ export default function KanbanBoard() {
         <div className="flex-1 min-h-0 h-full overflow-auto px-2 pt-2 pb-8">
           {filteredIssues.length === 0 && columns.length > 0 && (
             <div className="px-1 pb-4 text-sm text-gray-400">
-              {hasActiveFilters ? "No matching results" : "No cards yet"}
+              {hasActiveFilters ? "No matching results" : "Sin tarjetas yet"}
             </div>
           )}
           <div className="grid grid-flow-col auto-cols-max gap-2">

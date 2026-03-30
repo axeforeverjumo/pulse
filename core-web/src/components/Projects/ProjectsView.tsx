@@ -123,7 +123,7 @@ export default function ProjectsView() {
   if (!workspace) {
     return (
       <div className="flex-1 flex items-center justify-center bg-background-primary">
-        <p className="text-text-tertiary">Workspace not found</p>
+        <p className="text-text-tertiary">Espacio de trabajo no encontrado</p>
       </div>
     );
   }
@@ -165,12 +165,12 @@ export default function ProjectsView() {
           ) : (
             <div className="flex-1 flex items-center justify-center relative">
               <div className="text-center">
-                <p className="text-text-tertiary mb-4">No projects yet</p>
+                <p className="text-text-tertiary mb-4">Sin proyectos aún</p>
                 <button
                   onClick={() => setShowCreateModal(true)}
                   className="px-4 py-2 bg-brand-primary text-white rounded-md hover:opacity-90 transition-opacity"
                 >
-                  Create your first project
+                  Crea tu primer proyecto
                 </button>
               </div>
             </div>

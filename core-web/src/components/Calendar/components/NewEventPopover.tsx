@@ -347,7 +347,7 @@ export default function NewEventPopover() {
   const { date, hour, title } = pendingEvent;
 
   const formatDisplayDate = () => {
-    return date.toLocaleDateString('en-US', {
+    return date.toLocaleDateString('es-ES', {
       weekday: 'long',
       month: 'long',
       day: 'numeric'
@@ -356,7 +356,7 @@ export default function NewEventPopover() {
 
   const formatTime = () => {
     if (pendingEvent.isAllDay) {
-      return 'All day';
+      return 'Todo el día';
     }
     const startMinute = pendingEvent.minute || 0;
     const actualEndHour = pendingEvent.endHour ?? hour + 1;
@@ -432,7 +432,7 @@ export default function NewEventPopover() {
           value={title}
           onChange={(e) => updatePendingEventTitle(e.target.value)}
           onKeyDown={handleTitleKeyDown}
-          placeholder="Add title"
+          placeholder="Añadir título"
           className="w-full text-base font-semibold text-gray-900 bg-transparent border-none outline-none placeholder:text-gray-400 mb-3"
           autoComplete="off"
         />
@@ -446,7 +446,7 @@ export default function NewEventPopover() {
             {!pendingEvent.isAllDay && isEditingTime ? (
               <div className="space-y-2">
                 <div className="flex gap-2 items-center text-xs">
-                  <label className="text-gray-500 w-8">Start</label>
+                  <label className="text-gray-500 w-8">Inicio</label>
                   <InvertedSpinInput
                     min={1}
                     max={12}
@@ -487,7 +487,7 @@ export default function NewEventPopover() {
                   </select>
                 </div>
                 <div className="flex gap-2 items-center text-xs">
-                  <label className="text-gray-500 w-8">End</label>
+                  <label className="text-gray-500 w-8">Fin</label>
                   <InvertedSpinInput
                     min={1}
                     max={12}
@@ -530,7 +530,7 @@ export default function NewEventPopover() {
                 </div>
                 {/* End date picker */}
                 <div className="flex gap-2 items-center text-xs mt-2 pt-2 border-t border-gray-200">
-                  <label className="text-gray-500 w-8">End Date</label>
+                  <label className="text-gray-500 w-8">Fecha de fin</label>
                   <DatePicker
                     value={pendingEvent.endDate || pendingEvent.date}
                     onChange={(dateStr) => {
@@ -560,7 +560,7 @@ export default function NewEventPopover() {
               </button>
             ) : null}
 
-            {/* All day toggle */}
+            {/* Todo el día toggle */}
             <label className="flex items-center gap-2 mt-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -568,7 +568,7 @@ export default function NewEventPopover() {
                 onChange={(e) => updatePendingEventAllDay(e.target.checked)}
                 className="w-4 h-4 rounded-md border-gray-300 accent-black focus:ring-gray-500"
               />
-              <span className="text-sm text-gray-700">All day</span>
+              <span className="text-sm text-gray-700">Todo el día</span>
             </label>
           </div>
         </div>
@@ -590,7 +590,7 @@ export default function NewEventPopover() {
             className="flex items-center gap-2.5 mb-2 w-full text-left px-0 py-1"
           >
             <Icon icon={Video} size={16} className="text-gray-400 shrink-0" />
-            <span className="text-sm text-gray-400">Add Google Meet</span>
+            <span className="text-sm text-gray-400">Añadir Google Meet</span>
           </button>
         )}
 
@@ -602,7 +602,7 @@ export default function NewEventPopover() {
             value={pendingEvent?.location || ''}
             onChange={(e) => updatePendingEventLocation(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Add location"
+            placeholder="Añadir ubicación"
             className="flex-1 text-sm text-gray-900 bg-transparent border-none outline-none placeholder:text-gray-400 px-0 py-1"
           />
         </div>
@@ -613,7 +613,7 @@ export default function NewEventPopover() {
           <textarea
             value={pendingEvent?.description || ''}
             onChange={(e) => updatePendingEventDescription(e.target.value)}
-            placeholder="Add description"
+            placeholder="Añadir descripción"
             className="flex-1 text-sm text-gray-900 bg-transparent border-none outline-none placeholder:text-gray-400 px-0 py-1 resize-none"
             rows={2}
           />

@@ -37,7 +37,7 @@ export default function CommentItem({
       return comment.content ? (
         <span className="whitespace-pre-wrap">{comment.content}</span>
       ) : (
-        <span className="text-gray-400 italic">No content</span>
+        <span className="text-gray-400 italic">Sin contenido</span>
       );
     }
 

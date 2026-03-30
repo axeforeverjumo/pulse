@@ -122,7 +122,7 @@ function CalendarContent({
             size={24}
             className="animate-spin mr-2"
           />
-          Loading calendar...
+          Cargando calendario...
         </div>
       ) : error ? (
         <div className="flex-1 flex items-center justify-center text-red-500">
@@ -689,11 +689,11 @@ export default function CalendarView() {
         <div className={`w-[212px] shrink-0 flex flex-col overflow-hidden ${SIDEBAR.bg} border-r border-black/5`}>
           {/* Header */}
           <div className="h-12 flex items-center justify-between pl-4 pr-2 shrink-0">
-            <h2 className="text-base font-semibold text-text-body">Calendar</h2>
+            <h2 className="text-base font-semibold text-text-body">Calendario</h2>
             <button
               onClick={(e) => handleNewEvent(e)}
               className="p-1 rounded bg-white border border-black/10 hover:border-black/20 text-text-secondary hover:text-text-body transition-colors"
-              title="New event"
+              title="Nuevo evento"
             >
               <Icon icon={Plus} size={16} />
             </button>
@@ -713,7 +713,7 @@ export default function CalendarView() {
               </div>
               <div className="space-y-0.5">
                 {accountsStatus.length === 0 ? (
-                  <div className="text-xs text-text-tertiary">No accounts</div>
+                  <div className="text-xs text-text-tertiary">Sin cuentas</div>
                 ) : (
                   accountsStatus.map((account) => {
                     // When selection hasn't been initialized, all accounts are implicitly selected (unified view)

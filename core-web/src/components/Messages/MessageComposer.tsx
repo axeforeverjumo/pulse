@@ -248,7 +248,7 @@ interface MessageComposerProps {
 const channelDrafts = new Map<string, string>();
 
 export function MessageComposer({
-  placeholder = "Write a message...",
+  placeholder = "Escribe un mensaje...",
   onSend,
   workspaceId,
   channelId,
@@ -735,7 +735,7 @@ export function MessageComposer({
               onClick={() => onFileSelect()}
               disabled={isUploading}
               className="p-1.5 text-text-tertiary hover:text-text-body hover:bg-bg-gray rounded transition-colors disabled:opacity-50"
-              title="Attach file"
+              title="Adjuntar archivo"
             >
               <PaperClipIcon className="w-4.5 h-4.5" />
             </button>
@@ -775,7 +775,7 @@ export function MessageComposer({
               type="button"
               onClick={triggerMention}
               className="p-1.5 text-text-tertiary hover:text-text-body hover:bg-bg-gray rounded transition-colors"
-              title="Mention"
+              title="Mención"
             >
               <AtSymbolIcon className="w-4.5 h-4.5" />
             </button>

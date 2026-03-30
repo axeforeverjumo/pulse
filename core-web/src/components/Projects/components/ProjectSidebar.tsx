@@ -79,12 +79,12 @@ export default function ProjectSidebar({ onCreateClick, onSelectProject }: Proje
     <div className={`flex flex-col h-full ${SIDEBAR.bg} border-r border-black/5`}>
       {/* Header */}
       <div className="h-12 flex items-center justify-between pl-4 pr-2 shrink-0">
-        <h2 className="text-base font-semibold text-text-body">Projects</h2>
+        <h2 className="text-base font-semibold text-text-body">Proyectos</h2>
         <button
           onClick={onCreateClick}
           className="p-1 rounded bg-white border border-black/10 hover:border-black/20 text-text-secondary hover:text-text-body transition-colors focus-visible:ring-2 focus-visible:ring-brand-primary"
-          title="New project"
-          aria-label="New project"
+          title="Nuevo proyecto"
+          aria-label="Nuevo proyecto"
         >
           <Icon icon={Plus} size={16} aria-hidden="true" />
         </button>
@@ -147,7 +147,7 @@ export default function ProjectSidebar({ onCreateClick, onSelectProject }: Proje
                           setOpenMenuId(openMenuId === board.id ? null : board.id);
                         }}
                         className="p-1 rounded text-text-tertiary hover:text-text-body hover:bg-bg-gray-light transition-colors focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:opacity-100"
-                        title="More options"
+                        title="Más opciones"
                         aria-label={`Options for ${board.name}`}
                       >
                         <EllipsisHorizontalIcon className="w-3.5 h-3.5" aria-hidden="true" />
@@ -198,7 +198,7 @@ export default function ProjectSidebar({ onCreateClick, onSelectProject }: Proje
       {/* Delete Confirmation Modal */}
       <ConfirmModal
         isOpen={!!deleteTarget}
-        title="Delete project"
+        title="Eliminar proyecto"
         message={`Are you sure you want to delete "${deleteTarget?.name}"? All columns and cards will be permanently deleted.`}
         confirmLabel="Delete"
         onConfirm={handleDeleteConfirm}

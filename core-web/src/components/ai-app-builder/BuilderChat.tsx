@@ -71,7 +71,7 @@ export default function BuilderChat() {
     setStreamingContent("");
     setFilesCreated([]);
     setBuildError(null);
-    setGenerationStatus("Thinking...");
+    setGenerationStatus("Pensando...");
 
     // Add user message optimistically
     const userMessage: BuilderMessage = {
@@ -116,7 +116,7 @@ export default function BuilderChat() {
                 break;
 
               case "builder_plan":
-                setGenerationStatus("Building...");
+                setGenerationStatus("Construyendo...");
                 break;
 
               case "builder_file":
@@ -172,7 +172,7 @@ export default function BuilderChat() {
         id: `error-${Date.now()}`,
         conversation_id: "",
         role: "assistant",
-        content: `Error: ${err instanceof Error ? err.message : "Generation failed"}`,
+        content: `Error: ${err instanceof Error ? err.message : "Error en la generación"}`,
         content_parts: [],
         version_id: null,
         created_at: new Date().toISOString(),
@@ -284,8 +284,8 @@ export default function BuilderChat() {
             }}
             placeholder={
               hasFiles
-                ? "Describe a change..."
-                : "Describe your app..."
+                ? "Describe un cambio..."
+                : "Describe tu aplicación..."
             }
             rows={1}
             disabled={isGenerating}

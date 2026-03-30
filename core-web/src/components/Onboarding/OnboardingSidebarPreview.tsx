@@ -80,7 +80,7 @@ export default function OnboardingSidebarPreview({
             Channels
           </p>
           <div className="space-y-2 mb-5">
-            {["# general", "# design", "# engineering", "+ Add channels"].map((label) => (
+            {["# general", "# design", "# engineering", "+ Añadir canales"].map((label) => (
               <div key={label} className="flex items-center gap-2.5 px-2">
                 <span className="text-xs text-gray-400">{label}</span>
               </div>
@@ -103,7 +103,7 @@ export default function OnboardingSidebarPreview({
               )}
               <span className="text-xs text-gray-500 truncate">
                 {userName || "You"}{" "}
-                <span className="text-gray-300">you</span>
+                <span className="text-gray-300">tú</span>
               </span>
             </div>
           </div>

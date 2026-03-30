@@ -36,7 +36,7 @@ export default function SidebarChatInput({
   isUploading = false,
   disabled = false,
   isStreaming = false,
-  placeholder = 'Ask anything...',
+  placeholder = 'Pregunta lo que quieras...',
   mentions = [],
   onMentionSelect,
   onRemoveMention,
@@ -258,7 +258,7 @@ export default function SidebarChatInput({
               type="button"
               onClick={handleAtButtonClick}
               className="w-6 h-6 flex items-center justify-center rounded-full shrink-0 text-text-tertiary hover:text-text-body hover:bg-bg-gray-dark transition-colors"
-              title="Mention"
+              title="Mencionar"
             >
               <AtSymbolIcon className="w-4 h-4" />
             </button>

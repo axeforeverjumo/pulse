@@ -238,7 +238,7 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="w-full text-lg font-medium text-gray-900 bg-transparent border-0 p-0 focus:outline-none focus:ring-0 placeholder:text-gray-300"
-                placeholder="Card title"
+                placeholder="Título de tarjeta"
                 autoFocus
               />
             ) : (
@@ -276,7 +276,7 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
                     ) : (
                       <button
                         disabled
-                        title="Only the card creator or workspace admins can delete"
+                        title="Solo el creador de la tarjeta o los administradores pueden eliminar"
                         className="w-[calc(100%-8px)] mx-1 flex items-center gap-2 px-2 py-1.5 text-[12px] text-gray-300 cursor-not-allowed rounded-md"
                       >
                         <TrashIcon className="w-4 h-4" />
@@ -317,7 +317,7 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
                     ) : (
                       <div className="flex items-center gap-1.5 text-gray-400 flex-1">
                         <Flag size={14} weight="fill" />
-                        <span>No priority</span>
+                        <span>Sin prioridad</span>
                       </div>
                     )}
                   </button>
@@ -336,7 +336,7 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
                           }}
                           className="w-full flex items-center gap-2 px-3 py-2 text-[12px] hover:bg-gray-50 transition-colors"
                         >
-                          <span className="text-gray-400">No priority</span>
+                          <span className="text-gray-400">Sin prioridad</span>
                           {priority === 0 && <span className="ml-auto text-blue-600">âœ“</span>}
                         </button>
                         {PRIORITY_OPTIONS.filter((o) => o.value > 0).map((option) => (
@@ -363,7 +363,7 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
                   <DatePicker
                     value={dueDate}
                     onChange={setDueDate}
-                    placeholder="No due date"
+                    placeholder="Sin fecha límite"
                     buttonClassName="!px-3 hover:bg-gray-50/60"
                   />
                 </div>
@@ -396,7 +396,7 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
                   onChange={(e) => setDescription(e.target.value)}
                   rows={6}
                   className="w-full py-1.5 text-[13px] text-gray-700 bg-transparent border-0 focus:outline-none placeholder:text-gray-400 resize-none transition-all"
-                  placeholder="Add a description..."
+                  placeholder="AÃ±adir una descripciÃ³n..."
                 />
               </div>
 
@@ -404,7 +404,7 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
               <div className="border-t border-gray-100 pt-5">
                 <div className="flex items-center gap-2 mb-4">
                   <PhotoIcon className="w-4 h-4 text-gray-400" />
-                  <span className="text-[12px] font-medium text-gray-500">Images</span>
+                  <span className="text-[12px] font-medium text-gray-500">Imágenes</span>
                 </div>
                 <input
                   ref={imageInputRef}
@@ -482,7 +482,7 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
                   {card.description}
                 </p>
               ) : (
-                <p className="text-[13px] text-gray-400 italic">No description</p>
+                <p className="text-[13px] text-gray-400 italic">Sin descripción</p>
               )}
 
               {/* Labels */}
@@ -528,7 +528,7 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
                 <div className="border-t border-gray-100 pt-5">
                   <div className="flex items-center gap-2 mb-4">
                     <PhotoIcon className="w-4 h-4 text-gray-400" />
-                    <span className="text-[12px] font-medium text-gray-500">Attachments</span>
+                    <span className="text-[12px] font-medium text-gray-500">Adjuntos</span>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     {card.image_urls.map((url, index) => (

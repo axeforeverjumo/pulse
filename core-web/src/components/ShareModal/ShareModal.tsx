@@ -100,7 +100,7 @@ export default function ShareModal() {
     setIsSubmitting(false);
     if (result) {
       const label = selectedUser?.name || selectedUser?.email || email.trim();
-      toast.success(`Shared with ${label}`);
+      toast.success(`Compartido con ${label}`);
       setEmail('');
       setSelectedUser(null);
     }
@@ -119,7 +119,7 @@ export default function ShareModal() {
     if (link?.url) {
       try {
         await navigator.clipboard.writeText(link.url);
-        toast.success('Link copied to clipboard');
+        toast.success('Link copiado al portapapeles');
       } catch {
         toast.success('Link created');
       }
@@ -130,7 +130,7 @@ export default function ShareModal() {
   const handleCopyLink = async (url: string) => {
     try {
       await navigator.clipboard.writeText(url);
-      toast.success('Link copied to clipboard');
+      toast.success('Link copiado al portapapeles');
     } catch {
       toast.error('Failed to copy link');
     }
@@ -189,7 +189,7 @@ export default function ShareModal() {
 
         <div className="border-t border-border-gray pt-3">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs uppercase tracking-wide text-text-tertiary">People with access</h3>
+            <h3 className="text-xs uppercase tracking-wide text-text-tertiary">Personas con acceso</h3>
             {isLoadingShares && <span className="text-xs text-text-secondary">Loading...</span>}
           </div>
 
@@ -215,7 +215,7 @@ export default function ShareModal() {
 
         {membersSorted.length > 0 && (
           <div className="border-t border-border-gray pt-3">
-            <h3 className="text-xs uppercase tracking-wide text-text-tertiary mb-2">Workspace access</h3>
+            <h3 className="text-xs uppercase tracking-wide text-text-tertiary mb-2">Acceso al espacio de trabajo</h3>
             <div className="space-y-2">
               {membersSorted.map((member) => (
                 <div key={member.id} className="flex items-center justify-between">
@@ -234,7 +234,7 @@ export default function ShareModal() {
 
         <div className="border-t border-border-gray pt-3">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs uppercase tracking-wide text-text-tertiary">Pending requests</h3>
+            <h3 className="text-xs uppercase tracking-wide text-text-tertiary">Solicitudes pendientes</h3>
             {isLoadingPendingRequests && <span className="text-xs text-text-secondary">Loading...</span>}
           </div>
 
@@ -262,7 +262,7 @@ export default function ShareModal() {
 
         <div className="border-t border-border-gray pt-3">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs uppercase tracking-wide text-text-tertiary">Link sharing</h3>
+            <h3 className="text-xs uppercase tracking-wide text-text-tertiary">Compartir enlace</h3>
             {isLoadingLinks && <span className="text-xs text-text-secondary">Loading...</span>}
           </div>
 
@@ -296,7 +296,7 @@ export default function ShareModal() {
                       link={link}
                       onUpdateSlug={(slug) => updateLinkSlug(link.id, slug)}
                     />
-                    <p className="text-[11px] text-text-secondary">Anyone with the link</p>
+                    <p className="text-[11px] text-text-secondary">Cualquiera con el enlace</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <PermissionSelect

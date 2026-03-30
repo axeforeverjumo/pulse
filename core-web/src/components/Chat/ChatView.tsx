@@ -110,7 +110,7 @@ export default function ChatView() {
   // Ref for the last user message to scroll it to top
   const lastUserMessageRef = useRef<HTMLDivElement>(null);
 
-  // When true, the user explicitly requested a new chat â€” skip redirect to recent
+  // When true, the user explicitly requested a nuevo chat â€” skip redirect to recent
   const wantsNewChatRef = useRef(false);
 
   // When true, we just created a conversation in sendMessage â€” skip loadMessages
@@ -233,7 +233,7 @@ export default function ChatView() {
         navigate(getChatUrl(mostRecent.id), { replace: true });
         return;
       }
-      // New chat - just reset the ref, sidebar handles activeConversationId
+      // Nuevo chat - just reset the ref, sidebar handles activeConversationId
       activeConversationRef.current = null;
       return;
     }
@@ -409,17 +409,17 @@ export default function ChatView() {
                 navigate(getChatUrl(), { replace: true });
               }}
               className="p-1 rounded bg-white border border-black/10 hover:border-black/20 text-text-secondary hover:text-text-body transition-colors"
-              title="New chat"
+              title="Nuevo chat"
             >
               <Icon icon={Plus} size={16} />
             </button>
           </div>
           <div className="flex-1 overflow-y-auto px-2 pb-4">
             {conversations.length === 0 ? (
-              <p className="text-sm text-text-tertiary px-1 py-2">No chats yet</p>
+              <p className="text-sm text-text-tertiary px-1 py-2">Sin chats aún</p>
             ) : (
               <>
-              <p className={`text-xs ${SIDEBAR.item} px-1 pb-2`}>Your chats</p>
+              <p className={`text-xs ${SIDEBAR.item} px-1 pb-2`}>Tus chats</p>
               <div className="space-y-0.5">
                 {conversations.map((conversation) => (
                   <div key={conversation.id} className="group relative">
@@ -459,7 +459,7 @@ export default function ChatView() {
                               setOpenConversationMenuId(openConversationMenuId === conversation.id ? null : conversation.id);
                             }}
                             className="p-1.5 text-text-tertiary hover:text-text-body hover:bg-bg-gray-light rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                            title="More options"
+                            title="Más opciones"
                           >
                             <EllipsisHorizontalIcon className="w-3.5 h-3.5" />
                           </button>
@@ -540,7 +540,7 @@ export default function ChatView() {
       {/* Drag-over overlay */}
       {isDragging && (
         <div className="absolute inset-0 z-50 bg-bg-white/80 border-2 border-dashed border-text-tertiary rounded-xl flex items-center justify-center pointer-events-none">
-          <p className="text-text-secondary text-sm font-medium">Drop images to attach</p>
+          <p className="text-text-secondary text-sm font-medium">Suelta imágenes para adjuntar</p>
         </div>
       )}
       {/* Loading skeleton */}
@@ -694,7 +694,7 @@ export default function ChatView() {
               onStop={handleStopStreaming}
               disabled={loading}
               isStreaming={hasStreamingContent}
-              placeholder="Ask anything"
+              placeholder="Pregunta lo que quieras"
               pendingAttachments={pendingAttachments}
               onAddFiles={addFiles}
               onRemoveAttachment={removeAttachment}

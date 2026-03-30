@@ -260,7 +260,7 @@ export default function ChatInput({
   // Build label for the pill
   let pillLabel: React.ReactNode;
   if (isAll) {
-    pillLabel = <span className="text-[13px] font-semibold">All workspaces</span>;
+    pillLabel = <span className="text-[13px] font-semibold">Todos los espacios</span>;
   } else if (selectedWorkspaces.length === 1) {
     const ws = selectedWorkspaces[0];
     pillLabel = (
@@ -295,7 +295,7 @@ export default function ChatInput({
               <div key={attachment.id} className="relative flex-shrink-0 group">
                 <img
                   src={attachment.preview}
-                  alt="Attachment preview"
+                  alt="Vista previa del adjunto"
                   className={`w-16 h-16 rounded-xl object-cover border border-black/5 ${
                     attachment.status === 'uploading' ? 'opacity-50' : ''
                   } ${attachment.status === 'error' ? 'border-red-300' : ''}`}
@@ -398,7 +398,7 @@ export default function ChatInput({
                         <span className="w-5 h-5 flex items-center justify-center">
                           {isAll && <CheckIcon className="w-4 h-4 text-brand-primary" />}
                         </span>
-                        <span>All workspaces</span>
+                        <span>Todos los espacios</span>
                       </button>
                       {/* Workspace options (multi-select) */}
                       {workspaces.map((ws) => {
@@ -431,20 +431,20 @@ export default function ChatInput({
               type="button"
               onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
               className="flex items-center justify-center h-9 rounded-full border border-black/10 text-text-secondary hover:bg-black/5 transition-colors px-2 gap-1.5"
-              title="Attach files"
+              title="Adjuntar archivos"
             >
               <PaperClipIcon className="w-[18px] h-[18px]" />
-              <span className="text-[13px] font-semibold pr-1">Attach</span>
+              <span className="text-[13px] font-semibold pr-1">Adjuntar</span>
             </button>
             {workspaceId && (
               <button
                 type="button"
                 onClick={handleAtButtonClick}
                 className="flex items-center justify-center h-9 rounded-full border border-black/10 text-text-secondary hover:bg-black/5 transition-colors px-2 gap-1.5"
-                title="Mention a file or person"
+                title="Mencionar un archivo o persona"
               >
                 <AtSymbolIcon className="w-[18px] h-[18px]" />
-                <span className="text-[13px] font-semibold pr-1">Mention</span>
+                <span className="text-[13px] font-semibold pr-1">Mencionar</span>
               </button>
             )}
           </div>
@@ -455,7 +455,7 @@ export default function ChatInput({
               <button
                 onClick={(e) => { e.stopPropagation(); onStop?.(); }}
                 className="w-9 h-9 flex items-center justify-center rounded-full transition-all duration-200 bg-brand-primary text-text-light hover:opacity-90"
-                title="Stop generating"
+                title="Detener generación"
               >
                 <StopIcon className="w-4 h-4" />
               </button>

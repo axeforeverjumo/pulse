@@ -334,7 +334,7 @@ async def stream_chat_response(
             any(b.get("type") == "image" for b in m["content"] if isinstance(b, dict))
             for m in claude_messages
         )
-        logger.info(f"⏱️ [TIMING] Starting Claude API call (model: claude-opus-4-6, has_images: {has_images})")
+        logger.info(f"⏱️ [TIMING] Starting Claude API call (model: claude-haiku-4-5-20251001, has_images: {has_images})")
 
         # Stream from Claude with retry on transient errors
         collected_text = ""
@@ -349,7 +349,7 @@ async def stream_chat_response(
         for attempt in range(1, CLAUDE_MAX_RETRIES + 1):
             try:
                 async with client.messages.stream(
-                    model="claude-opus-4-6",
+                    model="claude-haiku-4-5-20251001",
                     max_tokens=25000,
                     system=system_prompt,
                     messages=claude_messages,

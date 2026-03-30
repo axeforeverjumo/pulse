@@ -117,13 +117,13 @@ export default function TemplateStore({ workspaceId, onClose, onCreated }: Templ
         <div className="px-6 py-4 border-b border-border-light flex items-center justify-between">
           <div>
             <h2 className="text-base font-semibold text-text-body">
-              {selectedTemplate ? "Deploy Agent" : "Agent Templates"}
+              {selectedTemplate ? "Desplegar agente" : "Plantillas de agentes"}
             </h2>
             <p className="text-xs text-text-tertiary mt-0.5">
               {selectedTemplate
                 ? supportsIdentity
-                  ? "Give your agent an identity"
-                  : "Name your agent and deploy it"
+                  ? "Dale una identidad a tu agente"
+                  : "Nombra tu agente y despliégalo"
                 : "Choose an archetype to deploy"}
             </p>
           </div>
@@ -218,7 +218,7 @@ export default function TemplateStore({ workspaceId, onClose, onCreated }: Templ
                     <textarea
                       value={objective}
                       onChange={(e) => setObjective(e.target.value)}
-                      placeholder="Build brand awareness and engagement through authentic, relatable content..."
+                      placeholder="Construye conocimiento de marca y engagement a través de contenido auténtico y cercano..."
                       className="w-full text-sm px-3 py-2 rounded-lg border border-border-gray bg-white focus:outline-none focus:ring-1 focus:ring-brand-primary resize-none h-16"
                     />
                   </div>
@@ -251,7 +251,7 @@ export default function TemplateStore({ workspaceId, onClose, onCreated }: Templ
                   disabled={creating || !agentName.trim()}
                   className="flex-1 text-sm px-4 py-2 rounded-lg bg-black text-white hover:bg-gray-800 disabled:opacity-50 transition-colors"
                 >
-                  {creating ? "Deploying..." : "Deploy Agent"}
+                  {creating ? "Desplegando..." : "Desplegar agente"}
                 </button>
               </div>
             </div>

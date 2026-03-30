@@ -120,7 +120,7 @@ export default function TeamView() {
         <div className={`w-[212px] shrink-0 flex flex-col overflow-hidden ${SIDEBAR.bg} border-r border-black/5`}>
           {/* Header */}
           <div className="h-12 flex items-center px-4 shrink-0">
-            <h2 className="text-base font-semibold text-text-body">Team</h2>
+            <h2 className="text-base font-semibold text-text-body">Equipo</h2>
           </div>
 
           {/* Channels Section */}
@@ -137,7 +137,7 @@ export default function TeamView() {
                 ) : (
                   <ChevronRightIcon className="w-3.5 h-3.5" />
                 )}
-                <span className="text-xs font-semibold uppercase">Channels</span>
+                <span className="text-xs font-semibold uppercase">Canales</span>
               </button>
               <button
                 onClick={() => setShowCreateChannel(true)}
@@ -188,7 +188,7 @@ export default function TeamView() {
                 ) : (
                   <ChevronRightIcon className="w-3.5 h-3.5" />
                 )}
-                <span className="text-xs font-semibold uppercase">Direct Messages</span>
+                <span className="text-xs font-semibold uppercase">Mensajes directos</span>
               </button>
             </div>
 
@@ -264,7 +264,7 @@ export default function TeamView() {
                     </h2>
                     <p className="text-xs text-text-tertiary">
                       {currentDM.status === 'online'
-                        ? 'Active now'
+                        ? 'Activo ahora'
                         : currentDM.status === 'away'
                         ? 'Away'
                         : 'Offline'}
@@ -302,7 +302,7 @@ export default function TeamView() {
                 onChange={(e) => setMessageInput(e.target.value)}
                 placeholder={
                   currentChannel
-                    ? `Message #${currentChannel.name}`
+                    ? `Mensaje en #${currentChannel.name}`
                     : `Message @${currentDM?.userName}`
                 }
                 className="flex-1 px-4 py-2 bg-bg-gray rounded-lg text-text-body placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-brand-primary"
@@ -319,7 +319,7 @@ export default function TeamView() {
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center text-text-tertiary">
-          <p>Select a channel or direct message to start chatting</p>
+          <p>Selecciona un canal o mensaje directo para comenzar a chatear</p>
         </div>
       )}
         </div>
@@ -330,7 +330,7 @@ export default function TeamView() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-bg-gray-dark border border-border-gray rounded-xl w-full max-w-md mx-4">
             <div className="flex items-center justify-between p-4 border-b border-border-gray">
-              <h2 className="text-lg font-semibold text-text-body">Create Channel</h2>
+              <h2 className="text-lg font-semibold text-text-body">Crear canal</h2>
               <button
                 onClick={() => setShowCreateChannel(false)}
                 className="p-1 text-text-secondary hover:text-text-body"
@@ -349,7 +349,7 @@ export default function TeamView() {
                   value={newChannelName}
                   onChange={(e) => setNewChannelName(e.target.value)}
                   className="w-full px-3 py-2 bg-bg-gray-dark/50 border border-border-gray rounded-lg text-sm text-text-body placeholder:text-text-tertiary focus:outline-none focus:border-brand-primary"
-                  placeholder="e.g. project-updates"
+                  placeholder="ej. actualizaciones-proyecto"
                   required
                 />
               </div>
@@ -367,7 +367,7 @@ export default function TeamView() {
                       onChange={(e) => setNewChannelType(e.target.value as 'public' | 'private')}
                       className="rounded border-border-gray"
                     />
-                    <span className="text-sm text-text-body">Public</span>
+                    <span className="text-sm text-text-body">Público</span>
                   </label>
                   <label className="flex items-center gap-2">
                     <input
@@ -377,7 +377,7 @@ export default function TeamView() {
                       onChange={(e) => setNewChannelType(e.target.value as 'public' | 'private')}
                       className="rounded border-border-gray"
                     />
-                    <span className="text-sm text-text-body">Private</span>
+                    <span className="text-sm text-text-body">Privado</span>
                   </label>
                 </div>
               </div>

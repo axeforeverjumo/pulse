@@ -94,7 +94,7 @@ export default function AgentsView() {
   if (!workspace) {
     return (
       <div className="flex-1 flex items-center justify-center bg-background-primary">
-        <p className="text-text-tertiary">Workspace not found</p>
+        <p className="text-text-tertiary">Espacio de trabajo no encontrado</p>
       </div>
     );
   }
@@ -106,7 +106,7 @@ export default function AgentsView() {
         <div className={`w-[212px] shrink-0 flex flex-col overflow-hidden ${SIDEBAR.bg} border-r border-black/5`}>
           {/* Header */}
           <div className="h-12 flex items-center justify-between pl-4 pr-2 shrink-0">
-            <h2 className="text-base font-semibold text-text-body">Agents</h2>
+            <h2 className="text-base font-semibold text-text-body">Agentes</h2>
             <button
               onClick={() => setShowTemplateStore(true)}
               className="p-1 rounded bg-white border border-black/10 hover:border-black/20 text-text-secondary hover:text-text-body transition-colors"
@@ -129,7 +129,7 @@ export default function AgentsView() {
                   size={32}
                   className="mx-auto text-text-tertiary opacity-50 mb-2"
                 />
-                <p className="text-sm text-text-tertiary">No agents yet</p>
+                <p className="text-sm text-text-tertiary">Sin agentes aún</p>
                 <button
                   onClick={() => setShowTemplateStore(true)}
                   className="mt-3 text-sm text-brand-primary hover:underline font-medium"
@@ -198,7 +198,7 @@ export default function AgentsView() {
                   size={32}
                   className="mx-auto text-text-tertiary opacity-50 mb-3"
                 />
-                <p className="text-sm text-text-tertiary">Select an agent or deploy a new one</p>
+                <p className="text-sm text-text-tertiary">Selecciona un agente o despliega uno nuevo</p>
               </div>
             </div>
           )}

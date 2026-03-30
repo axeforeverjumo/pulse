@@ -85,7 +85,7 @@ export default function VideoViewer({ url, title, onClose }: VideoViewerProps) {
                 cursor: 'pointer',
                 textDecoration: 'none',
               }}
-              title="Download Video"
+              title="Descargar video"
             >
               <ArrowDownTrayIcon className="w-5 h-5" />
             </a>
@@ -104,7 +104,7 @@ export default function VideoViewer({ url, title, onClose }: VideoViewerProps) {
                 borderRadius: 8,
                 cursor: 'pointer',
               }}
-              title="Close (Esc)"
+              title="Cerrar (Esc)"
             >
               <XMarkIcon className="w-5 h-5" />
             </button>

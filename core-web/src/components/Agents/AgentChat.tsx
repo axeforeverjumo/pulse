@@ -166,7 +166,7 @@ export default function AgentChat({ agent }: AgentChatProps) {
           <>
             {/* Expanded header */}
             <div className="flex items-center justify-between px-3 pt-3 pb-1">
-              <span className="text-xs font-medium text-text-secondary">History</span>
+              <span className="text-xs font-medium text-text-secondary">Historial</span>
               <button
                 onClick={() => setShowHistory(false)}
                 className="p-1 rounded hover:bg-black/5 transition-colors"

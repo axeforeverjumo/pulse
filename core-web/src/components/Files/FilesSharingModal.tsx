@@ -105,7 +105,7 @@ export default function FilesSharingModal({
     setIsSubmitting(false);
     if (result) {
       const label = selectedUser?.name || selectedUser?.email || email.trim();
-      toast.success(`Shared with ${label}`);
+      toast.success(`Compartido con ${label}`);
       setEmail("");
       setSelectedUser(null);
     }
@@ -123,7 +123,7 @@ export default function FilesSharingModal({
       setLinkDirty(false);
       try {
         await navigator.clipboard.writeText(link.url);
-        toast.success("Link copied to clipboard");
+        toast.success("Link copiado al portapapeles");
       } catch {
         toast.success("Link created");
       }
@@ -134,7 +134,7 @@ export default function FilesSharingModal({
     if (!activeLink) return;
     try {
       await navigator.clipboard.writeText(activeLink.url);
-      toast.success("Link copied to clipboard");
+      toast.success("Link copiado al portapapeles");
     } catch {
       toast.error("Failed to copy link");
     }
@@ -159,9 +159,9 @@ export default function FilesSharingModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Sharing" size="md">
+    <Modal isOpen={isOpen} onClose={onClose} title="Compartir" size="md">
       <div className="space-y-4 -mt-1">
-        {/* Share with user */}
+        {/* Compartir con user */}
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <div className="min-w-0 flex-1">
@@ -183,17 +183,17 @@ export default function FilesSharingModal({
               disabled={!email.trim() || isSubmitting}
               className="px-4 py-2 text-sm bg-black text-white rounded-md disabled:opacity-50 shrink-0"
             >
-              {isSubmitting ? "Sharing..." : "Share"}
+              {isSubmitting ? "Compartiendo..." : "Compartir"}
             </button>
           </div>
           {shareError && <p className="text-xs text-red-500">{shareError}</p>}
         </div>
 
-        {/* People with access */}
+        {/* Personas con acceso */}
         <div className="border-t border-border-gray pt-3">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-xs uppercase tracking-wide text-text-tertiary">
-              People with access
+              Personas con acceso
             </h3>
             {isLoadingShares && (
               <span className="text-xs text-text-secondary">Loading...</span>
@@ -231,7 +231,7 @@ export default function FilesSharingModal({
                 <div key={member.id} className="flex items-center justify-between">
                   <div className="min-w-0">
                     <p className="text-sm text-text-body truncate">
-                      {member.name || member.email || "Member"}
+                      {member.name || member.email || "Miembro"}
                     </p>
                     {member.email && (
                       <p className="text-xs text-text-secondary truncate">
@@ -283,11 +283,11 @@ export default function FilesSharingModal({
           )}
         </div>
 
-        {/* Link sharing */}
+        {/* Compartir enlace */}
         <div className="border-t border-border-gray pt-3">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-xs uppercase tracking-wide text-text-tertiary">
-              Link sharing
+              Compartir enlace
             </h3>
             {isLoadingLinks && (
               <span className="text-xs text-text-secondary">Loading...</span>
@@ -324,7 +324,7 @@ export default function FilesSharingModal({
                 disabled={isCreatingLink}
                 className="px-4 py-2 text-sm rounded-md bg-black text-white disabled:opacity-60 shrink-0"
               >
-                {isCreatingLink ? "Creating..." : "Create link"}
+                {isCreatingLink ? "Creando..." : "Crear enlace"}
               </button>
             )}
           </div>

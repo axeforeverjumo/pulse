@@ -11,12 +11,12 @@ interface TaskStepLogProps {
 }
 
 const STEP_TYPE_STYLES: Record<string, { label: string; color: string; bg: string }> = {
-  thinking: { label: "Thinking", color: "text-gray-600", bg: "bg-gray-50" },
-  tool_call: { label: "Tool Call", color: "text-blue-600", bg: "bg-blue-50" },
-  tool_result: { label: "Result", color: "text-blue-500", bg: "bg-blue-50/50" },
-  message: { label: "Message", color: "text-green-600", bg: "bg-green-50" },
+  thinking: { label: "Pensando", color: "text-gray-600", bg: "bg-gray-50" },
+  tool_call: { label: "Llamada de herramienta", color: "text-blue-600", bg: "bg-blue-50" },
+  tool_result: { label: "Resultado", color: "text-blue-500", bg: "bg-blue-50/50" },
+  message: { label: "Mensaje", color: "text-green-600", bg: "bg-green-50" },
   error: { label: "Error", color: "text-red-600", bg: "bg-red-50" },
-  log: { label: "Log", color: "text-purple-600", bg: "bg-purple-50" },
+  log: { label: "Registro", color: "text-purple-600", bg: "bg-purple-50" },
 };
 
 export default function TaskStepLog({ agentId, taskId, isRunning }: TaskStepLogProps) {

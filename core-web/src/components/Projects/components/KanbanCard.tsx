@@ -173,7 +173,7 @@ const KanbanCard = memo(function KanbanCard({
                 ? `${priorityConfig?.color} ${priorityConfig?.bg}`
                 : 'text-gray-400 hover:bg-gray-50'
             }`}
-            title="Set priority"
+            title="Establecer prioridad"
           >
             <Flag size={14} weight={card.priority > 0 ? 'fill' : 'regular'} />
             {card.priority > 0 && <span>P{card.priority}</span>}
@@ -181,7 +181,7 @@ const KanbanCard = memo(function KanbanCard({
           {showPriorityDropdown && (
             <div className="absolute top-full left-0 mt-1 p-1.5 bg-white rounded-lg shadow-lg border border-gray-100 z-20">
               <div className="flex gap-1">
-                {/* No priority option */}
+                {/* Sin prioridad option */}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -190,7 +190,7 @@ const KanbanCard = memo(function KanbanCard({
                   className={`flex items-center justify-center w-7 py-1 rounded-md transition-all text-[11px] font-medium text-gray-400 ${
                     card.priority === 0 ? 'bg-gray-100' : 'opacity-50 hover:opacity-100'
                   }`}
-                  title="No priority"
+                  title="Sin prioridad"
                 >
                   <span>â€“</span>
                 </button>
@@ -248,9 +248,9 @@ const KanbanCard = memo(function KanbanCard({
       {/* Delete Confirmation Modal */}
       <ConfirmModal
         isOpen={showDeleteConfirm}
-        title="Delete card"
-        message={`Are you sure you want to delete "${card.title}"? This action cannot be undone.`}
-        confirmLabel="Delete"
+        title="Eliminar tarjeta"
+        message={`¿Estás seguro de que quieres eliminar "${card.title}"? This action no se puede deshacer.`}
+        confirmLabel="Eliminar"
         onConfirm={handleDeleteConfirm}
         onCancel={() => setShowDeleteConfirm(false)}
       />

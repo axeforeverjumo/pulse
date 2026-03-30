@@ -64,7 +64,7 @@ export default function PublicDocumentViewer({
       {/* Sign in banner — fixed to bottom of screen */}
       {!isAuthenticated && (onSignInGoogle || onSignInMicrosoft) && (
         <div className="fixed bottom-0 left-0 right-0 border-t border-border-gray px-6 py-3 bg-bg-gray flex items-center justify-center gap-3 z-10">
-          <span className="text-xs text-text-secondary">Sign in for full access</span>
+          <span className="text-xs text-text-secondary">Inicia sesión para acceso completo</span>
           {onSignInGoogle && (
             <button
               onClick={onSignInGoogle}

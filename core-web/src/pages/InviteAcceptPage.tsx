@@ -64,7 +64,7 @@ export default function InviteAcceptPage() {
     if (!token) {
       clearPendingInviteToken();
       setState('error');
-      setMessage('Invitation token is missing.');
+      setMessage('El token de invitación no es válido.');
       return;
     }
 
@@ -75,7 +75,7 @@ export default function InviteAcceptPage() {
 
     if (!isAuthenticated) {
       setState('needs-auth');
-      setMessage('Sign in to continue with this invitation.');
+      setMessage('Inicia sesión para continuar con esta invitación.');
       return;
     }
 
@@ -89,7 +89,7 @@ export default function InviteAcceptPage() {
 
     const runAccept = async () => {
       setState('processing');
-      setMessage('Accepting invitation...');
+      setMessage('Aceptando invitación...');
 
       try {
         const result = await acceptWorkspaceInvitationByToken(token);
@@ -97,14 +97,14 @@ export default function InviteAcceptPage() {
         clearPendingInviteToken();
         const successMessage =
           result.already_processed
-            ? 'Invitation already accepted. You can continue into Core.'
-            : 'Invitation accepted. You are now a workspace member.';
+            ? 'Invitación ya aceptada. Puedes continuar a Pulse.'
+            : 'Invitación aceptada. Ahora eres miembro del espacio de trabajo.';
         setState('success');
         setMessage(successMessage);
         navigate('/chat', { replace: true });
       } catch (err) {
         if (!isMounted) return;
-        const errorMessage = err instanceof Error ? err.message : 'Failed to accept invitation';
+        const errorMessage = err instanceof Error ? err.message : 'Error al aceptar la invitación';
         if (isTerminalInviteError(errorMessage)) {
           clearPendingInviteToken();
         }
@@ -128,7 +128,7 @@ export default function InviteAcceptPage() {
       await signInWithGoogle(window.location.href);
     } catch (err) {
       setState('error');
-      setMessage(err instanceof Error ? err.message : 'Failed to start Google sign-in');
+      setMessage(err instanceof Error ? err.message : 'Error al iniciar sesión con Google');
     }
   };
 
@@ -140,7 +140,7 @@ export default function InviteAcceptPage() {
       await signInWithMicrosoft(window.location.href);
     } catch (err) {
       setState('error');
-      setMessage(err instanceof Error ? err.message : 'Failed to start Microsoft sign-in');
+      setMessage(err instanceof Error ? err.message : 'Error al iniciar sesión con Microsoft');
     }
   };
 
@@ -160,15 +160,15 @@ export default function InviteAcceptPage() {
         style={{ width: '100%', maxWidth: '28rem' }}
         className="bg-white border border-border-gray rounded-2xl p-6 shadow-sm"
       >
-        <h1 className="text-xl font-semibold text-text-body mb-2">Workspace invitation</h1>
-        <p className="text-sm text-text-secondary mb-6">{message || 'Preparing invitation...'}</p>
+        <h1 className="text-xl font-semibold text-text-body mb-2">Invitación al espacio de trabajo</h1>
+        <p className="text-sm text-text-secondary mb-6">{message || 'Preparando invitación...'}</p>
 
         {state === 'loading' && (
-          <div className="text-sm text-text-secondary">Loading...</div>
+          <div className="text-sm text-text-secondary">Cargando...</div>
         )}
 
         {state === 'processing' && (
-          <div className="text-sm text-text-secondary">Please wait...</div>
+          <div className="text-sm text-text-secondary">Por favor espera...</div>
         )}
 
         {state === 'needs-auth' && (
@@ -177,13 +177,13 @@ export default function InviteAcceptPage() {
               onClick={() => void handleSignInGoogle()}
               className="w-full px-4 py-2 text-sm rounded-lg bg-black text-white"
             >
-              Sign in with Google
+              Iniciar sesión con Google
             </button>
             <button
               onClick={() => void handleSignInMicrosoft()}
               className="w-full px-4 py-2 text-sm rounded-lg border border-border-gray hover:bg-bg-gray"
             >
-              Sign in with Microsoft
+              Iniciar sesión con Microsoft
             </button>
           </div>
         )}
@@ -194,7 +194,7 @@ export default function InviteAcceptPage() {
               onClick={() => navigate('/chat')}
               className="px-4 py-2 text-sm rounded-lg bg-black text-white"
             >
-              Open Core
+              Abrir Pulse
             </button>
           </div>
         )}
@@ -207,13 +207,13 @@ export default function InviteAcceptPage() {
                 onClick={retryAccept}
                 className="px-4 py-2 text-sm rounded-lg bg-black text-white"
               >
-                Retry
+                Reintentar
               </button>
               <button
                 onClick={() => navigate('/')}
                 className="px-4 py-2 text-sm rounded-lg border border-border-gray hover:bg-bg-gray"
               >
-                Go to Home
+                Ir al inicio
               </button>
             </div>
           </div>

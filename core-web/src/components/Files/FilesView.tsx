@@ -255,7 +255,7 @@ function getFileIcon(doc: Document, size: string = "w-5 h-5") {
   return <Icon icon={FileText} size={iconSize} />;
 }
 
-// Format date like Apple Notes - time for today, "Yesterday", or short date
+// Format date like Apple Notes - time for today, "Ayer", or short date
 function formatDateRelative(dateString?: string): string {
   if (!dateString) return "";
   const date = new Date(dateString);
@@ -272,7 +272,7 @@ function formatDateRelative(dateString?: string): string {
   yesterday.setDate(yesterday.getDate() - 1);
   const isYesterday = date.toDateString() === yesterday.toDateString();
   if (isYesterday) {
-    return "Yesterday";
+    return "Ayer";
   }
 
   // Otherwise show short date
@@ -349,12 +349,12 @@ function NestedFolderContents({
                         onBlur={() => onRenameSubmit(item.id)}
                         onClick={(e) => e.stopPropagation()}
                         autoFocus
-                        placeholder="New Folder"
+                        placeholder="Nueva carpeta"
                         className="flex-1 text-sm bg-transparent px-1 py-0.5 focus:outline-none placeholder:text-text-tertiary"
                       />
                     ) : (
                       <span className="flex-1 text-left truncate">
-                        {item.title || "Untitled"}
+                        {item.title || "Sin título"}
                       </span>
                     )}
                     {/* Three-dot menu + count overlay in same position */}
@@ -369,7 +369,7 @@ function NestedFolderContents({
                           setOpenMenuId(openMenuId === item.id ? null : item.id);
                         }}
                         className="p-0.5 rounded text-text-tertiary hover:text-text-body hover:bg-bg-gray-light transition-colors opacity-0 group-hover:opacity-100"
-                        title="More options"
+                        title="Más opciones"
                       >
                         <EllipsisHorizontalIcon className="w-3 h-3" />
                       </button>
@@ -468,12 +468,12 @@ function NestedFolderContents({
                     onBlur={() => onRenameSubmit(item.id)}
                     onClick={(e) => e.stopPropagation()}
                     autoFocus
-                    placeholder="Untitled"
+                    placeholder="Sin título"
                     className="flex-1 text-sm bg-transparent px-1 py-0.5 focus:outline-none placeholder:text-text-tertiary"
                   />
                 ) : (
                   <span className="flex-1 text-left truncate">
-                    {item.title || "Untitled"}
+                    {item.title || "Sin título"}
                   </span>
                 )}
                 {/* Three-dot menu */}
@@ -716,7 +716,7 @@ export default function FilesView() {
         return;
       }
 
-      // Determine insert position based on which half of the item the pointer is in
+      // Determine insert position based on which half de the item the pointer is in
       const getInsertPosition = (): 'before' | 'after' => {
         if (!over.rect || !event.activatorEvent) return 'after';
         const rect = over.rect;
@@ -932,7 +932,7 @@ export default function FilesView() {
   // Track notes awaiting content hydration after loading stripped persisted cache
   const awaitingHydrationNoteIdRef = useRef<string | null>(null);
   const [isHydratingNote, setIsHydratingNote] = useState(false);
-  // Track when we're in the process of creating a new note (to skip loading "Untitled")
+  // Track when we're in the process de creating a new note (to skip loading "Sin título")
   const isCreatingNoteRef = useRef(false);
   const [isCreatingNote, setIsCreatingNote] = useState(false);
   const [shouldFocusTitle, setShouldFocusTitle] = useState(false);
@@ -1099,7 +1099,7 @@ export default function FilesView() {
     navigate(`/workspace/${workspaceId}/files/${folder.id}`);
   };
 
-  // Get all folders for "Move to" menu (exclude current folder and the item itself)
+  // Get all folders for "Mover a" menu (exclude current folder and the item itself)
   const allFolders = useMemo(() => {
     const folders: Document[] = [];
     for (const docs of Object.values(documentsByFolder)) {
@@ -1148,7 +1148,7 @@ export default function FilesView() {
   }, [fetchSharedWithMe]);
 
 
-  // Auto-open shared document when arriving via share link (?shared=true)
+  // Auto-open shared document when arriving via enlace para compartir (?shared=true)
   const sharedParamHandledRef = useRef(false);
   useEffect(() => {
     if (sharedParamHandledRef.current) return;
@@ -1846,9 +1846,9 @@ export default function FilesView() {
             size={48}
             className="mx-auto mb-4 text-text-tertiary"
           />
-          <p className="text-text-secondary">Files app not configured</p>
+          <p className="text-text-secondary">Aplicación de archivos no configurada</p>
           <p className="text-sm text-text-tertiary mt-1">
-            Add a Files app to your workspace to get started
+            Añade una aplicación de archivos a tu espacio de trabajo para empezar
           </p>
         </div>
       </div>
@@ -1876,13 +1876,13 @@ export default function FilesView() {
         >
           {/* Header */}
           <div className="h-12 flex items-center justify-between pl-4 pr-2 shrink-0 relative">
-            <h2 className="text-base font-semibold text-text-body">Files</h2>
+            <h2 className="text-base font-semibold text-text-body">Archivos</h2>
             <button
               ref={newButtonRef}
               onClick={() => setShowNewMenu(!showNewMenu)}
               className="p-1 rounded bg-white border border-black/10 hover:border-black/20 text-text-secondary hover:text-text-body transition-colors focus-visible:ring-2 focus-visible:ring-brand-primary"
-              title="New"
-              aria-label="New file or folder"
+              title="Nuevo"
+              aria-label="Nuevo archivo o carpeta"
             >
               <Icon icon={Plus} size={16} aria-hidden="true" />
             </button>
@@ -1961,7 +1961,7 @@ export default function FilesView() {
               aria-expanded={showMyFiles}
               className="flex items-center gap-1 px-4 py-1.5 text-xs font-medium text-text-tertiary cursor-pointer group"
             >
-              <span>My Files</span>
+              <span>Mis archivos</span>
               <ChevronRightIcon className={`w-3 h-3 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-all ${showMyFiles ? 'rotate-90' : ''}`} aria-hidden="true" />
             </div>
           </div>
@@ -1974,12 +1974,12 @@ export default function FilesView() {
               ref={sortButtonRef}
               onClick={() => setShowSortMenu(!showSortMenu)}
               className="w-full flex items-center gap-2 px-2 h-[32px] rounded-md text-sm text-text-tertiary hover:text-text-body hover:bg-black/5 transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-primary"
-              title="Sort by"
-              aria-label="Sort files"
+              title="Ordenar por"
+              aria-label="Ordenar archivos"
             >
               <ChevronUpDownIcon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
               <span className="capitalize">
-                {sortBy === "manual" ? "Manual" : `${sortBy === "size" ? "File size" : sortBy} ${sortDirection === "asc" ? "â†‘" : "â†“"}`}
+                {sortBy === "manual" ? "Manual" : `${sortBy === "size" ? "TamaÃ±o de archivo" : sortBy} ${sortDirection === "asc" ? "â†‘" : "â†“"}`}
               </span>
             </button>
             <Dropdown
@@ -1999,7 +1999,7 @@ export default function FilesView() {
                     sortBy === col ? 'text-text-body font-medium' : 'text-text-secondary'
                   }`}
                 >
-                  <span className="capitalize">{col === "size" ? "File size" : col}</span>
+                  <span className="capitalize">{col === "size" ? "TamaÃ±o de archivo" : col}</span>
                   {sortBy === col && col !== "manual" && (
                     <span className="text-xs">
                       {sortDirection === "asc" ? "â†‘" : "â†“"}
@@ -2088,7 +2088,7 @@ export default function FilesView() {
                       className="mx-auto mb-2 opacity-50"
                     />
                     <p className="text-sm">
-                      {searchQuery ? "No matches" : "No notes yet"}
+                      {searchQuery ? "No matches" : "Sin notas aún"}
                     </p>
                   </div>
                 </motion.div>
@@ -2122,7 +2122,7 @@ export default function FilesView() {
                               : "border-border-gray text-text-tertiary"
                         }`}>
                           <ArrowUturnLeftIcon className="w-3.5 h-3.5" />
-                          {breadcrumbs.length >= 3 ? "Move to parent folder" : "Move to root"}
+                          {breadcrumbs.length >= 3 ? "Mover a carpeta padre" : "Mover a raÃ­z"}
                         </div>
                       )}
                     </DroppableFolder>
@@ -2203,7 +2203,7 @@ export default function FilesView() {
                                           onBlur={() => handleRenameSubmit(item.id)}
                                           onClick={(e) => e.stopPropagation()}
                                           autoFocus
-                                          placeholder="New Folder"
+                                          placeholder="Nueva carpeta"
                                           className="flex-1 text-sm bg-transparent px-1 py-0.5 focus:outline-none placeholder:text-text-tertiary"
                                         />
                                       ) : (
@@ -2221,7 +2221,7 @@ export default function FilesView() {
                                             setOpenItemMenuId(openItemMenuId === item.id ? null : item.id);
                                           }}
                                           className="p-0.5 rounded text-text-tertiary hover:text-text-body hover:bg-bg-gray-light transition-colors opacity-0 group-hover:opacity-100"
-                                          title="More options"
+                                          title="Más opciones"
                                         >
                                           <EllipsisHorizontalIcon className="w-3 h-3" />
                                         </button>
@@ -2281,7 +2281,7 @@ export default function FilesView() {
                                     />
                                   ) : (
                                     <span className="flex-1 text-left truncate">
-                                      {item.title || "Untitled"}
+                                      {item.title || "Sin título"}
                                     </span>
                                   )}
                                   {editingItemId !== item.id && (
@@ -2432,7 +2432,7 @@ export default function FilesView() {
                         ) : (
                           <span className="shrink-0">{getFileIcon(activeDragItem, "w-4 h-4")}</span>
                         )}
-                        <span className="truncate">{activeDragItem.title || "Untitled"}</span>
+                        <span className="truncate">{activeDragItem.title || "Sin título"}</span>
                       </div>
                     )}
                   </DragOverlay>
@@ -2444,7 +2444,7 @@ export default function FilesView() {
           </>
           )}
 
-          {/* Shared with me section header */}
+          {/* Compartido conmigo section header */}
           <div className="space-y-0.5 mt-1">
             <div
               role="button"
@@ -2459,7 +2459,7 @@ export default function FilesView() {
               aria-expanded={showShared}
               className="flex items-center gap-1 px-4 py-1.5 text-xs font-medium text-text-tertiary cursor-pointer group"
             >
-              <span>Shared with me</span>
+              <span>Compartido conmigo</span>
               <ChevronRightIcon className={`w-3 h-3 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-all ${showShared ? 'rotate-90' : ''}`} aria-hidden="true" />
               
             </div>
@@ -2479,7 +2479,7 @@ export default function FilesView() {
               ) : sharedFileItems.length === 0 ? (
                 <div className="p-6 text-center text-text-tertiary">
                   <UsersIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">Nothing shared with you yet</p>
+                  <p className="text-sm">Nada compartido contigo aún</p>
                 </div>
               ) : (
                 <div className="px-2 space-y-0.5">
@@ -2565,7 +2565,7 @@ export default function FilesView() {
                       href={inlineImageUrl}
                       download={selectedNote.title}
                       className="p-2 rounded-lg hover:bg-bg-gray transition-colors"
-                      title="Download"
+                      title="Descargar"
                     >
                       <Icon icon={Download} size={18} className="text-text-tertiary" />
                     </a>
@@ -2700,7 +2700,7 @@ export default function FilesView() {
                         }
                       }}
                       className={`w-full text-[28px] font-semibold text-text-body bg-transparent border-0 focus:outline-none placeholder:text-text-tertiary resize-none overflow-hidden text-balance ${!isNoteEditable ? 'cursor-default' : ''}`}
-                      placeholder="Untitled"
+                      placeholder="Sin título"
                       style={{ height: 'auto' }}
                     />
                   </div>
@@ -2729,13 +2729,13 @@ export default function FilesView() {
                         <NoteEditor
                           content={noteContent}
                           onChange={handleNoteContentChange}
-                          placeholder="Start writing..."
+                          placeholder="Empieza a escribir..."
                           onEditorReady={setNoteEditor}
                           editable={isNoteEditable}
                           onImageUpload={handleEditorImageUpload}
                           onBackspaceAtStart={() => {
                             titleInputRef.current?.focus();
-                            // Place cursor at end of title
+                            // Place cursor at end de title
                             const len = titleInputRef.current?.value.length ?? 0;
                             titleInputRef.current?.setSelectionRange(len, len);
                           }}
@@ -2996,11 +2996,11 @@ export default function FilesView() {
         isOpen={!!deleteTarget}
         title={
           deleteTarget?.is_folder || deleteTarget?.type === "folder"
-            ? "Delete Folder"
-            : "Delete Note"
+            ? "Eliminar carpeta"
+            : "Eliminar nota"
         }
-        message={`Are you sure you want to delete "${deleteTarget?.title || "Untitled"}"? This action cannot be undone.`}
-        confirmLabel="Delete"
+        message={`¿Estás seguro de que quieres eliminar "${deleteTarget?.title || "Sin título"}"? This action no se puede deshacer.`}
+        confirmLabel="Eliminar"
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteTarget(null)}
       />
@@ -3008,7 +3008,7 @@ export default function FilesView() {
       {/* Permission Error Modal */}
       <ConfirmModal
         isOpen={!!permissionError}
-        title="Cannot Delete"
+        title="No se puede eliminar"
         message={permissionError || ""}
         variant="warning"
         confirmLabel="OK"
@@ -3032,7 +3032,7 @@ export default function FilesView() {
           const url = URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = url;
-          a.download = `${noteTitle || "Untitled"}.md`;
+          a.download = `${noteTitle || "Sin título"}.md`;
           a.click();
           URL.revokeObjectURL(url);
         }}

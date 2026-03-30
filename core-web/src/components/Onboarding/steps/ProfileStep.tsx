@@ -75,7 +75,7 @@ export default function ProfileStep({
       <OnboardingProgress currentStep="profile" />
 
       <h2 className="text-3xl font-bold text-gray-900 tracking-tight mb-6">
-        What's your name?
+        ¿Cómo te llamas?
       </h2>
 
       {/* Avatar + Name input row */}
@@ -156,7 +156,7 @@ export default function ProfileStep({
               onNameChange(e.target.value.slice(0, MAX_NAME_LENGTH))
             }
             onKeyDown={handleKeyDown}
-            placeholder="Your name"
+            placeholder="Tu nombre"
             autoFocus
             className="w-full bg-white border border-border-gray rounded-xl px-5 py-3.5 pr-14 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-text-tertiary transition-all"
           />

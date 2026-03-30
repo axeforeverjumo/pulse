@@ -121,7 +121,7 @@ function formatDate(dateString?: string): string {
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
   if (date.toDateString() === yesterday.toDateString()) {
-    return "Yesterday";
+    return "Ayer";
   }
 
   const diffMs = now.getTime() - date.getTime();
@@ -318,15 +318,15 @@ function groupEmailsByDate(
 
     let label: string;
     if (emailDate >= today) {
-      label = "Today";
+      label = "Hoy";
     } else if (emailDate >= yesterday) {
-      label = "Yesterday";
+      label = "Ayer";
     } else if (emailDate >= thisWeekStart) {
-      label = "This Week";
+      label = "Esta semana";
     } else if (emailDate >= lastWeekStart) {
-      label = "Last Week";
+      label = "Semana pasada";
     } else if (emailDate >= thisMonthStart) {
-      label = "This Month";
+      label = "Este mes";
     } else if (date.getFullYear() === now.getFullYear()) {
       label = date.toLocaleDateString([], { month: "long" });
     } else {
@@ -337,7 +337,7 @@ function groupEmailsByDate(
     groups[label].push(email);
   });
 
-  const order = ["Today", "Yesterday", "This Week", "Last Week", "This Month"];
+  const order = ["Hoy", "Ayer", "Esta semana", "Semana pasada", "Este mes"];
   return Object.entries(groups)
     .sort(([a], [b]) => {
       const aIdx = order.indexOf(a);
@@ -355,11 +355,11 @@ const FOLDER_LIST: {
   name: string;
   icon: React.ComponentType<{ className?: string }>;
 }[] = [
-  { id: "INBOX", name: "Inbox", icon: EnvelopeOpenIcon },
-  { id: "STARRED", name: "Flagged", icon: StarIcon },
-  { id: "SENT", name: "Sent", icon: PaperAirplaneIcon },
-  { id: "DRAFT", name: "Drafts", icon: PencilIcon },
-  { id: "TRASH", name: "Trash", icon: TrashIcon },
+  { id: "INBOX", name: "Bandeja de entrada", icon: EnvelopeOpenIcon },
+  { id: "STARRED", name: "Destacados", icon: StarIcon },
+  { id: "SENT", name: "Enviados", icon: PaperAirplaneIcon },
+  { id: "DRAFT", name: "Borradores", icon: PencilIcon },
+  { id: "TRASH", name: "Papelera", icon: TrashIcon },
 ];
 
 // TTL for read overrides (must match emailStore.ts and useEmails.ts)
@@ -642,8 +642,8 @@ export default function EmailView() {
     return () => clearTimeout(timer);
   }, [searchQuery, isSearchActive]);
 
-  // Thread attachments map
-  const [threadAttachmentsMap, setThreadAttachmentsMap] = useState<
+  // Thread adjuntos map
+  const [threadAdjuntosMap, setThreadAdjuntosMap] = useState<
     Record<string, EmailWithAttachments[]>
   >({});
 
@@ -654,7 +654,7 @@ export default function EmailView() {
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Lightbox for image attachments
+  // Lightbox for image adjuntos
   const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
 
   // Reset quoted content visibility when selecting a different email
@@ -1182,10 +1182,10 @@ export default function EmailView() {
     }
   }, [selectedEmailId, flatEmailList, preloadAdjacent]);
 
-  // Reuse thread query payload for attachment rendering to avoid duplicate thread API calls
+  // Reuse thread query payload for adjunto rendering to avoid duplicate thread API calls
   useEffect(() => {
     if (!selectedThreadId || !threadData?.emails?.length) return;
-    setThreadAttachmentsMap((prev) => {
+    setThreadAdjuntosMap((prev) => {
       if (prev[selectedThreadId]) return prev;
       return {
         ...prev,
@@ -1238,12 +1238,12 @@ export default function EmailView() {
   const mailboxesSidebarRef = useRef<HTMLDivElement>(null);
   const emailListRef = useRef<HTMLDivElement>(null);
 
-  // Build list of navigable folder IDs for keyboard navigation (only "All Accounts" folders for simplicity)
+  // Build list of navigable folder IDs for keyboard navigation (only "Todas las cuentas" folders for simplicity)
   const folderIds = useMemo(() => FOLDER_LIST.map((f) => f.id), []);
 
   // Find current folder index
   const currentFolderIndex = useMemo(() => {
-    // Only consider "All Accounts" selection (when selectedAccountIds is empty)
+    // Only consider "Todas las cuentas" selection (when selectedAccountIds is empty)
     if (selectedAccountIds.length > 0) return 0;
     return folderIds.indexOf(activeFolder);
   }, [folderIds, activeFolder, selectedAccountIds]);
@@ -1308,7 +1308,7 @@ export default function EmailView() {
             ? currentFolderIndex + 1
             : 0;
         setActiveFolder(folderIds[nextIndex]);
-        setSelectedAccounts([]); // Ensure we're in "All Accounts" mode
+        setSelectedAccounts([]); // Ensure we're in "Todas las cuentas" mode
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         const prevIndex =
@@ -1316,7 +1316,7 @@ export default function EmailView() {
             ? currentFolderIndex - 1
             : folderIds.length - 1;
         setActiveFolder(folderIds[prevIndex]);
-        setSelectedAccounts([]); // Ensure we're in "All Accounts" mode
+        setSelectedAccounts([]); // Ensure we're in "Todas las cuentas" mode
       }
     },
     [
@@ -1351,7 +1351,7 @@ export default function EmailView() {
     [navigateEmails, setActiveZone, activeZone],
   );
 
-  // Get folder counts for display (for "All Accounts" view)
+  // Get folder counts for display (for "Todas las cuentas" view)
   const getFolderCount = (folderId: EmailFolder): number | undefined => {
     if (folderId === "INBOX") return counts?.inbox_unread;
     if (folderId === "DRAFT") return counts?.drafts_count;
@@ -1388,12 +1388,12 @@ export default function EmailView() {
         >
           {/* Header */}
           <div className="h-12 flex items-center justify-between pl-4 pr-2 shrink-0">
-            <h2 className="text-base font-semibold text-text-body">Email</h2>
+            <h2 className="text-base font-semibold text-text-body">Correo</h2>
             <button
               onClick={openCompose}
               className="p-1 rounded bg-white border border-black/10 hover:border-black/20 text-text-secondary hover:text-text-body transition-colors focus-visible:ring-2 focus-visible:ring-brand-primary"
-              title="Compose email"
-              aria-label="Compose email"
+              title="Redactar correo"
+              aria-label="Redactar correo"
             >
               <Icon
                 icon={Pencil}
@@ -1404,7 +1404,7 @@ export default function EmailView() {
           </div>
 
           <div className="flex-1 overflow-y-auto px-2 pt-0">
-            {/* All Accounts section */}
+            {/* Todas las cuentas section */}
             {(() => {
               const isAllExpanded = expandedAccounts.has("all");
               const toggleAllExpand = () => {
@@ -1421,7 +1421,7 @@ export default function EmailView() {
 
               return (
                 <div className="space-y-0.5">
-                  {/* All Accounts header - styled like folder row */}
+                  {/* Todas las cuentas header - styled like folder row */}
                   <button
                     onClick={toggleAllExpand}
                     aria-expanded={isAllExpanded}
@@ -1438,10 +1438,10 @@ export default function EmailView() {
                         aria-hidden="true"
                       />
                     )}
-                    <span className="flex-1 text-left">All Accounts</span>
+                    <span className="flex-1 text-left">Todas las cuentas</span>
                   </button>
 
-                  {/* Folders under All Accounts */}
+                  {/* Folders under Todas las cuentas */}
                   {isAllExpanded && (
                     <div className="space-y-0.5">
                       {FOLDER_LIST.map((folder) => {
@@ -1628,7 +1628,7 @@ export default function EmailView() {
                         <input
                           ref={searchInputRef}
                           type="text"
-                          placeholder="Search emails..."
+                          placeholder="Buscar correos..."
                           value={searchQuery}
                           onChange={(e) => handleSearchChange(e.target.value)}
                           onKeyDown={(e) => {
@@ -1685,7 +1685,7 @@ export default function EmailView() {
                         <button
                           onClick={() => setIsSearchOpen(true)}
                           className="p-2 text-text-body hover:bg-bg-gray-dark/50 rounded-lg transition-colors"
-                          title="Search"
+                          title="Buscar"
                         >
                           <MagnifyingGlassIcon className="w-4.5 h-4.5" />
                         </button>
@@ -1760,7 +1760,7 @@ export default function EmailView() {
                   <div className="p-4 text-center text-red-400">{error}</div>
                 ) : emails.length === 0 ? (
                   <div className="p-8 text-center text-text-secondary">
-                    <p className="text-sm">No messages</p>
+                    <p className="text-sm">Sin mensajes</p>
                   </div>
                 ) : filteredEmails.length === 0 && activeFolder === "INBOX" ? (
                   <div className="p-8 text-center text-text-secondary">
@@ -1881,7 +1881,7 @@ export default function EmailView() {
                       <button
                         onClick={() => openInlineReply(selectedEmail, "reply")}
                         className="p-2 text-text-body hover:bg-bg-gray-dark/50 rounded-lg transition-colors"
-                        title="Reply"
+                        title="Responder"
                       >
                         <Icon icon={ArrowUpLeft} size={18} />
                       </button>
@@ -1900,7 +1900,7 @@ export default function EmailView() {
                       <button
                         onClick={() => openInlineForward(selectedEmail)}
                         className="p-2 text-text-body hover:bg-bg-gray-dark/50 rounded-lg transition-colors"
-                        title="Forward"
+                        title="Reenviar"
                       >
                         <Icon icon={ArrowUpRight} size={18} />
                       </button>
@@ -1909,7 +1909,7 @@ export default function EmailView() {
                         <button
                           onClick={() => handleRestore(selectedEmail)}
                           className="p-2 text-text-body hover:bg-bg-gray-dark/50 rounded-lg transition-colors"
-                          title="Restore"
+                          title="Restaurar"
                         >
                           <ArrowUturnLeftIcon className="w-4.5 h-4.5" />
                         </button>
@@ -1918,14 +1918,14 @@ export default function EmailView() {
                           <button
                             onClick={() => handleArchive(selectedEmail)}
                             className="p-2 text-text-body hover:bg-bg-gray-dark/50 rounded-lg transition-colors"
-                            title="Archive"
+                            title="Archivo"
                           >
                             <ArchiveBoxIcon className="w-4.5 h-4.5" />
                           </button>
                           <button
                             onClick={() => handleDelete(selectedEmail)}
                             className="p-2 text-red-400 hover:bg-bg-gray-dark/50 rounded-lg transition-colors"
-                            title="Delete"
+                            title="Eliminar"
                           >
                             <TrashIcon className="w-4.5 h-4.5" />
                           </button>
@@ -2092,22 +2092,22 @@ export default function EmailView() {
                                       )}
                                       {(() => {
                                         const threadEmails =
-                                          threadAttachmentsMap[
+                                          threadAdjuntosMap[
                                             selectedEmail?.thread_id || ""
                                           ];
-                                        const emailWithAttachments =
+                                        const emailWithAdjuntos =
                                           threadEmails?.find(
                                             (e) => e.id === threadEmail.id,
                                           );
                                         if (
-                                          emailWithAttachments?.attachments
+                                          emailWithAdjuntos?.attachments
                                             ?.length
                                         ) {
                                           return (
                                             <AttachmentList
                                               emailId={threadEmail.id}
                                               attachments={
-                                                emailWithAttachments.attachments
+                                                emailWithAdjuntos.attachments
                                               }
                                               compact
                                               onImageClick={setLightboxImageUrl}
@@ -2256,19 +2256,19 @@ export default function EmailView() {
                             )}
                             {(() => {
                               const threadEmails =
-                                threadAttachmentsMap[
+                                threadAdjuntosMap[
                                   selectedEmail?.thread_id || ""
                                 ];
-                              const emailWithAttachments = threadEmails?.find(
+                              const emailWithAdjuntos = threadEmails?.find(
                                 (e) => e.id === latestThreadEmail?.id,
                               );
-                              if (emailWithAttachments?.attachments?.length) {
+                              if (emailWithAdjuntos?.attachments?.length) {
                                 return (
                                   <div className="px-6 py-4">
                                     <AttachmentList
                                       emailId={latestThreadEmail.id}
                                       attachments={
-                                        emailWithAttachments.attachments
+                                        emailWithAdjuntos.attachments
                                       }
                                       onImageClick={setLightboxImageUrl}
                                     />
@@ -2360,7 +2360,7 @@ export default function EmailView() {
               <button
                 onClick={() => setLightboxImageUrl(null)}
                 className="absolute top-4 right-4 p-2 text-white/80 hover:text-white transition-colors"
-                aria-label="Close"
+                aria-label="Cerrar"
               >
                 <XMarkIcon className="w-6 h-6" />
               </button>

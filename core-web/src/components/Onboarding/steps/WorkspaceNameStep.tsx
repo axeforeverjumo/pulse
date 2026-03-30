@@ -31,11 +31,11 @@ export default function WorkspaceNameStep({
       <OnboardingProgress currentStep="workspace-name" />
 
       <h2 className="text-3xl font-bold text-gray-900 tracking-tight mb-3">
-        Name your workspace
+        Nombre de tu espacio de trabajo
       </h2>
       <p className="text-base text-gray-500 leading-relaxed mb-8">
-        Choose something your team will recognize like the name of your
-        organization or team. You can always update it later.
+        Elige algo que tu equipo reconozca, como el nombre de tu
+        organización o equipo. Siempre puedes cambiarlo después.
       </p>
 
       <div className="relative">
@@ -46,7 +46,7 @@ export default function WorkspaceNameStep({
             onChange(e.target.value.slice(0, MAX_LENGTH))
           }
           onKeyDown={handleKeyDown}
-          placeholder="ex. Core Inc."
+          placeholder="ej. Mi Empresa"
           autoFocus
           className="w-full bg-white border border-border-gray rounded-xl px-5 py-3.5 pr-14 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-text-tertiary transition-all"
         />

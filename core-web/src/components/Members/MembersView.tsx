@@ -71,7 +71,7 @@ export default function MembersView() {
       const data = await getWorkspaceMembers(workspaceId);
       setMembers(data);
     } catch (err) {
-      setPageError(err instanceof Error ? err.message : "Failed to load workspace members");
+      setPageError(err instanceof Error ? err.message : "Error al cargar miembros del espacio");
       setMembers([]);
     } finally {
       setLoadingMembers(false);
@@ -88,7 +88,7 @@ export default function MembersView() {
       );
     } catch (err) {
       setPendingInvites([]);
-      setPageError(err instanceof Error ? err.message : "Failed to load invitations");
+      setPageError(err instanceof Error ? err.message : "Error al cargar invitaciones");
     } finally {
       setLoadingInvites(false);
     }
@@ -123,7 +123,7 @@ export default function MembersView() {
       await loadPendingInvites();
       showFeedback(`Invitation sent to ${targetEmail} as ${inviteRole}`);
     } catch (err) {
-      setPageError(err instanceof Error ? err.message : "Failed to send invitation");
+      setPageError(err instanceof Error ? err.message : "Error al enviar invitación");
     } finally {
       setInviting(false);
     }
@@ -139,7 +139,7 @@ export default function MembersView() {
       await loadPendingInvites();
       showFeedback(`Invitation resent to ${invitation.email}`);
     } catch (err) {
-      setPageError(err instanceof Error ? err.message : "Failed to resend invitation");
+      setPageError(err instanceof Error ? err.message : "Error al reenviar invitación");
     } finally {
       setActionBusyId(null);
     }
@@ -152,9 +152,9 @@ export default function MembersView() {
     try {
       const result = await getWorkspaceInvitationShareLink(invitationId);
       await copyTextToClipboard(result.invite_url);
-      showFeedback("Invite link copied");
+      showFeedback("Enlace de invitación copiado");
     } catch (err) {
-      setPageError(err instanceof Error ? err.message : "Failed to copy invite link");
+      setPageError(err instanceof Error ? err.message : "Error al copiar enlace de invitación");
     } finally {
       setActionBusyId(null);
     }
@@ -167,9 +167,9 @@ export default function MembersView() {
     try {
       await revokeWorkspaceInvitation(invitationId);
       await loadPendingInvites();
-      showFeedback("Invitation revoked");
+      showFeedback("Invitación revocada");
     } catch (err) {
-      setPageError(err instanceof Error ? err.message : "Failed to revoke invitation");
+      setPageError(err instanceof Error ? err.message : "Error al revocar invitación");
     } finally {
       setActionBusyId(null);
     }
@@ -185,7 +185,7 @@ export default function MembersView() {
       await loadMembers();
       showFeedback(`${member.email || member.name || "Member"} is now ${newRole}`);
     } catch (err) {
-      setPageError(err instanceof Error ? err.message : "Failed to update role");
+      setPageError(err instanceof Error ? err.message : "Error al actualizar rol");
     } finally {
       setActionBusyId(null);
     }
@@ -201,9 +201,9 @@ export default function MembersView() {
       await loadMembers();
       // Refresh DMs — backend cleans up empty DM channels with removed user
       useMessagesStore.getState().fetchDMs();
-      showFeedback("Member removed");
+      showFeedback("Miembro eliminado");
     } catch (err) {
-      setPageError(err instanceof Error ? err.message : "Failed to remove member");
+      setPageError(err instanceof Error ? err.message : "Error al eliminar miembro");
     } finally {
       setActionBusyId(null);
     }
@@ -219,7 +219,7 @@ export default function MembersView() {
                 {workspace?.name || "Workspace"}
               </h2>
               <p className="text-sm text-text-secondary">
-                Manage members and invitation links.
+                Gestionar miembros y enlaces de invitación.
               </p>
             </div>
             <button
@@ -239,30 +239,30 @@ export default function MembersView() {
 
           {canManageMembers ? (
             <div className="mb-6">
-              <h3 className="text-sm font-medium text-text-body mb-2">Invite member</h3>
+              <h3 className="text-sm font-medium text-text-body mb-2">Invitar miembro</h3>
               <form onSubmit={handleInvite} className="flex items-center gap-2">
                 <input
                   type="email"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="Email address"
+                  placeholder="Dirección de correo"
                   className="flex-1 border border-border-gray rounded px-3 py-2 text-sm outline-none focus:border-text-tertiary"
                 />
                 <select
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value as InviteRole)}
                   className="border border-border-gray rounded px-2 py-2 text-sm"
-                  aria-label="Invite role"
+                  aria-label="Rol de invitación"
                 >
-                  <option value="member">Member</option>
-                  <option value="admin">Admin</option>
+                  <option value="member">Miembro</option>
+                  <option value="admin">Administrador</option>
                 </select>
                 <button
                   type="submit"
                   disabled={inviting || !inviteEmail.trim()}
                   className="px-3 py-2 text-sm rounded bg-black text-white disabled:opacity-60"
                 >
-                  {inviting ? "Sending..." : "Invite"}
+                  {inviting ? "Enviando..." : "Invitar"}
                 </button>
               </form>
             </div>
@@ -273,11 +273,11 @@ export default function MembersView() {
           )}
 
           <div className="mb-7">
-            <h3 className="text-sm font-medium text-text-body mb-2">Pending invites</h3>
+            <h3 className="text-sm font-medium text-text-body mb-2">Invitaciones pendientes</h3>
             {loadingInvites ? (
-              <p className="text-sm text-text-secondary">Loading...</p>
+              <p className="text-sm text-text-secondary">Cargando...</p>
             ) : pendingInvites.length === 0 ? (
-              <p className="text-sm text-text-secondary">No pending invites</p>
+              <p className="text-sm text-text-secondary">Sin invitaciones pendientes</p>
             ) : (
               <div className="space-y-2">
                 {pendingInvites.map((invitation) => (
@@ -323,11 +323,11 @@ export default function MembersView() {
           </div>
 
           <div>
-            <h3 className="text-sm font-medium text-text-body mb-2">Members</h3>
+            <h3 className="text-sm font-medium text-text-body mb-2">Miembros</h3>
             {loadingMembers ? (
-              <p className="text-sm text-text-secondary">Loading...</p>
+              <p className="text-sm text-text-secondary">Cargando...</p>
             ) : members.length === 0 ? (
-              <p className="text-sm text-text-secondary">No members found</p>
+              <p className="text-sm text-text-secondary">No se encontraron miembros</p>
             ) : (
               <div className="space-y-2">
                 {members.map((member) => {
@@ -353,7 +353,7 @@ export default function MembersView() {
                       <div className="min-w-0">
                         <p className="text-sm text-text-body truncate">
                           {member.email || member.name || member.user_id}
-                          {isSelf && <span className="text-text-tertiary ml-1">(you)</span>}
+                          {isSelf && <span className="text-text-tertiary ml-1">(tú)</span>}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -364,8 +364,8 @@ export default function MembersView() {
                             disabled={actionBusyId === member.user_id}
                             className="text-xs border border-border-gray rounded px-1.5 py-1 bg-white disabled:opacity-60"
                           >
-                            <option value="member">Member</option>
-                            <option value="admin">Admin</option>
+                            <option value="member">Miembro</option>
+                            <option value="admin">Administrador</option>
                           </select>
                         ) : (
                           <span className="text-xs text-text-secondary capitalize px-1.5 py-1">

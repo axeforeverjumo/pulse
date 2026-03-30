@@ -21,7 +21,7 @@ class Config:
     ANTHROPIC_API_KEY: str = os.environ["ANTHROPIC_API_KEY"]
 
     MAX_TURNS: int = int(os.environ.get("MAX_TURNS", "25"))
-    MODEL: str = os.environ.get("MODEL", "claude-opus-4-6")
+    MODEL: str = os.environ.get("MODEL", "claude-haiku-4-5-20251001")
     TASK_POLL_INTERVAL: float = float(os.environ.get("TASK_POLL_INTERVAL", "1.0"))
     IDLE_TIMEOUT_SECONDS: int = int(os.environ.get("IDLE_TIMEOUT", "900"))
 

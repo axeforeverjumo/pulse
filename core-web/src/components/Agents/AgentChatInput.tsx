@@ -50,7 +50,7 @@ export default function AgentChatInput({ onSend, disabled, placeholder }: AgentC
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder || "Send a message..."}
+          placeholder={placeholder || "Enviar un mensaje..."}
           disabled={disabled}
           rows={1}
           className="flex-1 resize-none bg-transparent text-sm text-text-body placeholder:text-text-tertiary focus:outline-none disabled:opacity-50"

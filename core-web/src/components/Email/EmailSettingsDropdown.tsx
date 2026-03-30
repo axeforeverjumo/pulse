@@ -37,7 +37,7 @@ export default function EmailSettingsDropdown({
             className={itemClass}
           >
             <Icon icon={Undo2} size={16} className="text-text-secondary" />
-            <span>Restore</span>
+            <span>Restaurar</span>
           </button>
         )}
 
@@ -51,7 +51,7 @@ export default function EmailSettingsDropdown({
             className={itemClass}
           >
             <Icon icon={Archive} size={16} className="text-text-secondary" />
-            <span>Archive</span>
+            <span>Archivo</span>
           </button>
         )}
 
@@ -65,7 +65,7 @@ export default function EmailSettingsDropdown({
             className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-red-600 hover:bg-red-50 transition-colors text-left"
           >
             <Icon icon={Trash2} size={16} className="text-red-500" />
-            <span>Delete</span>
+            <span>Eliminar</span>
           </button>
         )}
 
@@ -81,7 +81,7 @@ export default function EmailSettingsDropdown({
               className={itemClass}
             >
               <Icon icon={Settings} size={16} className="text-text-secondary" />
-              <span>App settings</span>
+              <span>Configuración de la app</span>
             </button>
           </>
         )}

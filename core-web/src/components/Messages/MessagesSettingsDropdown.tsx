@@ -41,7 +41,7 @@ export default function MessagesSettingsDropdown({
             className={itemClass}
           >
             <Icon icon={Pencil} size={16} className="text-text-secondary" />
-            <span>Rename channel</span>
+            <span>Renombrar canal</span>
           </button>
         )}
 
@@ -55,7 +55,7 @@ export default function MessagesSettingsDropdown({
             className={itemClass}
           >
             <Icon icon={Users} size={16} className="text-text-secondary" />
-            <span className="flex-1">Members</span>
+            <span className="flex-1">Miembros</span>
             {memberCount != null && memberCount > 0 && (
               <span className="text-xs text-text-tertiary">{memberCount > 99 ? '99+' : memberCount}</span>
             )}
@@ -74,7 +74,7 @@ export default function MessagesSettingsDropdown({
               className={itemClass}
             >
               <Icon icon={Settings} size={16} className="text-text-secondary" />
-              <span>App settings</span>
+              <span>Configuración de la app</span>
             </button>
           </>
         )}
@@ -91,7 +91,7 @@ export default function MessagesSettingsDropdown({
               className={itemClass}
             >
               <Icon icon={LogOut} size={16} className="text-text-secondary" />
-              <span>Leave channel</span>
+              <span>Salir del canal</span>
             </button>
           </>
         )}
@@ -107,7 +107,7 @@ export default function MessagesSettingsDropdown({
               className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-red-600 hover:bg-red-50 transition-colors text-left"
             >
               <Icon icon={Trash2} size={16} className="text-red-500" />
-              <span>Delete channel</span>
+              <span>Eliminar canal</span>
             </button>
           </>
         )}

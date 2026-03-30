@@ -114,9 +114,9 @@ export default function ProjectList({
           <div className="flex flex-wrap gap-2 mt-4 justify-center">
             {[
               "A recipe organizer",
-              "Habit tracker with streaks",
-              "Expense splitter for groups",
-              "Flashcard study app",
+              "Rastreador de hábitos con rachas",
+              "Divisor de gastos para grupos",
+              "App de tarjetas de estudio",
             ].map((suggestion) => (
               <button
                 key={suggestion}
@@ -159,7 +159,7 @@ export default function ProjectList({
                     type="text"
                     value={newProjectName}
                     onChange={(e) => setNewProjectName(e.target.value)}
-                    placeholder="Project name"
+                    placeholder="Nombre del proyecto"
                     className="w-full border border-border-gray rounded-lg px-3 py-2 text-sm outline-none focus:border-border-gray-dark bg-white"
                     autoFocus
                     onKeyDown={(e) => {
@@ -179,7 +179,7 @@ export default function ProjectList({
                       disabled={creating || !newProjectName.trim()}
                       className="px-4 py-1.5 text-sm font-medium rounded-full bg-gray-900 text-white hover:opacity-90 disabled:opacity-50"
                     >
-                      {creating ? "Creating..." : "Create"}
+                      {creating ? "Creando..." : "Crear"}
                     </button>
                   </div>
                 </div>

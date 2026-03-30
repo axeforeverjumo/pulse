@@ -174,7 +174,7 @@ export default function PdfViewer({ url, title, onClose }: PdfViewerProps) {
               </button>
               <button
                 onClick={resetZoom}
-                title="Reset zoom"
+                title="Restablecer zoom"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -271,7 +271,7 @@ export default function PdfViewer({ url, title, onClose }: PdfViewerProps) {
                 cursor: 'pointer',
                 textDecoration: 'none',
               }}
-              title="Download PDF"
+              title="Descargar PDF"
             >
               <ArrowDownTrayIcon className="w-5 h-5" />
             </a>
@@ -291,7 +291,7 @@ export default function PdfViewer({ url, title, onClose }: PdfViewerProps) {
                 borderRadius: 8,
                 cursor: 'pointer',
               }}
-              title="Close (Esc)"
+              title="Cerrar (Esc)"
             >
               <XMarkIcon className="w-5 h-5" />
             </button>
@@ -318,7 +318,7 @@ export default function PdfViewer({ url, title, onClose }: PdfViewerProps) {
                 padding: 24,
               }}
             >
-              <p style={{ fontSize: 16, marginBottom: 8 }}>Failed to load PDF</p>
+              <p style={{ fontSize: 16, marginBottom: 8 }}>Error al cargar PDF</p>
               <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)' }}>{error}</p>
             </div>
           ) : (

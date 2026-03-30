@@ -58,7 +58,7 @@ function CodeBlock({ language, children }: { language: string | undefined; child
           ) : (
             <>
               <DocumentDuplicateIcon className="w-3.5 h-3.5" />
-              <span>Copy code</span>
+              <span>Copiar código</span>
             </>
           )}
         </button>
@@ -704,7 +704,7 @@ function ToolCallPartRenderer({ part }: { part: ContentPart }) {
   );
 }
 
-function SourcesPartRenderer({ part }: { part: ContentPart }) {
+function FuentesPartRenderer({ part }: { part: ContentPart }) {
   const sources = (part.data.sources || []) as Source[];
   if (!sources.length) return null;
 
@@ -730,7 +730,7 @@ function SourcesPartRenderer({ part }: { part: ContentPart }) {
   );
 }
 
-function SourceRefRenderer({ part, sources }: { part: ContentPart; sources: Source[] }) {
+function FuenteRefRenderer({ part, sources }: { part: ContentPart; sources: Source[] }) {
   const sourceIndex = (part.data.source_index as number) || 0;
   const source = sources[sourceIndex - 1]; // 1-based index
 
@@ -867,7 +867,7 @@ function ReasoningPartRenderer({ part }: { part: ContentPart }) {
         className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-tertiary hover:bg-bg-gray/50 transition-colors"
       >
         {isOpen ? <ChevronDownIcon className="w-3 h-3" /> : <ChevronRightIcon className="w-3 h-3" />}
-        <span>Reasoning</span>
+        <span>Razonamiento</span>
       </button>
       {isOpen && (
         <div className="px-3 pb-3 text-sm text-text-secondary">
@@ -897,10 +897,10 @@ interface ContentPartsRendererProps {
 
 function ContentPartsRenderer({ parts, messageId, isStreaming }: ContentPartsRendererProps) {
   // Collect all sources for source_ref linking
-  const allSources: Source[] = [];
+  const allFuentes: Source[] = [];
   for (const part of parts) {
     if (part.type === 'sources' && Array.isArray(part.data.sources)) {
-      allSources.push(...(part.data.sources as Source[]));
+      allFuentes.push(...(part.data.sources as Source[]));
     }
   }
 
@@ -964,9 +964,9 @@ function ContentPartsRenderer({ parts, messageId, isStreaming }: ContentPartsRen
           case 'tool_call':
             return <ToolCallPartRenderer key={part.id} part={part} />;
           case 'sources':
-            return <SourcesPartRenderer key={part.id} part={part} />;
+            return <FuentesPartRenderer key={part.id} part={part} />;
           case 'source_ref':
-            return <SourceRefRenderer key={part.id} part={part} sources={allSources} />;
+            return <FuenteRefRenderer key={part.id} part={part} sources={allFuentes} />;
           case 'email_ref':
             return <EmailRefRenderer key={part.id} part={part} emails={allEmails} />;
           case 'cal_ref':

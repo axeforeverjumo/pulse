@@ -23,13 +23,13 @@ interface WeekViewProps {
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const DAY_NAMES = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
+  "Domingo",
+  "Lunes",
+  "Martes",
+  "Miércoles",
+  "Jueves",
+  "Viernes",
+  "Sábado",
 ];
 const HOUR_HEIGHT = 60;
 const TIME_COLUMN_WIDTH = 53;
@@ -267,7 +267,7 @@ export default function WeekView({
               style={{ width: TIME_COLUMN_WIDTH - 8 }}
               className="shrink-0 flex items-center justify-end pr-2"
             >
-              <span className="text-xs text-gray-400">All</span>
+              <span className="text-xs text-gray-400">Todo</span>
             </div>
             {weekDays.map((day, dayIndex) => {
               const dayAllDayEvents = allDayEventsByDay[dayIndex];

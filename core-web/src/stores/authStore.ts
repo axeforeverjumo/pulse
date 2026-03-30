@@ -179,7 +179,7 @@ async function completeOAuthConnection(session: Session): Promise<void> {
     });
 
     if (!response.ok) {
-      let errorMessage = `Failed to complete OAuth flow (${response.status})`;
+      let errorMessage = `Error al completar el flujo de OAuth (${response.status})`;
       try {
         const errorData = (await response.json()) as { detail?: unknown; message?: unknown };
         if (typeof errorData.detail === 'string') {
@@ -198,7 +198,7 @@ async function completeOAuthConnection(session: Session): Promise<void> {
       completedOAuthPayloadKeys.clear();
     }
   } catch (err) {
-    console.error('Failed to complete OAuth provider setup:', err);
+    console.error('Error al completar la configuración de OAuth:', err);
   } finally {
     inFlightOAuthPayloadKeys.delete(payloadKey);
   }
@@ -225,7 +225,7 @@ export const useAuthStore = create<AuthState>()(
           const { data: { session }, error } = await supabase.auth.getSession();
 
           if (error) {
-            console.error('Auth initialization error:', error);
+            console.error('Error de inicialización de autenticación:', error);
             set({ isLoading: false });
             return;
           }
@@ -261,7 +261,7 @@ export const useAuthStore = create<AuthState>()(
             }
           });
         } catch (err) {
-          console.error('Auth initialization error:', err);
+          console.error('Error de inicialización de autenticación:', err);
           set({ isLoading: false });
         }
       },
@@ -372,7 +372,7 @@ export const useAuthStore = create<AuthState>()(
               });
             }
           } catch (err) {
-            console.error('Failed to fetch user profile:', err);
+            console.error('Error al obtener el perfil de usuario:', err);
           } finally {
             fetchProfilePromise = null;
           }
@@ -395,7 +395,7 @@ export const useAuthStore = create<AuthState>()(
 
       updateUserName: async (name) => {
         const token = get().session?.access_token;
-        if (!token) throw new Error('No auth token');
+        if (!token) throw new Error('No hay token de autenticación');
 
         const response = await fetch(`${API_BASE}/users/me`, {
           method: 'PATCH',
@@ -407,7 +407,7 @@ export const useAuthStore = create<AuthState>()(
         });
 
         if (!response.ok) {
-          throw new Error(`Failed to update user name (${response.status})`);
+          throw new Error(`Error al actualizar el nombre de usuario (${response.status})`);
         }
 
         const currentProfile = get().userProfile;
@@ -418,7 +418,7 @@ export const useAuthStore = create<AuthState>()(
 
       completeOnboarding: async () => {
         const token = get().session?.access_token;
-        if (!token) throw new Error('No auth token');
+        if (!token) throw new Error('No hay token de autenticación');
 
         const timestamp = new Date().toISOString();
         const response = await fetch(`${API_BASE}/users/me`, {
@@ -431,7 +431,7 @@ export const useAuthStore = create<AuthState>()(
         });
 
         if (!response.ok) {
-          throw new Error(`Failed to complete onboarding (${response.status})`);
+          throw new Error(`Error al completar la incorporación (${response.status})`);
         }
 
         const currentProfile = get().userProfile;
@@ -444,7 +444,7 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: 'core-auth-storage',
+      name: 'pulse-auth-storage',
       partialize: (state) => ({
         // Persist isAuthenticated as a hint for instant redirect on page load
         isAuthenticated: state.isAuthenticated,

@@ -124,7 +124,7 @@ export default function ProjectsListView() {
       return true;
     });
 
-    // Sort by created_at descending (newest first) for list view
+    // Sort by created_at descending (newest first) for vista de lista
     return [...filtered].sort((a, b) =>
       new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
     );
@@ -188,7 +188,7 @@ export default function ProjectsListView() {
   if (!activeProjectId) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-text-tertiary">Select a project to view the list</p>
+        <p className="text-text-tertiary">Selecciona un proyecto para ver la lista</p>
       </div>
     );
   }
@@ -207,12 +207,12 @@ export default function ProjectsListView() {
           </colgroup>
           <thead className="sticky top-0 z-10 bg-white border-b border-gray-100">
             <tr className="text-xs text-gray-500 uppercase tracking-wide">
-              <th className="pl-4 pr-6 py-3.5 font-medium">Title</th>
-              <th className="px-4 py-3.5 font-medium">Status</th>
-              <th className="px-4 py-3.5 font-medium">Assignees</th>
-              <th className="px-4 py-3.5 font-medium">Due</th>
-              <th className="px-4 py-3.5 font-medium">Priority</th>
-              <th className="px-4 py-3.5 font-medium">Labels</th>
+              <th className="pl-4 pr-6 py-3.5 font-medium">T�tulo</th>
+              <th className="px-4 py-3.5 font-medium">Estado</th>
+              <th className="px-4 py-3.5 font-medium">Asignados</th>
+              <th className="px-4 py-3.5 font-medium">Vencimiento</th>
+              <th className="px-4 py-3.5 font-medium">Prioridad</th>
+              <th className="px-4 py-3.5 font-medium">Etiquetas</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -250,7 +250,7 @@ export default function ProjectsListView() {
                           handleCancelEditing();
                         }
                       }}
-                      placeholder="Enter item title..."
+                      placeholder="Introduce título del elemento..."
                       disabled={isCreating}
                       className="w-full bg-transparent border-0 p-0 focus:ring-0 focus:outline-none outline-none text-[13px] text-gray-900 placeholder:text-gray-400 font-medium"
                     />
@@ -263,7 +263,7 @@ export default function ProjectsListView() {
                         className="w-2 h-2 rounded-full"
                         style={{ backgroundColor: getStatusDotColor(columns[0]) }}
                       />
-                      <span>{columns[0]?.name || "To Do"}</span>
+                      <span>{columns[0]?.name || "Por hacer"}</span>
                     </div>
                   )}
                 </td>
@@ -384,7 +384,7 @@ export default function ProjectsListView() {
 
         {filteredIssues.length === 0 && (
           <div className="flex items-center justify-center py-12 text-[13px] text-gray-400">
-            {hasActiveFilters ? "No matching results" : "No items yet"}
+            {hasActiveFilters ? "Sin resultados coincidentes" : "Sin elementos aún"}
           </div>
         )}
       </div>

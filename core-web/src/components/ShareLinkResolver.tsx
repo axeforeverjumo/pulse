@@ -37,7 +37,7 @@ function SignInBanner({
 }) {
   return (
     <div className="border-b border-border-gray px-6 py-3 bg-bg-gray flex items-center gap-2">
-      <span className="text-xs text-text-secondary">Sign in for full access</span>
+      <span className="text-xs text-text-secondary">Inicia sesión para acceso completo</span>
       <button
         onClick={onSignInGoogle}
         className="px-2.5 py-1 text-xs rounded bg-black text-white"
@@ -91,7 +91,7 @@ export default function ShareLinkResolver() {
       setResource(shared);
       setState('ready');
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to resolve share link';
+      const errorMessage = err instanceof Error ? err.message : 'Failed to resolve enlace para compartir';
       const status = (err as Error & { status?: number })?.status;
 
       if (status === 404 || errorMessage.toLowerCase().includes('not found')) {
@@ -108,7 +108,7 @@ export default function ShareLinkResolver() {
   useEffect(() => {
     if (!token) {
       setState('error');
-      setMessage('Share link is missing.');
+      setMessage('Enlace para compartir is missing.');
       return;
     }
 
@@ -264,7 +264,7 @@ export default function ShareLinkResolver() {
         style={{ width: '100%', maxWidth: '28rem' }}
         className="bg-white border border-border-gray rounded-2xl p-6 shadow-sm"
       >
-        <h1 className="text-xl font-semibold text-text-body mb-2">Shared resource</h1>
+        <h1 className="text-xl font-semibold text-text-body mb-2">Recurso compartido</h1>
         <p className="text-sm text-text-secondary mb-6">{message || 'Preparing link...'}</p>
 
         {(state === 'loading' || state === 'processing') && (

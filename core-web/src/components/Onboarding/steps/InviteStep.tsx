@@ -81,14 +81,14 @@ export default function InviteStep({
       <OnboardingProgress currentStep="invite" />
 
       <h2 className="text-3xl font-bold text-gray-900 tracking-tight mb-3">
-        Invite your teammates
+        Invita a tu equipo
       </h2>
       <p className="text-base text-gray-500 leading-relaxed mb-8">
-        Core works better with more people. Add your core collaborators.
+        Pulse funciona mejor con más personas. Añade a tus colaboradores.
       </p>
 
       <label className="block text-base font-medium text-gray-700 mb-2">
-        Add teammate by email
+        Añadir por correo electrónico
       </label>
       <div
         className="w-full min-h-[52px] bg-white border border-border-gray rounded-xl px-3 py-2.5 flex flex-wrap gap-2 items-center cursor-text focus-within:border-text-tertiary transition-all"
@@ -134,7 +134,7 @@ export default function InviteStep({
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           onBlur={handleBlur}
-          placeholder={emails.length === 0 ? "Ex. ellis@gmail.com, maria@gmail.com" : ""}
+          placeholder={emails.length === 0 ? "ej. ana@gmail.com, pedro@gmail.com" : ""}
           className="flex-1 min-w-[120px] text-base text-gray-900 placeholder:text-gray-400 outline-none bg-transparent"
         />
       </div>
@@ -144,7 +144,7 @@ export default function InviteStep({
           onClick={onSkip}
           className="text-base text-gray-400 hover:text-gray-600 transition-colors"
         >
-          Skip this step
+          Omitir este paso
         </button>
         <button
           onClick={() => onNext()}

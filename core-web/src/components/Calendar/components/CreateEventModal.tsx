@@ -138,7 +138,7 @@ export default function CreateEventModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">New Event</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Nuevo evento</h2>
           <button
             onClick={onClose}
             className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
@@ -155,20 +155,20 @@ export default function CreateEventModal({
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Title</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Título</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className={inputStyles}
-              placeholder="Event title"
+              placeholder="Título del evento"
               autoFocus
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Fecha</label>
             <DatePicker
               value={date}
               onChange={setDate}
@@ -187,14 +187,14 @@ export default function CreateEventModal({
               className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900/20"
             />
             <label htmlFor="allDay" className="text-sm text-gray-600">
-              All day
+              Todo el día
             </label>
           </div>
 
           {!isAllDay && (
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Start</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Inicio</label>
                 <input
                   type="time"
                   value={startTime}
@@ -203,7 +203,7 @@ export default function CreateEventModal({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">End</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Fin</label>
                 <input
                   type="time"
                   value={endTime}
@@ -215,13 +215,13 @@ export default function CreateEventModal({
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Location</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Ubicación</label>
             <input
               type="text"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               className={inputStyles}
-              placeholder="Add location"
+              placeholder="Añadir ubicación"
             />
           </div>
 
@@ -236,18 +236,18 @@ export default function CreateEventModal({
           >
             <Icon icon={Video} size={16} className={addGoogleMeet ? 'text-blue-600' : 'text-gray-400'} />
             <span className={`text-sm ${addGoogleMeet ? 'text-blue-600 font-medium' : 'text-gray-500'}`}>
-              {addGoogleMeet ? 'Google Meet video conferencing' : 'Add Google Meet video conferencing'}
+              {addGoogleMeet ? 'Videoconferencia de Google Meet' : 'Add Videoconferencia de Google Meet'}
             </span>
           </button>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Descripción</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
               className={`${inputStyles} resize-none`}
-              placeholder="Add description"
+              placeholder="Añadir descripción"
             />
           </div>
 
@@ -264,7 +264,7 @@ export default function CreateEventModal({
               disabled={isLoading || !title.trim()}
               className="px-5 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {isLoading ? 'Creating...' : 'Create Event'}
+              {isLoading ? 'Creando...' : 'Crear evento'}
             </button>
           </div>
         </form>

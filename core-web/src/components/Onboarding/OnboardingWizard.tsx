@@ -30,7 +30,7 @@ export default function OnboardingWizard() {
   const userProfile = useAuthStore((s) => s.userProfile);
   const [step, setStep] = useState<Step>("get-started");
   const [creatingStatus, setCreatingStatus] = useState(
-    "Creating your workspace"
+    "Creando tu espacio de trabajo"
   );
 
   const [data, setData] = useState<OnboardingData>(() => ({
@@ -60,7 +60,7 @@ export default function OnboardingWizard() {
 
       // 1. Create new workspace
       if (finalData.workspaceName.trim()) {
-        setCreatingStatus("Creating your workspace");
+        setCreatingStatus("Creando tu espacio de trabajo");
         try {
           newWorkspace = await addWorkspace(finalData.workspaceName.trim());
         } catch (err) {
@@ -70,7 +70,7 @@ export default function OnboardingWizard() {
 
       // 2. Update user name (independent)
       if (finalData.userName.trim()) {
-        setCreatingStatus("Setting up your profile");
+        setCreatingStatus("Configurando tu perfil");
         try {
           await updateUserName(finalData.userName.trim());
         } catch (err) {
@@ -80,7 +80,7 @@ export default function OnboardingWizard() {
 
       // 3. Send invitations to new workspace (independent)
       if (finalData.inviteEmails.length > 0 && newWorkspace) {
-        setCreatingStatus("Sending invitations");
+        setCreatingStatus("Enviando invitaciones");
         for (const email of finalData.inviteEmails) {
           try {
             await createWorkspaceInvitation(newWorkspace.id, email, "member");
@@ -91,7 +91,7 @@ export default function OnboardingWizard() {
       }
 
       // 4. Mark onboarding complete (critical — always attempt)
-      setCreatingStatus("Almost done");
+      setCreatingStatus("Casi listo");
       try {
         await completeOnboarding();
       } catch (err) {

@@ -49,7 +49,7 @@ export default function ProjectsSettingsDropdown({
             className={itemClass}
           >
             <Icon icon={Settings} size={16} className="text-text-secondary" />
-            <span>App settings</span>
+            <span>Ajustes de la aplicación</span>
           </button>
         )}
 
@@ -65,7 +65,7 @@ export default function ProjectsSettingsDropdown({
               className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-red-600 hover:bg-red-50 transition-colors text-left"
             >
               <Icon icon={Trash2} size={16} className="text-red-500" />
-              <span>Delete board</span>
+              <span>Eliminar tablero</span>
             </button>
           </>
         )}

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 60" fill="none">
+  <!-- Pulse icon - heartbeat/pulse line -->
+  <rect width="36" height="36" x="2" y="12" rx="8" fill="url(#grad)"/>
+  <polyline points="8,30 14,30 18,18 22,42 26,24 30,30 34,30" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- "Pulse" text -->
+  <text x="48" y="38" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="30" font-weight="700" fill="#00A3FF" letter-spacing="-0.5">Pulse</text>
+  <!-- Separator -->
+  <line x1="178" y1="14" x2="178" y2="46" stroke="#E0E0E0" stroke-width="1.5"/>
+  <!-- "Factoría IA" text -->
+  <text x="190" y="36" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="20" font-weight="500" fill="#64748B" letter-spacing="-0.3">Factoría IA</text>
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00A3FF"/>
+      <stop offset="100%" stop-color="#00D4AA"/>
+    </linearGradient>
+  </defs>
+</svg>

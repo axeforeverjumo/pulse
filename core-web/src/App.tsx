@@ -80,11 +80,11 @@ function AppErrorFallback({
     <div className="h-screen w-screen flex items-center justify-center bg-bg-mini-app">
       <div className="flex flex-col items-center gap-4 max-w-md text-center px-6">
         <h1 className="text-xl font-semibold text-text-dark">
-          Something went wrong
+          Algo salió mal
         </h1>
         {/* TODO: Replace with generic message once error tracking is mature */}
         <p className="text-sm text-text-secondary">
-          {error instanceof Error ? error.message : "An unexpected error occurred."}
+          {error instanceof Error ? error.message : "Ha ocurrido un error inesperado."}
         </p>
         <div className="flex gap-3 mt-2">
           <button
@@ -339,7 +339,7 @@ function AppContent() {
 
     const handleOnline = () => {
       toast.dismiss("offline-toast");
-      toast.success("Back online", { duration: 3000 });
+      toast.success("Conexión restaurada", { duration: 3000 });
     };
 
     window.addEventListener("offline", handleOffline);

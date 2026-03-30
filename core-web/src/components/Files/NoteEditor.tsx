@@ -162,7 +162,7 @@ export function NoteToolbar({
         {/* Text formatting toggle button */}
         <button
           onClick={() => setShowTextFormatting(!showTextFormatting)}
-          title="Text formatting"
+          title="Formato de texto"
           className="p-1.5 rounded transition-colors text-sm font-medium text-text-secondary hover:text-text-body hover:bg-bg-gray"
         >
           Aa
@@ -178,14 +178,14 @@ export function NoteToolbar({
           <ToolbarButton
             onAction={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
             isActive={editor.isActive('heading', { level: 1 })}
-            title="Heading 1"
+            title="Encabezado 1"
           >
             <span className="w-4 h-4 flex items-center justify-center text-xs font-bold">H1</span>
           </ToolbarButton>
           <ToolbarButton
             onAction={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
             isActive={editor.isActive('heading', { level: 2 })}
-            title="Heading 2"
+            title="Encabezado 2"
           >
             <span className="w-4 h-4 flex items-center justify-center text-xs font-bold">H2</span>
           </ToolbarButton>
@@ -193,28 +193,28 @@ export function NoteToolbar({
           <ToolbarButton
             onAction={() => editor.chain().focus().toggleBold().run()}
             isActive={editor.isActive('bold')}
-            title="Bold"
+            title="Negrita"
           >
             <span className="w-4 h-4 flex items-center justify-center font-bold text-sm">B</span>
           </ToolbarButton>
           <ToolbarButton
             onAction={() => editor.chain().focus().toggleItalic().run()}
             isActive={editor.isActive('italic')}
-            title="Italic"
+            title="Cursiva"
           >
             <span className="w-4 h-4 flex items-center justify-center italic text-sm">I</span>
           </ToolbarButton>
           <ToolbarButton
             onAction={() => editor.chain().focus().toggleStrike().run()}
             isActive={editor.isActive('strike')}
-            title="Strikethrough"
+            title="Tachado"
           >
             <span className="w-4 h-4 flex items-center justify-center line-through text-sm">S</span>
           </ToolbarButton>
           <ToolbarButton
             onAction={() => editor.chain().focus().toggleUnderline().run()}
             isActive={editor.isActive('underline')}
-            title="Underline"
+            title="Subrayado"
           >
             <Icon icon={UnderlineIcon} size={16} />
           </ToolbarButton>
@@ -224,7 +224,7 @@ export function NoteToolbar({
               e.preventDefault();
               setShowHighlightMenu(!showHighlightMenu);
             }}
-            title="Highlight"
+            title="Resaltar"
             className={`p-1.5 rounded transition-colors ${
               editor.isActive('highlight')
                 ? 'bg-bg-gray-dark text-text-body'
@@ -242,7 +242,7 @@ export function NoteToolbar({
               }
             }}
             isActive={editor.isActive('link')}
-            title="Link"
+            title="Enlace"
           >
             <Icon icon={LinkIcon} size={16} />
           </ToolbarButton>
@@ -252,14 +252,14 @@ export function NoteToolbar({
         <ToolbarButton
           onAction={() => editor.chain().focus().toggleBulletList().run()}
           isActive={editor.isActive('bulletList')}
-          title="Bullet List"
+          title="Lista con vi�etas"
         >
           <Icon icon={List} size={16} />
         </ToolbarButton>
         <ToolbarButton
           onAction={() => editor.chain().focus().toggleOrderedList().run()}
           isActive={editor.isActive('orderedList')}
-          title="Numbered List"
+          title="Lista numerada"
         >
           <Icon icon={ListOrdered} size={16} />
         </ToolbarButton>
@@ -267,14 +267,14 @@ export function NoteToolbar({
         <ToolbarButton
           onAction={() => editor.chain().focus().toggleBlockquote().run()}
           isActive={editor.isActive('blockquote')}
-          title="Quote"
+          title="Cita"
         >
           <Icon icon={Quote} size={16} />
         </ToolbarButton>
         <ToolbarButton
           onAction={() => editor.chain().focus().toggleCode().run()}
           isActive={editor.isActive('code')}
-          title="Code"
+          title="C�digo"
         >
           <Icon icon={Code} size={16} />
         </ToolbarButton>
@@ -282,14 +282,14 @@ export function NoteToolbar({
         <ToolbarButton
           onAction={() => editor.chain().focus().toggleTaskList().run()}
           isActive={editor.isActive('taskList')}
-          title="Task List"
+          title="Lista de tareas"
         >
           <Icon icon={ListChecks} size={16} />
         </ToolbarButton>
         <ToolbarButton
           onAction={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
           isActive={editor.isActive('table')}
-          title="Insert Table"
+          title="Insertar tabla"
         >
           <span className="w-4 h-4 flex items-center justify-center">
             <svg width="16" height="13" viewBox="0 0 24 19" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
@@ -341,7 +341,7 @@ export function NoteToolbar({
             ))}
             {editor.isActive('highlight') && (
               <button
-                title="Remove highlight"
+                title="Quitar resaltado"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   editor.chain().focus().unsetHighlight().run();
@@ -416,7 +416,7 @@ export function NoteToolbarRight({
     <div className="flex items-center gap-1">
       <button
         onClick={toggleVersionHistory}
-        title="Version history"
+        title="Historial de versiones"
         className={`p-1.5 rounded transition-colors ${
           isVersionHistoryOpen
             ? 'text-text-body bg-bg-gray-dark'
@@ -428,7 +428,7 @@ export function NoteToolbarRight({
       {onDownload && (
         <button
           onClick={onDownload}
-          title="Download as .md"
+          title="Descargar como .md"
           className="p-1.5 rounded transition-colors text-text-tertiary hover:text-text-body hover:bg-bg-gray"
         >
           <Icon icon={Download} size={16} />
@@ -437,7 +437,7 @@ export function NoteToolbarRight({
       {onToggleFullWidth && (
         <button
           onClick={onToggleFullWidth}
-          title={isFullWidth ? "Narrow width" : "Full width"}
+          title={isFullWidth ? "Ancho estrecho" : "Ancho completo"}
           className="p-1.5 rounded transition-colors text-text-tertiary hover:text-text-body hover:bg-bg-gray"
         >
           <Icon icon={isFullWidth ? Minimize2 : Maximize2} size={16} />
@@ -545,11 +545,11 @@ function TableFloatingToolbar({ editor }: { editor: Editor }) {
       {btn('+ Row ↑', 'Add row above', () => editor.chain().focus().addRowBefore().run())}
       {btn('+ Row ↓', 'Add row below', () => editor.chain().focus().addRowAfter().run())}
       {divider}
-      {btn('+ Col ←', 'Add column left', () => editor.chain().focus().addColumnBefore().run())}
-      {btn('+ Col →', 'Add column right', () => editor.chain().focus().addColumnAfter().run())}
+      {btn('+ Col ←', 'A�adir columna left', () => editor.chain().focus().addColumnBefore().run())}
+      {btn('+ Col →', 'A�adir columna right', () => editor.chain().focus().addColumnAfter().run())}
       {divider}
       {btn('− Row', 'Delete row', () => editor.chain().focus().deleteRow().run())}
-      {btn('− Col', 'Delete column', () => editor.chain().focus().deleteColumn().run())}
+      {btn('− Col', 'Eliminar columna', () => editor.chain().focus().deleteColumn().run())}
       {divider}
       {btn('🗑 Table', 'Delete table', () => editor.chain().focus().deleteTable().run())}
     </div>
@@ -694,7 +694,7 @@ export default function NoteEditor({ content, onChange, placeholder = 'Start wri
           const coords = editor.view.coordsAtPos(from);
           setMentionCursorCoords({ top: coords.top, bottom: coords.bottom, left: coords.left });
         } catch {
-          // coordsAtPos can fail if pos is out of view
+          // coordsAtPos can fail if pos is out de view
         }
       } else {
         setShowMentionAutocomplete(false);
@@ -711,7 +711,7 @@ export default function NoteEditor({ content, onChange, placeholder = 'Start wri
       handleKeyDown: (view, event) => {
         const { from, to } = view.state.selection;
         if (event.key === 'Backspace') {
-          // Position 1 = start of first paragraph text (0 is doc node, 1 is inside first <p>)
+          // Position 1 = start de first paragraph text (0 is doc node, 1 is inside first <p>)
           if (from <= 1 && to <= 1 && onBackspaceAtStartRef.current) {
             // If the first block is empty, delete it before focusing title
             const firstChild = view.state.doc.firstChild;

@@ -58,7 +58,7 @@ export default function EventDetailModal({
 
   const formatDisplayDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', {
+    return date.toLocaleDateString('es-ES', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
@@ -68,7 +68,7 @@ export default function EventDetailModal({
 
   const formatDisplayTime = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleTimeString('en-US', {
+    return date.toLocaleTimeString('es-ES', {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true
@@ -99,7 +99,7 @@ export default function EventDetailModal({
       });
       onUpdated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update event');
+      setError(err instanceof Error ? err.message : 'Error al actualizar evento');
     } finally {
       setIsLoading(false);
     }
@@ -113,7 +113,7 @@ export default function EventDetailModal({
       await deleteCalendarEvent(event.id);
       onDeleted();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete event');
+      setError(err instanceof Error ? err.message : 'Error al eliminar evento');
       setIsDeleting(false);
     }
   };
@@ -150,7 +150,7 @@ export default function EventDetailModal({
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">
-            {isEditing ? 'Edit Event' : 'Event Details'}
+            {isEditing ? 'Editar evento' : 'Detalles del evento'}
           </h2>
           <div className="flex items-center gap-1">
             {!isEditing && (
@@ -158,7 +158,7 @@ export default function EventDetailModal({
                 <button
                   onClick={() => setIsEditing(true)}
                   className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                  title="Edit event"
+                  title="Editar evento"
                 >
                   <Icon icon={Pencil} size={20} />
                 </button>
@@ -166,7 +166,7 @@ export default function EventDetailModal({
                   onClick={handleDelete}
                   disabled={isDeleting}
                   className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                  title="Delete event"
+                  title="Eliminar evento"
                 >
                   <Icon icon={Trash2} size={20} />
                 </button>
@@ -190,20 +190,20 @@ export default function EventDetailModal({
         {isEditing ? (
           <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="p-6 space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Title</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Título</label>
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className={inputStyles}
-                placeholder="Event title"
+                placeholder="Título del evento"
                 autoFocus
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Fecha</label>
               <input
                 type="date"
                 value={date}
@@ -222,14 +222,14 @@ export default function EventDetailModal({
                 className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900/20"
               />
               <label htmlFor="editAllDay" className="text-sm text-gray-600">
-                All day
+                Todo el día
               </label>
             </div>
 
             {!isAllDay && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Start</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Inicio</label>
                   <input
                     type="time"
                     value={startTime}
@@ -238,7 +238,7 @@ export default function EventDetailModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">End</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Fin</label>
                   <input
                     type="time"
                     value={endTime}
@@ -250,24 +250,24 @@ export default function EventDetailModal({
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Location</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Ubicación</label>
               <input
                 type="text"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 className={inputStyles}
-                placeholder="Add location"
+                placeholder="Añadir ubicación"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Descripción</label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
                 className={`${inputStyles} resize-none`}
-                placeholder="Add description"
+                placeholder="Añadir descripción"
               />
             </div>
 
@@ -284,7 +284,7 @@ export default function EventDetailModal({
                 disabled={isLoading || !title.trim()}
                 className="px-5 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {isLoading ? 'Saving...' : 'Save Changes'}
+                {isLoading ? 'Guardando...' : 'Guardar cambios'}
               </button>
             </div>
           </form>
@@ -303,7 +303,7 @@ export default function EventDetailModal({
                     </p>
                   )}
                   {event.all_day && (
-                    <p className="text-sm text-gray-500">All day</p>
+                    <p className="text-sm text-gray-500">Todo el día</p>
                   )}
                 </div>
               </div>
@@ -324,7 +324,7 @@ export default function EventDetailModal({
                     rel="noopener noreferrer"
                     className={`text-sm hover:underline ${isGoogleMeetLink(event.meeting_link) ? 'text-blue-600 font-medium hover:text-blue-700' : 'text-blue-600 hover:text-blue-700'}`}
                   >
-                    {isGoogleMeetLink(event.meeting_link) ? 'Join with Google Meet' : 'Join Meeting'}
+                    {isGoogleMeetLink(event.meeting_link) ? 'Unirse con Google Meet' : 'Unirse a la reunión'}
                   </a>
                 </div>
               )}
@@ -337,7 +337,7 @@ export default function EventDetailModal({
 
               {event.attendees && event.attendees.length > 0 && (
                 <div className="pt-2 border-t border-gray-100">
-                  <p className="text-sm font-medium text-gray-700 mb-2">Attendees</p>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Asistentes</p>
                   <div className="space-y-1">
                     {event.attendees.map((attendee, i) => (
                       <p key={i} className="text-sm text-gray-600">

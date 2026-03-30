@@ -209,7 +209,7 @@ export default function DocxViewer({ url, title, onClose }: DocxViewerProps) {
               </button>
               <button
                 onClick={resetZoom}
-                title="Reset zoom"
+                title="Restablecer zoom"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -245,7 +245,7 @@ export default function DocxViewer({ url, title, onClose }: DocxViewerProps) {
                 cursor: 'pointer',
                 textDecoration: 'none',
               }}
-              title="Download Document"
+              title="Descargar documento"
             >
               <ArrowDownTrayIcon className="w-5 h-5" />
             </a>
@@ -265,7 +265,7 @@ export default function DocxViewer({ url, title, onClose }: DocxViewerProps) {
                 borderRadius: 8,
                 cursor: 'pointer',
               }}
-              title="Close (Esc)"
+              title="Cerrar (Esc)"
             >
               <XMarkIcon className="w-5 h-5" />
             </button>
@@ -296,7 +296,7 @@ export default function DocxViewer({ url, title, onClose }: DocxViewerProps) {
                 padding: 24,
               }}
             >
-              <p style={{ fontSize: 16, marginBottom: 8 }}>Failed to load document</p>
+              <p style={{ fontSize: 16, marginBottom: 8 }}>Error al cargar documento</p>
               <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)' }}>{error}</p>
             </div>
           ) : isLoading ? (

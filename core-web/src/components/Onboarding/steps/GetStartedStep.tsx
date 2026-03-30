@@ -29,8 +29,8 @@ export default function GetStartedStep({ onNext }: GetStartedStepProps) {
           className="absolute inset-0 blur-2xl bg-gradient-to-br from-gray-200 to-gray-300 rounded-full scale-150 opacity-60"
         />
         <img
-          src="/CoreLogo.png"
-          alt="Core"
+          src="/pulse-icon.svg"
+          alt="Pulse"
           className="relative w-20 h-20"
         />
       </motion.div>
@@ -46,7 +46,7 @@ export default function GetStartedStep({ onNext }: GetStartedStepProps) {
         }}
         className="text-4xl font-semibold text-gray-900 tracking-tight mb-4"
       >
-        Welcome to Core
+        Bienvenido a Pulse
       </motion.h1>
 
       {/* Description */}
@@ -60,9 +60,9 @@ export default function GetStartedStep({ onNext }: GetStartedStepProps) {
         }}
         className="text-gray-500 text-lg leading-relaxed mb-12"
       >
-        Your all-in-one workspace for teams.
+        Tu espacio de trabajo todo en uno.
         <br />
-        Let's get you set up in a few quick steps.
+        Vamos a configurarlo en unos pasos rápidos.
       </motion.p>
 
       {/* CTA Button */}
@@ -79,7 +79,7 @@ export default function GetStartedStep({ onNext }: GetStartedStepProps) {
         onClick={onNext}
         className="px-12 py-3 bg-gray-900 text-white rounded-full text-base font-medium shadow-lg shadow-gray-900/20 hover:bg-gray-800 transition-colors"
       >
-        Get Started
+        Comenzar
       </motion.button>
 
       {/* Terms */}
@@ -93,13 +93,13 @@ export default function GetStartedStep({ onNext }: GetStartedStepProps) {
         }}
         className="text-xs text-gray-400 mt-10 leading-relaxed"
       >
-        By continuing, you agree to our{" "}
+        Al continuar, aceptas nuestros{" "}
         <a href="/terms" className="underline hover:text-gray-600 transition-colors">
-          Terms of Service
+          Términos de Servicio
         </a>{" "}
-        and{" "}
+        y{" "}
         <a href="/privacy" className="underline hover:text-gray-600 transition-colors">
-          Privacy Policy
+          Política de Privacidad
         </a>
         .
       </motion.p>

@@ -326,7 +326,7 @@ export default function SidebarChat() {
           addMessage({
             id: `error-${Date.now()}`,
             role: "assistant",
-            content: "Sorry, there was an error processing your request.",
+            content: "Lo sentimos, hubo un error al procesar tu solicitud.",
           });
         }
       }
@@ -361,7 +361,7 @@ export default function SidebarChat() {
       addMessage({
         id: `error-${Date.now()}`,
         role: "assistant",
-        content: "Sorry, there was an error connecting to the server.",
+        content: "Lo sentimos, hubo un error al conectar con el servidor.",
       });
     } finally {
       setLoading(false);
@@ -392,7 +392,7 @@ export default function SidebarChat() {
             <button
               onClick={() => setSidebarChatOpen(false)}
               className="p-1.5 text-text-tertiary hover:text-text-body hover:bg-bg-gray rounded-lg transition-colors"
-              title="Close"
+              title="Cerrar"
               aria-label="Close chat sidebar"
             >
               <XMarkIcon className="w-4 h-4 stroke-2" />
@@ -419,7 +419,7 @@ export default function SidebarChat() {
               animate={{ opacity: 1 }}
               className="flex-1 flex items-center justify-center"
             >
-              <p className="text-sm text-text-tertiary">Ask anything</p>
+              <p className="text-sm text-text-tertiary">Pregunta lo que quieras</p>
             </motion.div>
           )}
 
@@ -483,7 +483,7 @@ export default function SidebarChat() {
             isUploading={isUploading}
             disabled={loading}
             isStreaming={hasStreamingContent}
-            placeholder="Ask anything..."
+            placeholder="Pregunta lo que quieras..."
             mentions={mentions}
             onMentionSelect={handleMentionSelect}
             onRemoveMention={handleRemoveMention}

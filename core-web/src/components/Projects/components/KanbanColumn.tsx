@@ -236,7 +236,7 @@ const KanbanColumn = memo(function KanbanColumn({
                 onClick={() => setShowColorPicker(!showColorPicker)}
                 className="w-2 h-2 rounded-full shrink-0 hover:scale-125 transition-transform"
                 style={{ backgroundColor: displayColor }}
-                title="Change color"
+                title="Cambiar color"
               />
               {showColorPicker && (
                 <div className="absolute top-full left-0 mt-2 p-2.5 bg-white rounded-lg shadow-lg border border-gray-100 z-10">
@@ -288,7 +288,7 @@ const KanbanColumn = memo(function KanbanColumn({
                   ? "opacity-100"
                   : "opacity-0"
               }`}
-              title="Column options"
+              title="Opciones de columna"
             >
               <EllipsisHorizontalIcon className="w-3.5 h-3.5" />
             </button>
@@ -342,7 +342,7 @@ const KanbanColumn = memo(function KanbanColumn({
                 />
               </div>
             ))}
-            {/* Drop indicator at end of column */}
+            {/* Drop indicator at end de column */}
             {previewIndex === cards.length && cards.length > 0 && (
               <div className="h-0.5 bg-gray-300 rounded-full my-2 transition-colors duration-200" />
             )}
@@ -379,7 +379,7 @@ const KanbanColumn = memo(function KanbanColumn({
                   disabled={!newCardTitle.trim()}
                   className="px-3 py-2 text-[12px] bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
-                  Add card
+                  Añadir tarjeta
                 </button>
               </div>
             </div>
@@ -394,7 +394,7 @@ const KanbanColumn = memo(function KanbanColumn({
               {isExpanded ? (
                 <>
                   <ChevronUpIcon className="w-3.5 h-3.5" />
-                  <span>Show less</span>
+                  <span>Ver menos</span>
                 </>
               ) : (
                 <>
@@ -412,7 +412,7 @@ const KanbanColumn = memo(function KanbanColumn({
               className="w-full mt-2 py-3 text-[13px] text-gray-400 hover:text-gray-600 rounded-lg flex items-center justify-center gap-1.5 transition-colors duration-200 hover:bg-white/60"
             >
               <PlusIcon className="w-4 h-4 stroke-2" />
-              <span>Add card</span>
+              <span>Añadir tarjeta</span>
             </button>
           )}
         </div>
@@ -421,9 +421,9 @@ const KanbanColumn = memo(function KanbanColumn({
       {/* Delete Confirmation Modal */}
       <ConfirmModal
         isOpen={showDeleteConfirm}
-        title="Delete column"
-        message={`Are you sure you want to delete "${column.name}"? All cards in this column will also be deleted.`}
-        confirmLabel="Delete"
+        title="Eliminar columna"
+        message={`¿Estás seguro de que quieres eliminar "${column.name}"? All cards in this column will also be deleted.`}
+        confirmLabel="Eliminar"
         onConfirm={handleDeleteConfirm}
         onCancel={() => setShowDeleteConfirm(false)}
       />
