@@ -5,7 +5,8 @@ export type MentionEntityType =
   | 'channel'
   | 'project_board'
   | 'project_issue'
-  | 'todo';
+  | 'todo'
+  | 'agent';
 
 /** Data stored on a mention mark / content block */
 export interface MentionData {
@@ -44,4 +45,5 @@ export const MENTION_ICONS: Record<MentionEntityType, string> = {
   project_board: '📋',
   project_issue: '📋',
   todo: '✓',
+  agent: '🤖',
 };

@@ -45,6 +45,7 @@ import type {
   DMChannel,
   ChannelMember,
 } from "../../api/client";
+import { api } from "../../api/client";
 import {
   getWorkspaceMembers,
   getPresignedUploadUrl,
@@ -1879,7 +1880,43 @@ export default function MessagesView() {
       const blocks: ContentBlock[] = [...(textBlocks || [])];
       if (forwardBlock) blocks.push(forwardBlock);
       setForwardingMessage(null);
-      sendMessage(blocks);
+      const sentMessage = await sendMessage(blocks);
+
+      // Detect agent mentions in the sent message and trigger agent responses
+      if (sentMessage) {
+        const textBlock = blocks.find((b) => b.type === "text");
+        const html = (textBlock?.data?.html as string) || "";
+        const plainText = (textBlock?.data?.content as string) || "";
+        // Parse HTML for agent mention marks
+        const agentMentionRegex = /data-entity-type="agent"[^>]*data-entity-id="([^"]+)"/g;
+        let match: RegExpExecArray | null;
+        const mentionedAgentIds = new Set<string>();
+        while ((match = agentMentionRegex.exec(html)) !== null) {
+          mentionedAgentIds.add(match[1]);
+        }
+        // Also check reverse attribute order
+        const reverseRegex = /data-entity-id="([^"]+)"[^>]*data-entity-type="agent"/g;
+        while ((match = reverseRegex.exec(html)) !== null) {
+          mentionedAgentIds.add(match[1]);
+        }
+        if (mentionedAgentIds.size > 0) {
+          const channelName = currentChannel?.name || "";
+          for (const agentId of mentionedAgentIds) {
+            api("/openclaw-agents/mention", {
+              method: "POST",
+              body: JSON.stringify({
+                channel_id: sentMessage.channel_id,
+                message_id: sentMessage.id,
+                agent_id: agentId,
+                message_content: plainText,
+                channel_name: channelName,
+              }),
+            }).catch((err) => {
+              console.error("Agent mention failed:", err);
+            });
+          }
+        }
+      }
       return;
     }
 

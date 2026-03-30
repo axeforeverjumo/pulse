@@ -1,10 +1,19 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useFilesStore } from '../stores/filesStore';
 import { useMessagesStore } from '../stores/messagesStore';
 import { useProjectMembers, useProjectBoards } from './queries/useProjects';
 import type { MentionMenuItem, MentionMenuLevel } from '../types/mention';
 import type { Document, Channel } from '../api/client';
+import { api } from '../api/client';
+
+interface MentionableAgent {
+  id: string;
+  name: string;
+  openclaw_agent_id: string;
+  avatar_url?: string;
+  tier?: string;
+}
 
 const APP_EMOJIS: Record<string, string> = {
   files: '📁',
@@ -30,6 +39,17 @@ export function useMentionData(workspaceId: string | null) {
   // Reactively subscribe to project boards so they're fetched if not cached
   const projectsApp = (workspace?.apps || []).find((a) => a.type === 'projects');
   const { data: boards } = useProjectBoards(projectsApp?.id ?? null);
+
+  // Fetch mentionable agents for this workspace
+  const [mentionableAgents, setMentionableAgents] = useState<MentionableAgent[]>([]);
+  useEffect(() => {
+    if (!workspaceId) return;
+    let cancelled = false;
+    api<{ agents: MentionableAgent[] }>(`/openclaw-agents/mentionable?workspace_id=${workspaceId}`)
+      .then((data) => { if (!cancelled) setMentionableAgents(data.agents); })
+      .catch(() => { /* ignore */ });
+    return () => { cancelled = true; };
+  }, [workspaceId]);
 
   // Ensure files data is loaded when mention hook is used
   const hasFileData = Object.keys(documentsByFolder).length > 0;
@@ -60,11 +80,20 @@ export function useMentionData(workspaceId: string | null) {
       subtitle: m.email,
     }));
 
+    const agentItems: MentionMenuItem[] = mentionableAgents.map((agent) => ({
+      id: agent.id,
+      entityType: 'agent' as const,
+      displayName: agent.name,
+      avatarUrl: agent.avatar_url || undefined,
+      icon: '🤖',
+      subtitle: agent.tier === 'advance' ? 'Advance' : 'Core',
+    }));
+
     return {
       title: 'Mention',
-      items: [...appItems, ...peopleItems],
+      items: [...appItems, ...peopleItems, ...agentItems],
     };
-  }, [workspace?.apps, members]);
+  }, [workspace?.apps, members, mentionableAgents]);
 
   const getDrillDown = useCallback(
     (item: MentionMenuItem): MentionMenuLevel | null => {

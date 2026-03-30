@@ -100,14 +100,15 @@ export function UniversalMentionAutocomplete({
     ? mentionData.filterLevel(currentLevel, isAtRoot ? query : '').slice(0, MAX_VISIBLE_ITEMS)
     : [];
 
-  // Split root level into apps, inline file results, and people for rendering with dividers
+  // Split root level into apps, inline file results, people, and agents for rendering with dividers
   const appItems = isAtRoot ? filteredItems.filter((i) => i.hasChildren) : [];
-  const inlineFileItems = isAtRoot ? filteredItems.filter((i) => !i.hasChildren && i.entityType !== 'person') : [];
+  const inlineFileItems = isAtRoot ? filteredItems.filter((i) => !i.hasChildren && i.entityType !== 'person' && i.entityType !== 'agent') : [];
   const peopleItems = isAtRoot ? filteredItems.filter((i) => i.entityType === 'person') : [];
+  const agentItems = isAtRoot ? filteredItems.filter((i) => i.entityType === 'agent') : [];
   const drillItems = !isAtRoot ? filteredItems : [];
 
   // All selectable items in display order
-  const allItems = isAtRoot ? [...appItems, ...inlineFileItems, ...peopleItems] : drillItems;
+  const allItems = isAtRoot ? [...appItems, ...inlineFileItems, ...peopleItems, ...agentItems] : drillItems;
 
   const drillInto = useCallback(
     (item: MentionMenuItem) => {
@@ -324,6 +325,19 @@ export function UniversalMentionAutocomplete({
                     People
                   </div>
                   {peopleItems.map(renderItem)}
+                </>
+              )}
+
+              {/* Agents section */}
+              {agentItems.length > 0 && (
+                <>
+                  {(appItems.length > 0 || inlineFileItems.length > 0 || peopleItems.length > 0) && (
+                    <div className="my-1 border-t border-border-gray" />
+                  )}
+                  <div className="px-3 py-1 text-xs font-medium text-text-tertiary uppercase tracking-wide">
+                    Agents
+                  </div>
+                  {agentItems.map(renderItem)}
                 </>
               )}
             </>
