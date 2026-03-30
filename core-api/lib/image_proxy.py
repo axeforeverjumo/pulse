@@ -84,6 +84,11 @@ def generate_image_url(
     proxy_secret = secret or settings.image_proxy_secret
 
     if not proxy_url or not proxy_secret:
+        # No image proxy configured — return direct S3/MinIO URL
+        r2_base = settings.r2_s3_api
+        if r2_base and r2_key:
+            bucket = settings.r2_bucket_name or "pulse-uploads"
+            return f"{r2_base}/{bucket}/{r2_key}"
         return ""
 
     v = VARIANTS.get(variant, VARIANTS["thumb"])
