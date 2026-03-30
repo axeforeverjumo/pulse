@@ -1,10 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  FolderClosed,
+  useState, useEffect, useCallback, useRef } from "react";
+import {
   FileText,
-  Sheet,
-  Presentation,
-  Image,
   File,
   Search,
   ChevronRight,
@@ -17,6 +14,7 @@ import {
   Share2,
   Download,
   Trash2,
+  Folder,
 } from "lucide-react";
 import { Icon } from "../ui/Icon";
 import { api } from "../../api/client";
@@ -83,19 +81,20 @@ function isFolder(mimeType: string): boolean {
   return mimeType === "application/vnd.google-apps.folder";
 }
 
-function getFileIcon(mimeType: string): { icon: typeof File; color: string } {
-  if (isFolder(mimeType)) return { icon: FolderClosed, color: "text-gray-500" };
-  if (mimeType === "application/vnd.google-apps.document")
-    return { icon: FileText, color: "text-blue-600" };
-  if (mimeType === "application/vnd.google-apps.spreadsheet")
-    return { icon: Sheet, color: "text-green-600" };
-  if (mimeType === "application/vnd.google-apps.presentation")
-    return { icon: Presentation, color: "text-orange-500" };
-  if (mimeType === "application/pdf")
-    return { icon: FileText, color: "text-red-600" };
-  if (mimeType.startsWith("image/"))
-    return { icon: Image, color: "text-purple-600" };
-  return { icon: File, color: "text-gray-400" };
+function getGoogleIconUrl(mimeType: string): string {
+  const icons: Record<string, string> = {
+    "application/vnd.google-apps.folder": "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_2_folder_x32.png",
+    "application/vnd.google-apps.document": "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_document_x32.png",
+    "application/vnd.google-apps.spreadsheet": "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_spreadsheet_x32.png",
+    "application/vnd.google-apps.presentation": "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_presentation_x32.png",
+    "application/vnd.google-apps.form": "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_form_x32.png",
+    "application/pdf": "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_pdf_x32.png",
+  };
+  if (icons[mimeType]) return icons[mimeType];
+  if (mimeType.startsWith("image/")) return "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_image_x32.png";
+  if (mimeType.startsWith("video/")) return "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_video_x32.png";
+  if (mimeType.startsWith("audio/")) return "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_audio_x32.png";
+  return "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_generic_x32.png";
 }
 
 function formatFileSize(bytes?: string): string {
@@ -510,7 +509,7 @@ export default function GoogleDriveView() {
       {/* ============================================================ */}
       <div className="shrink-0 px-4 sm:px-6 py-2.5 flex items-center gap-1 text-sm text-gray-500 bg-white border-b border-gray-100 overflow-x-auto">
         <span className="text-gray-400 mr-1">
-          <Icon icon={FolderClosed} size={16} />
+          <Icon icon={Folder} size={16} />
         </span>
         {breadcrumb.map((item, i) => (
           <span key={`${item.id}-${i}`} className="flex items-center gap-1 shrink-0">
@@ -558,7 +557,7 @@ export default function GoogleDriveView() {
           <div className="flex items-center justify-center py-24">
             <div className="text-center">
               <div className="w-20 h-20 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-4">
-                <Icon icon={FolderClosed} size={36} className="text-gray-300" />
+                <Icon icon={Folder} size={36} className="text-gray-300" />
               </div>
               <p className="text-base text-gray-500 mb-1">
                 {searchQuery
@@ -578,14 +577,14 @@ export default function GoogleDriveView() {
           /* ============================================================ */
           <div className="p-4 sm:p-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
             {sortedFiles.map((file) => {
-              const { icon, color } = getFileIcon(file.mimeType);
+              const iconUrl = getGoogleIconUrl(file.mimeType);
               return (
                 <button
                   key={file.id}
                   onClick={() => handleFileClick(file)}
                   className="flex flex-col items-center gap-2 p-4 rounded-xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-all text-center group cursor-pointer"
                 >
-                  <Icon icon={icon} size={32} className={color} />
+                  <img src={iconUrl} alt="" className="w-8 h-8" draggable={false} />
                   <span className="text-xs text-gray-800 line-clamp-2 leading-tight group-hover:text-blue-700 transition-colors w-full">
                     {file.name}
                   </span>
@@ -635,7 +634,7 @@ export default function GoogleDriveView() {
             </thead>
             <tbody>
               {sortedFiles.map((file) => {
-                const { icon, color } = getFileIcon(file.mimeType);
+                const iconUrl = getGoogleIconUrl(file.mimeType);
                 const isHovered = hoveredRow === file.id;
                 const isMenuOpen = activeContextMenu === file.id;
                 const noSize =
@@ -658,7 +657,7 @@ export default function GoogleDriveView() {
                     {/* Name */}
                     <td className="px-4 sm:px-6 py-0">
                       <div className="flex items-center gap-3">
-                        <Icon icon={icon} size={20} className={`${color} shrink-0`} />
+                        <img src={iconUrl} alt="" className="w-8 h-8" draggable={false} />
                         <span
                           className={`text-sm truncate transition-colors ${
                             isHovered ? "text-blue-700" : "text-gray-900"
