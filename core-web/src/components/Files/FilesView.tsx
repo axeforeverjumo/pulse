@@ -3057,24 +3057,13 @@ function LocalFilesView() {
 /* ------------------------------------------------------------------ */
 
 export default function FilesView() {
-  const [activeTab, setActiveTab] = useState<"archivos" | "drive">("archivos");
+  const [activeTab, setActiveTab] = useState<"archivos" | "drive">("drive");
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
       {/* Tab bar */}
       <div className="px-3 pt-2 pb-1 shrink-0 bg-white border-b border-gray-200">
         <div className="flex gap-1 bg-black/5 rounded-lg p-0.5 w-fit">
-          <button
-            onClick={() => setActiveTab("archivos")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              activeTab === "archivos"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            <Icon icon={HardDrive} size={13} />
-            Archivos
-          </button>
           <button
             onClick={() => setActiveTab("drive")}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
@@ -3088,15 +3077,24 @@ export default function FilesView() {
               <path d="M2 19.5l5-8.5h10" />
               <path d="M22 19.5l-5-8.5H7" />
             </svg>
-            Google Drive
+            Archivos
+          </button>
+          <button
+            onClick={() => setActiveTab("archivos")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              activeTab === "archivos"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <Icon icon={HardDrive} size={13} />
+            Archivos locales
           </button>
         </div>
       </div>
 
       {/* Tab content */}
-      {activeTab === "archivos" ? (
-        <LocalFilesView />
-      ) : (
+      {activeTab === "drive" ? (
         <Suspense
           fallback={
             <div className="flex-1 flex items-center justify-center">
@@ -3106,6 +3104,8 @@ export default function FilesView() {
         >
           <GoogleDriveView />
         </Suspense>
+      ) : (
+        <LocalFilesView />
       )}
     </div>
   );
