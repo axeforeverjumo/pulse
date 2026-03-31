@@ -38,7 +38,6 @@ import {
   useUpdateState,
   useProjectMembers,
   useWorkspaceAgents,
-  useAddAssignee,
   useAddAgentAssignee,
   type ProjectIssue,
   type ProjectState,
@@ -79,7 +78,6 @@ const KanbanColumn = memo(function KanbanColumn({
   const createIssue = useCreateIssue(boardId);
   const deleteState = useDeleteState(boardId);
   const updateState = useUpdateState(boardId);
-  const addAssignee = useAddAssignee(boardId);
   const addAgentAssignee = useAddAgentAssignee(boardId);
 
   // Workspace data for assignee picker
