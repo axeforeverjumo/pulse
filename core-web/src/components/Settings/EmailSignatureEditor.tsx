@@ -146,7 +146,7 @@ export default function EmailSignatureEditor({ accounts }: Props) {
           />
           <input
             type="text"
-            placeholder="Email"
+            placeholder="Correo electrónico"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="text-sm border border-border-gray rounded px-2.5 py-1.5 bg-bg-white text-text-body placeholder:text-text-tertiary focus:outline-none focus:border-text-tertiary"

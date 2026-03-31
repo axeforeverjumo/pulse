@@ -242,7 +242,7 @@ export default function AgentConfigPanel({ agent, onAgentUpdate, onAgentDelete }
                   value={identity.backstory || ""}
                   onChange={(e) => saveIdentity({ ...identity, backstory: e.target.value })}
                   className="w-full text-xs text-text-body bg-white border border-border-light rounded-lg p-2 resize-none h-20 focus:outline-none focus:ring-1 focus:ring-brand-primary"
-                  placeholder="Agent backstory..."
+                  placeholder="Historia del agente..."
                 />
               </div>
               <div>
@@ -251,7 +251,7 @@ export default function AgentConfigPanel({ agent, onAgentUpdate, onAgentDelete }
                   value={identity.objective || ""}
                   onChange={(e) => saveIdentity({ ...identity, objective: e.target.value })}
                   className="w-full text-xs text-text-body bg-white border border-border-light rounded-lg p-2 resize-none h-16 focus:outline-none focus:ring-1 focus:ring-brand-primary"
-                  placeholder="Agent objective..."
+                  placeholder="Objetivo del agente..."
                 />
               </div>
               <div>
@@ -386,7 +386,7 @@ export default function AgentConfigPanel({ agent, onAgentUpdate, onAgentDelete }
             value={systemPrompt}
             onChange={(e) => handlePromptChange(e.target.value)}
             className="w-full h-48 text-xs text-text-body bg-white border border-border-light rounded-lg p-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-brand-primary"
-            placeholder="Prompt del sistema for this agent..."
+            placeholder="Prompt del sistema para este agente..."
           />
         </div>
       </div>

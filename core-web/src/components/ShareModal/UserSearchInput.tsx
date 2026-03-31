@@ -112,7 +112,7 @@ export default function UserSearchInput({ value, onValueChange, onSelect }: User
         onChange={(e) => onValueChange(e.target.value)}
         onFocus={() => value.trim().length >= 2 && setIsOpen(true)}
         onKeyDown={handleKeyDown}
-        placeholder="Add people by email"
+        placeholder="Añadir personas por correo"
         role="combobox"
         aria-autocomplete="list"
         aria-expanded={isOpen}

@@ -59,7 +59,7 @@ function AgentChatMessage({ task, agentId, agentName }: AgentChatMessageProps) {
                 <span className={`transition-transform ${showSteps ? "rotate-90" : ""}`}>&#9654;</span>
                 {task.token_usage > 0 && <span>{task.token_usage.toLocaleString()} tokens</span>}
                 {task.token_usage > 0 && <span className="text-text-tertiary/40">·</span>}
-                <span>{showSteps ? "Hide steps" : "View steps"}</span>
+                <span>{showSteps ? "Ocultar pasos" : "Ver pasos"}</span>
               </button>
             )}
           </div>

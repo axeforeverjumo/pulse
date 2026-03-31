@@ -6,6 +6,7 @@ import { CheckIcon } from '@heroicons/react/24/outline';
 import { User } from 'lucide-react';
 import { Icon } from '../../ui/Icon';
 import { useProjectsStore } from '../../../stores/projectsStore';
+import { triggerAgentWork } from '../../../api/client';
 import {
   useProjectMembers,
   useWorkspaceAgents,
@@ -163,7 +164,7 @@ export default function AssigneePicker({ issueId, boardId, currentAssignees, but
   };
 
   const getDisplayName = (member: { name?: string; email?: string }) => {
-    return member.name || member.email || 'Unknown';
+    return member.name || member.email || 'Desconocido';
   };
 
   const handleToggleUser = (userId: string) => {
@@ -178,7 +179,17 @@ export default function AssigneePicker({ issueId, boardId, currentAssignees, but
     if (assignedAgentIds.has(agentId)) {
       removeAgentAssigneeMutation.mutate({ issueId, agentId });
     } else if (!atMax) {
-      addAgentAssigneeMutation.mutate({ issueId, agentId });
+      addAgentAssigneeMutation.mutate(
+        { issueId, agentId },
+        {
+          onSuccess: () => {
+            // Trigger the agent to work on this task in the background
+            triggerAgentWork(issueId, agentId).catch((err) => {
+              console.error('Failed to trigger agent work:', err);
+            });
+          },
+        }
+      );
     }
   };
 
@@ -191,7 +202,7 @@ export default function AssigneePicker({ issueId, boardId, currentAssignees, but
           type: 'agent' as const,
           id: a.agent_id,
           agentId: a.agent_id,
-          name: agentData?.name || 'Agent',
+          name: agentData?.name || 'Agente',
           avatarUrl: agentData?.avatar_url,
         };
       }
@@ -285,7 +296,7 @@ export default function AssigneePicker({ issueId, boardId, currentAssignees, but
                 >
                   <Icon icon={User} size={compact ? 12 : 14} />
                   {emptyState !== 'icon-only' && (
-                    <span className={compact ? 'text-[11px]' : ''}>{emptyState === 'icon-dash' ? '\u2013' : 'No assignees'}</span>
+                    <span className={compact ? 'text-[11px]' : ''}>{emptyState === 'icon-dash' ? '\u2013' : 'Sin asignados'}</span>
                   )}
                 </motion.div>
               ) : (
@@ -297,7 +308,7 @@ export default function AssigneePicker({ issueId, boardId, currentAssignees, but
                     exit={{ opacity: 0, scale: 0.8 }}
                     transition={{ duration: 0.15, ease: 'easeOut' }}
                     className={`w-5 h-5 rounded-full bg-white flex items-center justify-center shrink-0 border border-gray-100/60 ${index > 0 ? '-ml-1.5' : ''}`}
-                    title={entry.type === 'agent' ? `${entry.name} (Agent)` : getDisplayName(entry)}
+                    title={entry.type === 'agent' ? `${entry.name} (Agente)` : getDisplayName(entry)}
                   >
                     {renderAvatar(entry, 20)}
                   </motion.div>
@@ -311,7 +322,7 @@ export default function AssigneePicker({ issueId, boardId, currentAssignees, but
                 ? assigneeEntries[0].type === 'agent'
                   ? assigneeEntries[0].name
                   : getDisplayName(assigneeEntries[0])
-                : `${assigneeEntries.length} assignees`}
+                : `${assigneeEntries.length} asignados`}
             </span>
           )}
           {assigneeEntries.length > 3 && compact && (
@@ -343,7 +354,7 @@ export default function AssigneePicker({ issueId, boardId, currentAssignees, but
                   : 'text-gray-400 hover:text-gray-600'
               }`}
             >
-              Members
+              Miembros
             </button>
             <button
               type="button"
@@ -370,14 +381,14 @@ export default function AssigneePicker({ issueId, boardId, currentAssignees, but
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={activeTab === 'members' ? 'Search members...' : 'Search agents...'}
+              placeholder={activeTab === 'members' ? 'Buscar miembros...' : 'Buscar agentes...'}
               className="w-full px-2.5 py-1.5 text-[12px] text-gray-700 bg-transparent border-0 rounded-lg focus:outline-none placeholder:text-gray-400"
               autoFocus
             />
           </div>
           {atMax && (
             <div className="px-3 py-1.5 text-[11px] text-amber-600 bg-amber-50">
-              Maximum {MAX_ASSIGNEES} assignees reached
+              Máximo de {MAX_ASSIGNEES} asignados alcanzado
             </div>
           )}
 
@@ -431,7 +442,7 @@ export default function AssigneePicker({ issueId, boardId, currentAssignees, but
               })}
               {filteredMembers.length === 0 && (
                 <div className="px-3 py-3 text-[12px] text-gray-400 text-center">
-                  No members found
+                  No se encontraron miembros
                 </div>
               )}
             </div>
@@ -439,7 +450,12 @@ export default function AssigneePicker({ issueId, boardId, currentAssignees, but
 
           {/* Agents tab */}
           {activeTab === 'agents' && (
-            <div className="max-h-48 overflow-y-auto p-1.5 flex flex-col gap-0.5 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' as any }}>
+            <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' as any }}>
+              {/* Info banner */}
+              <div className="px-3 py-2 bg-gray-50 text-[11px] text-gray-500 border-b border-gray-100 shrink-0">
+                <span className="font-medium text-blue-600">Core</span>: analizan y responden · <span className="font-medium text-purple-600">Advance</span>: ejecutan trabajo real
+              </div>
+              <div className="p-1.5 flex flex-col gap-0.5">
               {filteredAgents.map((agent) => {
                 const isAssigned = assignedAgentIds.has(agent.id);
                 const isDisabled = !isAssigned && atMax;
@@ -482,7 +498,7 @@ export default function AssigneePicker({ issueId, boardId, currentAssignees, but
                         {agent.name}
                       </div>
                       <div className="text-[11px] text-gray-400 truncate">
-                        Agent
+                        Agente
                       </div>
                     </div>
                     {isAssigned && (
@@ -493,9 +509,10 @@ export default function AssigneePicker({ issueId, boardId, currentAssignees, but
               })}
               {filteredAgents.length === 0 && (
                 <div className="px-3 py-3 text-[12px] text-gray-400 text-center">
-                  No agents available
+                  No hay agentes disponibles
                 </div>
               )}
+              </div>
             </div>
           )}
         </div>,

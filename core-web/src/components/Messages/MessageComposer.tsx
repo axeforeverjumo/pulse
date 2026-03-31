@@ -845,7 +845,7 @@ export function MessageComposer({
             <ToolbarButton
               active={editor?.isActive("blockquote")}
               onClick={() => editor?.chain().focus().toggleBlockquote().run()}
-              title="Blockquote"
+              title="Cita"
             >
               <BlockquoteIcon className="w-4 h-4" />
             </ToolbarButton>
@@ -959,7 +959,7 @@ export function MessageComposer({
                 type="button"
                 onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                 className="p-1.5 text-text-tertiary hover:text-text-body hover:bg-bg-gray rounded transition-colors"
-                title="Add emoji"
+                title="Añadir emoji"
               >
                 <FaceSmileIcon className="w-4.5 h-4.5" />
               </button>
@@ -1155,28 +1155,28 @@ export function InlineEditEditor({
             <ToolbarButton
               active={editor?.isActive("bold")}
               onClick={() => editor?.chain().focus().toggleBold().run()}
-              title="Bold"
+              title="Negrita"
             >
               <BoldIcon className="w-4 h-4" />
             </ToolbarButton>
             <ToolbarButton
               active={editor?.isActive("italic")}
               onClick={() => editor?.chain().focus().toggleItalic().run()}
-              title="Italic"
+              title="Cursiva"
             >
               <ItalicIcon className="w-4 h-4" />
             </ToolbarButton>
             <ToolbarButton
               active={editor?.isActive("underline")}
               onClick={() => editor?.chain().focus().toggleUnderline().run()}
-              title="Underline"
+              title="Subrayado"
             >
               <UnderlineIcon className="w-4 h-4" />
             </ToolbarButton>
             <ToolbarButton
               active={editor?.isActive("strike")}
               onClick={() => editor?.chain().focus().toggleStrike().run()}
-              title="Strikethrough"
+              title="Tachado"
             >
               <StrikethroughIcon className="w-4 h-4" />
             </ToolbarButton>
@@ -1184,21 +1184,21 @@ export function InlineEditEditor({
             <ToolbarButton
               active={editor?.isActive("code")}
               onClick={() => editor?.chain().focus().toggleCode().run()}
-              title="Code"
+              title="Código"
             >
               <CodeIcon className="w-4 h-4" />
             </ToolbarButton>
             <ToolbarButton
               active={editor?.isActive("bulletList")}
               onClick={() => editor?.chain().focus().toggleBulletList().run()}
-              title="List"
+              title="Lista"
             >
               <BulletListIcon className="w-4 h-4" />
             </ToolbarButton>
             <ToolbarButton
               active={editor?.isActive("blockquote")}
               onClick={() => editor?.chain().focus().toggleBlockquote().run()}
-              title="Quote"
+              title="Cita"
             >
               <BlockquoteIcon className="w-4 h-4" />
             </ToolbarButton>

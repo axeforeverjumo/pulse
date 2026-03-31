@@ -2738,6 +2738,13 @@ export async function removeAgentAssignee(issueId: string, agentId: string): Pro
   return api(`/projects/issues/${issueId}/agent-assignees/${agentId}`, { method: 'DELETE' });
 }
 
+export async function triggerAgentWork(issueId: string, agentId: string): Promise<{ status: string; response: string }> {
+  return api(`/openclaw-agents/work-on-task/${issueId}`, {
+    method: 'POST',
+    body: JSON.stringify({ agent_id: agentId }),
+  });
+}
+
 // --- Issue Comments ---
 
 export async function getIssueComments(

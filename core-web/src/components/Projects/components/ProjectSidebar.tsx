@@ -199,8 +199,8 @@ export default function ProjectSidebar({ onCreateClick, onSelectProject }: Proje
       <ConfirmModal
         isOpen={!!deleteTarget}
         title="Eliminar proyecto"
-        message={`Are you sure you want to delete "${deleteTarget?.name}"? All columns and cards will be permanently deleted.`}
-        confirmLabel="Delete"
+        message={`¿Estás seguro de que quieres eliminar "${deleteTarget?.name}"? Todas las columnas y tarjetas se eliminarán permanentemente.`}
+        confirmLabel="Eliminar"
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteTarget(null)}
       />

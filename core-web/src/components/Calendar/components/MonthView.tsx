@@ -20,7 +20,7 @@ interface MonthViewProps {
   onVisibleMonthChange?: (date: Date) => void;
 }
 
-const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAY_NAMES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const MAX_VISIBLE_EVENTS = 4;
 const MONTHS_BEFORE = 24;
 const MONTHS_AFTER = 24;

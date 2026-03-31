@@ -164,7 +164,7 @@ export default function NewEventBlock({
               color: '#19556E',
             }}
           >
-            {title || "New event"}
+            {title || "Nuevo evento"}
           </p>
           {showTime && (
             <p

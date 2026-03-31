@@ -279,7 +279,7 @@ export default function SidebarChatInput({
             type="button"
             onClick={handleAddClick}
             className="w-6 h-6 flex items-center justify-center rounded-full shrink-0 text-text-tertiary hover:text-text-body hover:bg-bg-gray-dark transition-colors"
-            title="Add image"
+            title="Añadir imagen"
           >
             <PlusIcon className="w-4 h-4" />
           </button>

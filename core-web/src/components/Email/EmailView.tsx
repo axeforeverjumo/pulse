@@ -65,7 +65,7 @@ function getInitials(name?: string, email?: string): string {
   if (email) {
     return email[0]?.toUpperCase() || "U";
   }
-  return "U"; // "Unknown" instead of "?"
+  return "U"; // "Desconocido" instead of "?"
 }
 
 // Generate consistent color from string
@@ -1842,7 +1842,7 @@ export default function EmailView() {
                                     >
                                       {email.from_name ||
                                         email.from_email?.split("@")[0] ||
-                                        "Unknown"}
+                                        "Desconocido"}
                                     </span>
                                     {email.threadCount > 1 && (
                                       <span className="text-[12px] text-text-secondary font-medium shrink-0">
@@ -2053,7 +2053,7 @@ export default function EmailView() {
                                         <span className="text-[14px] font-medium text-text-body truncate">
                                           {threadEmail.from_name ||
                                             threadEmail.from_email ||
-                                            "Unknown"}
+                                            "Desconocido"}
                                         </span>
                                         <span className="text-[12px] text-text-tertiary shrink-0">
                                           {formatDate(threadEmail.date)}

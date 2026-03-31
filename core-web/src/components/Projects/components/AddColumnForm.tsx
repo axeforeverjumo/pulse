@@ -58,7 +58,7 @@ export default function AddColumnForm({ onAdd }: AddColumnFormProps) {
         className="w-80 h-10 flex items-center justify-center gap-1.5 text-[13px] text-gray-400 hover:text-gray-600 rounded-xl transition-all duration-200 hover:bg-gray-50"
       >
         <PlusIcon className="w-4 h-4 stroke-2" />
-        <span>Add column</span>
+        <span>Añadir columna</span>
       </button>
     );
   }
@@ -76,7 +76,7 @@ export default function AddColumnForm({ onAdd }: AddColumnFormProps) {
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Column name"
+            placeholder="Nombre de columna"
             className="flex-1 text-[13px] font-medium text-gray-900 bg-transparent border-0 p-0 focus:outline-none focus:ring-0 placeholder:text-gray-300"
           />
           <button
@@ -112,14 +112,14 @@ export default function AddColumnForm({ onAdd }: AddColumnFormProps) {
             disabled={!name.trim()}
             className="px-3 py-1.5 text-[12px] font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
           >
-            Add column
+            Añadir columna
           </button>
           <button
             type="button"
             onClick={handleCancel}
             className="px-3 py-1.5 text-[12px] font-medium text-gray-400 hover:text-gray-600 transition-colors"
           >
-            Cancel
+            Cancelar
           </button>
         </div>
       </form>

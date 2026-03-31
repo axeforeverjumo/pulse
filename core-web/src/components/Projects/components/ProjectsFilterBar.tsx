@@ -105,7 +105,7 @@ export default function ProjectsFilterBar({
   const assigneeOptions = useMemo(() => {
     return members.map((member) => ({
       id: member.user_id,
-      label: member.name || member.email || "Unknown",
+      label: member.name || member.email || "Desconocido",
       avatar_url: member.avatar_url,
       initials: member.name
         ? member.name
@@ -158,7 +158,7 @@ export default function ProjectsFilterBar({
                 ? "bg-gray-100 text-gray-900"
                 : "text-gray-500 hover:bg-gray-100 hover:text-gray-700"
             }`}
-            aria-label="Filters"
+            aria-label="Filtros"
           >
             <Icon icon={Filter} size={16} />
             {!hasActiveFilters && (
@@ -562,7 +562,7 @@ export default function ProjectsFilterBar({
               ? "bg-black/6 text-text-body"
               : "text-text-tertiary hover:text-text-secondary"
           }`}
-          aria-label="Kanban view"
+          aria-label="Vista Kanban"
         >
           <Icon icon={Columns3} size={14} />
         </button>
@@ -574,7 +574,7 @@ export default function ProjectsFilterBar({
               ? "bg-black/6 text-text-body"
               : "text-text-tertiary hover:text-text-secondary"
           }`}
-          aria-label="List view"
+          aria-label="Vista de lista"
         >
           <Icon icon={List} size={14} />
         </button>

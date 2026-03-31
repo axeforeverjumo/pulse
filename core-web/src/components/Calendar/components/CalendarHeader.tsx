@@ -119,14 +119,14 @@ export default function CalendarHeader({
           <button
             onClick={onPrevious}
             className="p-1 text-text-tertiary hover:text-text-body hover:bg-black/5 rounded-md transition-colors"
-            aria-label="Previous"
+            aria-label="Anterior"
           >
             <Icon icon={ArrowLeft} size={14} />
           </button>
           <button
             onClick={onNext}
             className="p-1 text-text-tertiary hover:text-text-body hover:bg-black/5 rounded-md transition-colors"
-            aria-label="Next"
+            aria-label="Siguiente"
           >
             <Icon icon={ArrowRight} size={14} />
           </button>

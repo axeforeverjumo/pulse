@@ -51,7 +51,7 @@ export default function IssueComments({ issueId }: IssueCommentsProps) {
       {/* Header */}
       <div className="pb-2 flex-shrink-0">
         <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-          Comments
+          Actividad
           {comments.length > 0 && (
             <span className="ml-1.5 text-gray-300">({comments.length})</span>
           )}

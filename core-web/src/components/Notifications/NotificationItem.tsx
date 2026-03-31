@@ -97,7 +97,7 @@ export default function NotificationItem({
 
   const actorName = notification.data?.inviter_name
     || notification.data?.actor_name
-    || 'Someone';
+    || 'Alguien';
   const actorAvatar = notification.data?.actor_avatar;
   const initials = actorName
     .split(' ')
@@ -326,7 +326,7 @@ export default function NotificationItem({
           onArchive(notification.id);
         }}
         className="shrink-0 p-1 text-text-tertiary hover:text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity"
-        title="Dismiss"
+        title="Descartar"
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
           <path d="M3.5 3.5l7 7M10.5 3.5l-7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>

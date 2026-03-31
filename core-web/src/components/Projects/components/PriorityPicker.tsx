@@ -12,11 +12,11 @@ interface PriorityPickerProps {
 }
 
 const PRIORITY_OPTIONS = [
-  { value: 0, label: 'No priority', color: 'text-gray-400', bg: 'bg-gray-50' },
-  { value: 1, label: 'Urgent', color: 'text-rose-500', bg: 'bg-rose-50' },
-  { value: 2, label: 'High', color: 'text-orange-500', bg: 'bg-orange-50' },
-  { value: 3, label: 'Medium', color: 'text-amber-500', bg: 'bg-amber-50' },
-  { value: 4, label: 'Low', color: 'text-slate-500', bg: 'bg-slate-100' },
+  { value: 0, label: 'Sin prioridad', color: 'text-gray-400', bg: 'bg-gray-50' },
+  { value: 1, label: 'Urgente', color: 'text-rose-500', bg: 'bg-rose-50' },
+  { value: 2, label: 'Alta', color: 'text-orange-500', bg: 'bg-orange-50' },
+  { value: 3, label: 'Media', color: 'text-amber-500', bg: 'bg-amber-50' },
+  { value: 4, label: 'Baja', color: 'text-slate-500', bg: 'bg-slate-100' },
 ] as const;
 
 export default function PriorityPicker({ issueId, boardId, priority, buttonClassName = '' }: PriorityPickerProps) {

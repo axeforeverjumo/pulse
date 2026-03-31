@@ -332,7 +332,7 @@ export default function EditEventModal({
               onClick={onClose}
               className="px-4 py-2 text-xs font-medium text-text-secondary hover:text-gray-900 hover:bg-bg-gray rounded-lg transition-colors"
             >
-              Cancel
+              Cancelar
             </button>
             <button
               type="submit"

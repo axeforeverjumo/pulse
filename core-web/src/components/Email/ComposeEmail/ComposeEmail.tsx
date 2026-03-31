@@ -228,9 +228,9 @@ export default function ComposeEmail() {
         queryClient.invalidateQueries({ queryKey: [...emailKeys.all, 'counts'] });
       }),
       {
-        loading: "Sending...",
-        success: "Email sent",
-        error: (err) => err?.message || "Failed to send email",
+        loading: "Enviando...",
+        success: "Correo enviado",
+        error: (err) => err?.message || "Error al enviar el correo",
       }
     );
   }, [sendComposedEmail, draft.to.length, isSending, attachments, filesToBase64, queryClient]);
@@ -287,7 +287,7 @@ export default function ComposeEmail() {
           onClick={() => isMinimized && toggleComposeMinimize()}
         >
           <span className="text-sm font-medium text-text-body">
-            {isMinimized && draft.subject ? draft.subject : "New Message"}
+            {isMinimized && draft.subject ? draft.subject : "Nuevo mensaje"}
           </span>
           <div className="flex items-center gap-1">
             <button
@@ -326,7 +326,7 @@ export default function ComposeEmail() {
               <div className="flex items-start">
                 <div className="flex-1 min-w-0">
                   <ChipInput
-                    label="To"
+                    label="Para"
                     value={draft.to}
                     onChange={(value) => updateComposeDraft("to", value)}
                     placeholder=""
@@ -417,7 +417,7 @@ export default function ComposeEmail() {
                     editor?.commands.focus();
                   }
                 }}
-                placeholder="Subject"
+                placeholder="Asunto"
                 className="flex-1 text-sm text-text-body bg-transparent outline-none placeholder:text-text-tertiary"
               />
             </div>
@@ -457,7 +457,7 @@ export default function ComposeEmail() {
                     <button
                       onClick={() => removeAttachment(idx)}
                       className="p-0.5 text-text-tertiary hover:text-red-500 rounded transition-colors opacity-0 group-hover:opacity-100"
-                      title="Remove attachment"
+                      title="Eliminar adjunto"
                     >
                       <XMarkIcon className="w-3.5 h-3.5" />
                     </button>
@@ -521,7 +521,7 @@ export default function ComposeEmail() {
                     ? "bg-bg-gray-dark text-text-body"
                     : "text-text-secondary hover:text-text-body hover:bg-bg-gray-dark/50"
                 }`}
-                title="Add Link"
+                title="Añadir enlace"
               >
                 <LinkIcon className="w-4 h-4" />
               </button>

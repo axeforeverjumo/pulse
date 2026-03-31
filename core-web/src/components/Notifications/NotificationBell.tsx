@@ -18,7 +18,7 @@ export default function NotificationBell() {
       <button
         data-notification-bell
         onClick={toggleOpen}
-        title="Notifications"
+        title="Notificaciones"
         className={`relative w-10 h-10 flex items-center justify-center rounded-xl transition-all ${
           isOpen
             ? 'bg-bg-gray text-text-body'

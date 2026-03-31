@@ -103,7 +103,7 @@ function AssistantMessage({ content, contentParts, messageId, isStreaming, onReg
                 <button
                   onClick={handleCopyMessage}
                   className="p-1.5 text-text-tertiary hover:text-text-body hover:bg-bg-gray rounded transition-colors"
-                  title="Copy"
+                  title="Copiar"
                 >
                   {copied ? (
                     <CheckIcon className="w-4 h-4 stroke-2" />

@@ -165,7 +165,7 @@ export default function AgentsCard() {
 
   return (
     <BentoCard
-      title="Agents"
+      title="Agentes"
       icon={
         <Icon
           icon={Brain}
@@ -198,7 +198,7 @@ export default function AgentsCard() {
             size={32}
             className="mb-2 opacity-40"
           />
-          <p className="text-[13px]">No agents deployed</p>
+          <p className="text-[13px]">Sin agentes desplegados</p>
         </div>
       ) : (
         <div>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { useParams } from "react-router-dom";
-import { Brain, Send, ArrowLeft, Loader2, Users, Building2, Plus, X, Trash2, Pencil } from "lucide-react";
+import { Brain, Send, ArrowLeft, Loader2, Users, Building2, Plus, X, Trash2, Pencil, Info } from "lucide-react";
 import { Icon } from "../ui/Icon";
 import { api } from "../../api/client";
 import { SIDEBAR } from "../../lib/sidebar";
@@ -844,6 +844,7 @@ export default function AgentsView() {
   const [agentToDelete, setAgentToDelete] = useState<OpenClawAgent | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [agentToEdit, setAgentToEdit] = useState<OpenClawAgent | null>(null);
+  const [showAgentInfoModal, setShowAgentInfoModal] = useState(false);
 
   const loadAgents = useCallback(async () => {
     if (!workspaceId) return;
@@ -932,14 +933,21 @@ export default function AgentsView() {
             </div>
           ) : (
             <div className="flex-1 overflow-y-auto px-2">
-              {/* Create agent button */}
-              <div className="px-1 pt-2 pb-1">
+              {/* Create agent button + info */}
+              <div className="px-1 pt-2 pb-1 flex items-center gap-1.5">
                 <button
                   onClick={() => setShowCreateModal(true)}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed border-gray-300 text-xs font-medium text-gray-500 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50/50 transition-all"
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed border-gray-300 text-xs font-medium text-gray-500 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50/50 transition-all"
                 >
                   <Icon icon={Plus} size={14} />
                   Crear agente
+                </button>
+                <button
+                  onClick={() => setShowAgentInfoModal(true)}
+                  className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors shrink-0"
+                  title="Info sobre tipos de agentes"
+                >
+                  <Icon icon={Info} size={15} />
                 </button>
               </div>
 
@@ -1038,6 +1046,72 @@ export default function AgentsView() {
           onClose={() => setAgentToEdit(null)}
           onUpdated={handleAgentUpdated}
         />,
+        document.body
+      )}
+
+      {/* Agent Info Modal */}
+      {showAgentInfoModal && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center"
+          style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setShowAgentInfoModal(false)}
+        >
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div
+            className="relative bg-white rounded-2xl shadow-2xl overflow-hidden"
+            style={{ width: "440px", maxWidth: "90vw" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-900">Tipos de Agentes</h2>
+              <button
+                onClick={() => setShowAgentInfoModal(false)}
+                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <Icon icon={X} size={18} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-5 space-y-4">
+              {/* Core section */}
+              <div className="bg-blue-50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-[11px] font-bold rounded-full">CORE</span>
+                  <span className="text-sm font-medium text-blue-900">Rapidos</span>
+                </div>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>• Responden en 1-3 segundos</li>
+                  <li>• Ideales para consultas, analisis y redaccion</li>
+                  <li>• Editables: personaliza su personalidad y expertise</li>
+                  <li>• En tareas: analizan y escriben recomendaciones</li>
+                </ul>
+              </div>
+
+              {/* Advance section */}
+              <div className="bg-purple-50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="px-2 py-0.5 bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-[11px] font-bold rounded-full">ADVANCE</span>
+                  <span className="text-sm font-medium text-purple-900">Potentes</span>
+                </div>
+                <ul className="text-sm text-purple-800 space-y-1">
+                  <li>• Tiempo de respuesta: 10-30 segundos</li>
+                  <li>• Herramientas completas: crean documentos, codigo, investigan</li>
+                  <li>• Sincronizados desde OpenClaw</li>
+                  <li>• En tareas: ejecutan trabajo real (crear docs, codigo, analisis profundo)</li>
+                </ul>
+              </div>
+
+              {/* Tip */}
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium">Consejo:</span> Usa agentes Core para consultas rapidas y Advance para trabajo que requiera accion.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>,
         document.body
       )}
     </div>

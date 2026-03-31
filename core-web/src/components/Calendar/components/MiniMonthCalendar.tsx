@@ -90,7 +90,7 @@ export default function MiniMonthCalendar({
           type="button"
           onClick={() => setCurrentMonth(addMonths(currentMonth, -1))}
           className="w-6 h-6 inline-flex items-center justify-center rounded-md hover:bg-bg-gray-dark/50 transition-colors"
-          aria-label="Previous month"
+          aria-label="Mes anterior"
         >
           <ChevronLeftIcon className="w-4 h-4 text-text-tertiary" />
         </button>
@@ -99,7 +99,7 @@ export default function MiniMonthCalendar({
           type="button"
           onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
           className="w-6 h-6 inline-flex items-center justify-center rounded-md hover:bg-bg-gray-dark/50 transition-colors"
-          aria-label="Next month"
+          aria-label="Mes siguiente"
         >
           <ChevronRightIcon className="w-4 h-4 text-text-tertiary" />
         </button>

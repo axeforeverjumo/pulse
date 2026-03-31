@@ -1057,7 +1057,7 @@ function LocalFilesView() {
     setRenamingId(null);
     // Fire off rename in background (store does optimistic update)
     // Use "New Folder" as default if input is empty
-    const finalName = trimmed || "New Folder";
+    const finalName = trimmed || "Nueva carpeta";
     renameDocument(docId, finalName);
   };
 
@@ -1981,7 +1981,7 @@ function LocalFilesView() {
             >
               <ChevronUpDownIcon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
               <span className="capitalize">
-                {sortBy === "manual" ? "Manual" : `${sortBy === "size" ? "Tamaño de archivo" : sortBy} ${sortDirection === "asc" ? "↑" : "↓"}`}
+                {sortBy === "manual" ? "Manual" : `${sortBy === "size" ? "Tamaño de archivo" : sortBy === "name" ? "Nombre" : sortBy === "date" ? "Fecha" : sortBy} ${sortDirection === "asc" ? "↑" : "↓"}`}
               </span>
             </button>
             <Dropdown
@@ -2001,7 +2001,7 @@ function LocalFilesView() {
                     sortBy === col ? 'text-text-body font-medium' : 'text-text-secondary'
                   }`}
                 >
-                  <span className="capitalize">{col === "size" ? "Tamaño de archivo" : col}</span>
+                  <span className="capitalize">{col === "size" ? "Tamaño de archivo" : col === "name" ? "Nombre" : col === "date" ? "Fecha" : col}</span>
                   {sortBy === col && col !== "manual" && (
                     <span className="text-xs">
                       {sortDirection === "asc" ? "↑" : "↓"}

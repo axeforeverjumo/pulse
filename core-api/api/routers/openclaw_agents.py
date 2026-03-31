@@ -488,6 +488,107 @@ Responde SOLO con JSON válido:
     return {"agent": new_agent, "message": f"Agente {request.name} creado exitosamente"}
 
 
+# ── Agent work on project task ──
+
+
+class AgentWorkOnTaskRequest(BaseModel):
+    agent_id: str
+
+
+@router.post("/work-on-task/{issue_id}")
+async def agent_work_on_task(
+    issue_id: str,
+    request: AgentWorkOnTaskRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Trigger an agent to analyze and work on a project task. Saves response as a comment."""
+    from api.services.projects import create_comment
+
+    supabase = await get_async_service_role_client()
+
+    # Get task details
+    task_result = await supabase.table("project_issues").select("*").eq("id", issue_id).maybe_single().execute()
+    if not task_result or not task_result.data:
+        raise HTTPException(status_code=404, detail="Tarea no encontrada")
+
+    # Get agent details
+    agent_result = await supabase.table("openclaw_agents").select("*").eq("id", request.agent_id).maybe_single().execute()
+    if not agent_result or not agent_result.data:
+        raise HTTPException(status_code=404, detail="Agente no encontrado")
+
+    agent = agent_result.data
+    task_data = task_result.data
+
+    task_context = f"""Titulo: {task_data['title']}
+Descripcion: {task_data.get('description') or 'Sin descripcion'}
+Prioridad: {task_data.get('priority', 0)}"""
+
+    if agent.get("tier") == "core":
+        # Core agent: call Haiku directly
+        import anthropic
+        from api.config import settings
+
+        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+
+        system_prompt = f"""Eres {agent['name']}.
+
+{agent.get('soul_md', '')}
+
+{agent.get('identity_md', '')}
+
+Te han asignado una tarea de proyecto. Analiza la tarea y proporciona tu plan de accion, observaciones o entregables. Responde de forma concreta y util. Responde siempre en espanol."""
+
+        try:
+            response = await client.messages.create(
+                model=agent.get("model", "claude-haiku-4-5-20251001"),
+                max_tokens=2048,
+                system=system_prompt,
+                messages=[{"role": "user", "content": f"Tarea asignada:\n\n{task_context}\n\nTrabaja en esta tarea."}],
+            )
+            agent_response = response.content[0].text
+        except Exception as e:
+            logger.error(f"Haiku API error on task work: {e}")
+            agent_response = "No pude procesar la tarea en este momento. Intentalo mas tarde."
+    else:
+        # Advance agent: proxy to OpenClaw bridge
+        try:
+            async with httpx.AsyncClient(timeout=180.0) as http_client:
+                resp = await http_client.post(
+                    OPENCLAW_BRIDGE_URL,
+                    json={
+                        "model": f"openclaw:{agent['openclaw_agent_id']}",
+                        "messages": [
+                            {"role": "user", "content": f"[Pulse Task Assignment] Tarea asignada:\n\n{task_context}\n\nTrabaja en esta tarea. Crea documentos, analiza, desarrolla lo que necesites."}
+                        ]
+                    }
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    agent_response = data.get("choices", [{}])[0].get("message", {}).get("content", "No pude procesar la tarea.")
+                else:
+                    logger.error(f"OpenClaw bridge error on task work: {resp.status_code} {resp.text}")
+                    agent_response = "Error al conectar con el agente."
+        except httpx.TimeoutException:
+            agent_response = "El agente tardo demasiado en responder."
+        except httpx.ConnectError:
+            agent_response = "No se pudo conectar con el agente."
+        except Exception as e:
+            logger.error(f"OpenClaw error on task work: {e}")
+            agent_response = "Error al procesar la tarea."
+
+    # Save agent's response as a comment on the task
+    comment_content = f"\U0001f916 **{agent['name']}** (actividad automatica):\n\n{agent_response}"
+    blocks = [{"type": "text", "data": {"content": comment_content}}]
+
+    try:
+        await create_comment(user_id, user_jwt, issue_id, blocks)
+    except Exception as e:
+        logger.error(f"Failed to save agent comment on task {issue_id}: {e}")
+
+    return {"status": "ok", "response": agent_response}
+
+
 # ── Multi-agent dispatch (sidebar chat @mentions) ──
 
 

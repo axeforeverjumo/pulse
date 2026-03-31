@@ -293,14 +293,14 @@ export default function InlineReplyComposer() {
         <button
           onClick={discardInlineReply}
           className="absolute right-3 top-2 p-1 text-text-secondary hover:text-text-body rounded transition-colors z-10"
-          title="Discard"
+          title="Descartar"
         >
           <XMarkIcon className="w-4 h-4" />
         </button>
         <div className="flex items-start">
           <div className="flex-1 min-w-0 pr-16">
             <ChipInput
-              label="To"
+              label="Para"
               value={draft.to}
               onChange={(value) => updateInlineReplyDraft("to", value)}
               placeholder=""
@@ -409,7 +409,7 @@ export default function InlineReplyComposer() {
               <button
                 onClick={() => removeAttachment(idx)}
                 className="p-0.5 text-text-tertiary hover:text-red-500 rounded transition-colors opacity-0 group-hover:opacity-100"
-                title="Remove attachment"
+                title="Eliminar adjunto"
               >
                 <XMarkIcon className="w-3.5 h-3.5" />
               </button>
@@ -436,7 +436,7 @@ export default function InlineReplyComposer() {
         className="flex items-center gap-1 px-4 py-2 text-sm text-text-secondary hover:text-text-body transition-colors w-full text-left border-t border-border-gray"
       >
         {showQuoted ? <ChevronUpIcon className="w-3.5 h-3.5" /> : <ChevronDownIcon className="w-3.5 h-3.5" />}
-        {showQuoted ? "Hide" : "Show"} {draft.replyType === "forward" ? "forwarded message" : "quoted text"}
+        {showQuoted ? "Ocultar" : "Mostrar"} {draft.replyType === "forward" ? "mensaje reenviado" : "texto citado"}
       </button>
 
       {/* Formatting toolbar + Send button */}
@@ -504,7 +504,7 @@ export default function InlineReplyComposer() {
                 ? "bg-bg-gray-dark text-text-body"
                 : "text-text-secondary hover:text-text-body hover:bg-bg-gray-dark/50"
             }`}
-            title="Add Link"
+            title="Añadir enlace"
           >
             <LinkIcon className="w-4 h-4" />
           </button>

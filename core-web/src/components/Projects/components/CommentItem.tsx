@@ -218,7 +218,7 @@ export default function CommentItem({
               <button
                 onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                 className="p-1 text-gray-300 hover:text-gray-500 hover:bg-gray-100 rounded transition-colors"
-                title="Add reaction"
+                title="Añadir reacción"
               >
                 <svg
                   className="w-4 h-4"

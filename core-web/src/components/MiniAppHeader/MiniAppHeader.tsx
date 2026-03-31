@@ -35,7 +35,7 @@ export function HeaderButtons({ onSettingsClick, settingsButtonRef }: { onSettin
         <div className="relative" data-notification-bell>
           <button
             onClick={toggleNotificationsPanel}
-            title="Notifications"
+            title="Notificaciones"
             className={`${iconBtn} ${isNotificationsPanelOpen ? iconBtnActive : iconBtnInactive} relative`}
           >
             <Icon icon={Bell} size={20} active={isNotificationsPanelOpen} />

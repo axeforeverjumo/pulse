@@ -488,24 +488,24 @@ export default function SettingsView({ isOpen, onClose }: SettingsViewProps) {
             <Modal
               isOpen={!!confirmRemoveId}
               onClose={() => setConfirmRemoveId(null)}
-              title="Remove Account"
+              title="Eliminar cuenta"
               size="sm"
             >
               <p className="text-sm text-gray-600 mb-4">
-                Are you sure you want to disconnect this email account? Emails from this account will no longer be synced.
+                ¿Estás seguro de que quieres desconectar esta cuenta de correo? Los correos de esta cuenta ya no se sincronizarán.
               </p>
               <div className="flex justify-end gap-2">
                 <button
                   onClick={() => setConfirmRemoveId(null)}
                   className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                 >
-                  Cancel
+                  Cancelar
                 </button>
                 <button
                   onClick={handleConfirmRemove}
                   className="px-4 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
                 >
-                  Remove
+                  Eliminar
                 </button>
               </div>
             </Modal>

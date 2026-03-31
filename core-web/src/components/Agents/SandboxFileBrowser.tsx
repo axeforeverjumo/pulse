@@ -172,8 +172,8 @@ export default function SandboxFileBrowser({ agentId, sandboxStatus }: SandboxFi
   if (!isOnline) {
     return (
       <div>
-        <p className="text-[11px] uppercase tracking-wide text-text-tertiary mb-1">Sandbox Files</p>
-        <p className="text-[11px] text-text-tertiary italic">Sandbox is offline</p>
+        <p className="text-[11px] uppercase tracking-wide text-text-tertiary mb-1">Archivos del sandbox</p>
+        <p className="text-[11px] text-text-tertiary italic">El sandbox está desconectado</p>
       </div>
     );
   }
@@ -181,7 +181,7 @@ export default function SandboxFileBrowser({ agentId, sandboxStatus }: SandboxFi
   if (!loaded) {
     return (
       <div>
-        <p className="text-[11px] uppercase tracking-wide text-text-tertiary mb-1">Sandbox Files</p>
+        <p className="text-[11px] uppercase tracking-wide text-text-tertiary mb-1">Archivos del sandbox</p>
         {error && <p className="text-[11px] text-red-500 mb-1">{error}</p>}
         {statusMsg && <p className="text-[10px] text-text-tertiary mb-1 font-mono">{statusMsg}</p>}
         <button
@@ -189,7 +189,7 @@ export default function SandboxFileBrowser({ agentId, sandboxStatus }: SandboxFi
           disabled={loading}
           className="text-[11px] px-2.5 py-1 rounded-md border border-border-gray text-text-secondary hover:bg-white disabled:opacity-50 transition-colors"
         >
-          {loading ? "Cargando..." : "Browse VM"}
+          {loading ? "Cargando..." : "Explorar VM"}
         </button>
       </div>
     );

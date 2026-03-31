@@ -127,7 +127,7 @@ export default function QuickChatCard() {
 
   return (
     <BentoCard
-      title="Messages"
+      title="Mensajes"
       icon={<ChatBubbleOvalLeftIcon className="w-[18px] h-[18px]" />}
       headerAction={
         totalUnread > 0 ? (
@@ -147,7 +147,7 @@ export default function QuickChatCard() {
       {displayItems.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center py-12 text-text-tertiary">
           <ChatBubbleOvalLeftIcon className="w-8 h-8 mb-2 opacity-40" />
-          <p className="text-[13px]">No conversations yet</p>
+          <p className="text-[13px]">Sin conversaciones aún</p>
         </div>
       ) : (
         <div>

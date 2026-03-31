@@ -60,7 +60,7 @@ export default function TaskStepLog({ agentId, taskId, isRunning }: TaskStepLogP
   }
 
   if (steps.length === 0) {
-    return <p className="text-xs text-text-tertiary py-2">No steps recorded yet.</p>;
+    return <p className="text-xs text-text-tertiary py-2">Sin pasos registrados aún.</p>;
   }
 
   return (
@@ -148,7 +148,7 @@ export default function TaskStepLog({ agentId, taskId, isRunning }: TaskStepLogP
       {isRunning && (
         <div className="flex items-center gap-2 px-3 py-2">
           <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-          <span className="text-xs text-text-tertiary">Agent is working...</span>
+          <span className="text-xs text-text-tertiary">El agente está trabajando...</span>
         </div>
       )}
 

@@ -618,7 +618,7 @@ export default function EventPopover({
                           onClick={() => setEditingField(null)}
                           className="px-3 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors"
                         >
-                          Cancel
+                          Cancelar
                         </button>
                         <button
                           onClick={() => handleSaveField('date', editDate, editEndDate)}

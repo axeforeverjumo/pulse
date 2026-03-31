@@ -160,7 +160,7 @@ export default function LabelPicker({ issueId, boardId, currentLabels, buttonCla
         ) : (
           <div className={`flex items-center gap-1.5 text-gray-400 flex-1 ${emptyState === 'icon-dash' ? 'pl-0.5' : ''}`}>
             <Icon icon={Tag} size={14} />
-            <span>{emptyState === 'icon-dash' ? '—' : 'Add label'}</span>
+            <span>{emptyState === 'icon-dash' ? '—' : 'Añadir etiqueta'}</span>
           </div>
         )}
       </button>
@@ -178,7 +178,7 @@ export default function LabelPicker({ issueId, boardId, currentLabels, buttonCla
           <div className="max-h-48 overflow-y-auto py-1">
             {boardLabels.length === 0 && !showCreate && (
               <div className="px-3 py-3 text-[12px] text-gray-400 text-center">
-                No labels yet
+                Sin etiquetas
               </div>
             )}
             {boardLabels.map((label) => (
@@ -216,7 +216,7 @@ export default function LabelPicker({ issueId, boardId, currentLabels, buttonCla
                   type="text"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  placeholder="Label name"
+                  placeholder="Nombre de etiqueta"
                   className="w-full px-2.5 py-1.5 text-[12px] text-gray-700 bg-gray-50 border-0 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-200 placeholder:text-gray-400"
                   autoFocus
                   onKeyDown={(e) => {
@@ -249,7 +249,7 @@ export default function LabelPicker({ issueId, boardId, currentLabels, buttonCla
                     }}
                     className="flex-1 px-2 py-1 text-[11px] font-medium text-gray-500 hover:bg-gray-50 rounded-lg transition-colors"
                   >
-                    Cancel
+                    Cancelar
                   </button>
                   <button
                     type="button"
@@ -257,7 +257,7 @@ export default function LabelPicker({ issueId, boardId, currentLabels, buttonCla
                     disabled={!newName.trim()}
                     className="flex-1 px-2 py-1 text-[11px] font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-40 transition-all"
                   >
-                    Create
+                    Crear
                   </button>
                 </div>
               </div>
@@ -271,7 +271,7 @@ export default function LabelPicker({ issueId, boardId, currentLabels, buttonCla
                 className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-gray-500 hover:bg-gray-50 transition-colors"
               >
                 <Icon icon={Plus} size={14} />
-                Create label
+                Crear etiqueta
               </button>
             )}
           </div>

@@ -23,7 +23,7 @@ export default function PublicDocumentViewer({
   onSignInGoogle,
   onSignInMicrosoft,
 }: PublicDocumentViewerProps) {
-  const sharerName = sharedBy?.name || 'Someone';
+  const sharerName = sharedBy?.name || 'Alguien';
 
   return (
     <div className="h-screen w-screen bg-white flex flex-col">

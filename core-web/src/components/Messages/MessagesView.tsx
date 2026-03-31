@@ -781,7 +781,7 @@ function Message({
       !failedAvatarIds?.has(message.id) ? (
         <img
           src={message.user.avatar_url}
-          alt={message.user.name || message.user.email || "User"}
+          alt={message.user.name || message.user.email || "Usuario"}
           className="w-10 h-10 rounded-lg flex-shrink-0 object-cover mt-[4px]"
           onError={() => onAvatarError?.(message.id)}
         />
@@ -800,8 +800,8 @@ function Message({
         <div className="flex items-baseline gap-2">
           <span className="font-medium text-text-body">
             {message.agent_id
-              ? (message.agent?.name || "Agent")
-              : (message.user?.name || message.user?.email || "Unknown")}
+              ? (message.agent?.name || "Agente")
+              : (message.user?.name || message.user?.email || "Desconocido")}
           </span>
           {message.agent_id && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-600 font-medium">
@@ -865,15 +865,15 @@ function Message({
               const userReacted = hasUserReacted(emoji);
               // Build tooltip text with user names
               const userNames = userIds.map((userId) => {
-                if (userId === currentUserId) return "You";
+                if (userId === currentUserId) return "Tú";
                 const userInfo = getUserInfo?.(userId);
-                return userInfo?.name || userInfo?.email || "Unknown";
+                return userInfo?.name || userInfo?.email || "Desconocido";
               });
-              // Format: "You, Alice, Bob" or "You and 2 others"
+              // Format: "Tú, Alice, Bob" or "Tú y 2 más"
               const tooltipText =
                 userNames.length <= 3
                   ? userNames.join(", ")
-                  : `${userNames.slice(0, 2).join(", ")} and ${userNames.length - 2} other${userNames.length - 2 > 1 ? "s" : ""}`;
+                  : `${userNames.slice(0, 2).join(", ")} y ${userNames.length - 2} más`;
 
               return (
                 <div key={emoji} className="relative">
@@ -1145,7 +1145,7 @@ function ForwardPreviewBar({
         </div>
       )}
       <span className="text-xs font-semibold text-text-secondary shrink-0">
-        {message.user?.name || message.user?.email || "Unknown"}
+        {message.user?.name || message.user?.email || "Desconocido"}
       </span>
       <span className="text-xs text-text-tertiary truncate flex-1 min-w-0">
         {previewText}
@@ -1568,11 +1568,11 @@ export default function MessagesView() {
     // Self-DM: all participants are the current user
     if (otherParticipants.length === 0) {
       const self = dm.participants?.find((p) => p.id === user?.id);
-      const name = self?.name || self?.email?.split("@")[0] || "You";
+      const name = self?.name || self?.email?.split("@")[0] || "Tú";
       return `${name} (you)`;
     }
     return otherParticipants
-      .map((p) => p.name || p.email?.split("@")[0] || "Unknown")
+      .map((p) => p.name || p.email?.split("@")[0] || "Desconocido")
       .join(", ");
   };
 
@@ -2670,7 +2670,7 @@ export default function MessagesView() {
                       );
 
                     return membersWithoutDM.slice(0, 8).map((member) => {
-                      const displayName = member.name || member.email?.split("@")[0] || "Unknown";
+                      const displayName = member.name || member.email?.split("@")[0] || "Desconocido";
                       return (
                         <button
                           key={`member-${member.user_id}`}
@@ -2920,11 +2920,11 @@ export default function MessagesView() {
                       <span className="font-medium text-text-secondary">
                         {currentChannel.created_by_user?.name ||
                           currentChannel.created_by_user?.email ||
-                          "Someone"}
+                          "Alguien"}
                       </span>{" "}
-                      created this channel on{" "}
+                      creó este canal el{" "}
                       {new Date(currentChannel.created_at).toLocaleDateString(
-                        "en-US",
+                        "es-ES",
                         {
                           month: "long",
                           day: "numeric",
@@ -3392,7 +3392,7 @@ export default function MessagesView() {
                         !failedAvatarIds?.has(member.user_id) ? (
                           <img
                             src={member.avatar_url}
-                            alt={member.name || member.email || "User"}
+                            alt={member.name || member.email || "Usuario"}
                             className="w-8 h-8 rounded-full object-cover flex-shrink-0"
                             onError={() => handleAvatarError(member.user_id)}
                           />
@@ -3405,9 +3405,9 @@ export default function MessagesView() {
                           <p className="text-[13px] font-medium text-gray-900 truncate">
                             {member.name ||
                               member.email?.split("@")[0] ||
-                              "Unknown"}
+                              "Desconocido"}
                             {member.user_id === user?.id && (
-                              <span className="text-gray-400 font-normal"> (you)</span>
+                              <span className="text-gray-400 font-normal"> (tú)</span>
                             )}
                           </p>
                           {member.email && member.name && (

@@ -52,7 +52,7 @@ function AssistantMessage({ content, isStreaming }: { content: string; isStreami
             <button
               onClick={handleCopyMessage}
               className="p-1 text-text-tertiary hover:text-text-body hover:bg-bg-gray rounded transition-colors"
-              title="Copy"
+              title="Copiar"
             >
               {copied ? (
                 <CheckIcon className="w-3.5 h-3.5 stroke-2" />
@@ -81,14 +81,14 @@ function AgentMessage({ content, agentName, agentAvatar }: { content: string; ag
     <div className="group py-1.5 px-4">
       <div className="flex gap-2 items-start max-w-[95%]">
         {agentAvatar ? (
-          <img src={agentAvatar} alt={agentName || "Agent"} className="w-6 h-6 rounded-full shrink-0 mt-0.5" />
+          <img src={agentAvatar} alt={agentName || "Agente"} className="w-6 h-6 rounded-full shrink-0 mt-0.5" />
         ) : (
           <div className="w-6 h-6 rounded-full bg-violet-100 flex items-center justify-center shrink-0 mt-0.5">
             <span className="text-xs text-violet-600 font-semibold">{(agentName || "A")[0]}</span>
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <span className="text-xs font-semibold text-violet-700 block mb-0.5">{agentName || "Agent"}</span>
+          <span className="text-xs font-semibold text-violet-700 block mb-0.5">{agentName || "Agente"}</span>
           <StreamingText
             content={content}
             isStreaming={false}
@@ -98,7 +98,7 @@ function AgentMessage({ content, agentName, agentAvatar }: { content: string; ag
             <button
               onClick={handleCopyMessage}
               className="p-1 text-text-tertiary hover:text-text-body hover:bg-bg-gray rounded transition-colors"
-              title="Copy"
+              title="Copiar"
             >
               {copied ? (
                 <CheckIcon className="w-3.5 h-3.5 stroke-2" />

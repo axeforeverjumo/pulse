@@ -216,7 +216,7 @@ export default function AgentChat({ agent }: AgentChatProps) {
                       size={28}
                       className="mx-auto text-text-tertiary opacity-40 mb-2"
                     />
-                    <p className="text-sm text-text-tertiary">Start a conversation with {agent.name}</p>
+                    <p className="text-sm text-text-tertiary">Inicia una conversación con {agent.name}</p>
                   </div>
                 </div>
               ) : (
@@ -253,15 +253,15 @@ export default function AgentChat({ agent }: AgentChatProps) {
                 />
                 <p className="text-sm text-text-tertiary">
                   {conversations.length === 0
-                    ? `Start a conversation with ${agent.name}`
-                    : "Select a conversation or start a new one"}
+                    ? `Inicia una conversación con ${agent.name}`
+                    : "Selecciona una conversación o inicia una nueva"}
                 </p>
               </div>
             </div>
             <AgentChatInput
               onSend={handleSend}
               disabled={sending}
-              placeholder={`Message ${agent.name}...`}
+              placeholder={`Mensaje a ${agent.name}...`}
             />
           </div>
         )}

@@ -70,12 +70,12 @@ const availableAppTypes = [
   },
   {
     type: "messages",
-    name: "Messages",
+    name: "Mensajes",
     icon: Users,
   },
   {
     type: "files",
-    name: "Files",
+    name: "Archivos",
     icon: Folder,
   },
   {
@@ -85,22 +85,22 @@ const availableAppTypes = [
   },
   {
     type: "projects",
-    name: "Projects",
+    name: "Proyectos",
     icon: Pin,
   },
   {
     type: "agents",
-    name: "Agents",
+    name: "Agentes",
     icon: Brain,
   },
   {
     type: "email",
-    name: "Email",
+    name: "Correo",
     icon: Mail,
   },
   {
     type: "calendar",
-    name: "Calendar",
+    name: "Calendario",
     icon: Calendar,
   },
 ];
@@ -1162,12 +1162,12 @@ export default function Sidebar() {
               onClick={() =>
                 setOpenMenu(openMenu === "user-menu" ? null : "user-menu")
               }
-              title={isAuthenticated && user?.email ? user.email : "Guest"}
+              title={isAuthenticated && user?.email ? user.email : "Invitado"}
               className={`${iconBtn} ${openMenu === "user-menu" ? iconBtnActive : iconBtnInactive}`}
             >
               <SelfPresenceAvatar
                 avatarUrl={userProfile?.avatar_url}
-                name={userProfile?.name || user?.email || "User"}
+                name={userProfile?.name || user?.email || "Usuario"}
                 fallbackLetter={isAuthenticated && user?.email ? user.email.charAt(0).toUpperCase() : "G"}
                 userId={user?.id}
               />
@@ -1444,7 +1444,7 @@ export default function Sidebar() {
                           {member.avatar_url ? (
                             <img
                               src={member.avatar_url}
-                              alt={member.name || member.email || "User"}
+                              alt={member.name || member.email || "Usuario"}
                               className="w-7 h-7 rounded-full object-cover shrink-0"
                               onError={(e) => {
                                 e.currentTarget.style.display = 'none';

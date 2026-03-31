@@ -76,7 +76,7 @@ export default function EmailsCard() {
 
   return (
     <BentoCard
-      title="Emails"
+      title="Correos"
       icon={<EnvelopeIcon className="w-[18px] h-[18px]" />}
       headerAction={
         unreadCount > 0 ? (
@@ -96,7 +96,7 @@ export default function EmailsCard() {
       {displayEmails.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center py-12 text-text-tertiary">
           <EnvelopeIcon className="w-8 h-8 mb-2 opacity-40" />
-          <p className="text-[13px]">No emails yet</p>
+          <p className="text-[13px]">Sin correos aún</p>
         </div>
       ) : (
         <div>

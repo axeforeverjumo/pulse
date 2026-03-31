@@ -76,11 +76,11 @@ export default function CalendarCard() {
 
   return (
     <BentoCard
-      title="Calendar"
+      title="Calendario"
       icon={<CalendarDaysIcon className="w-[18px] h-[18px]" />}
       headerAction={
         todayCount > 0 ? (
-          <span className="text-[12px] text-text-tertiary">{todayCount} today</span>
+          <span className="text-[12px] text-text-tertiary">{todayCount} hoy</span>
         ) : (
           <button
             onClick={handleViewAll}
@@ -94,7 +94,7 @@ export default function CalendarCard() {
       {upcomingEvents.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center py-12 text-text-tertiary">
           <CalendarDaysIcon className="w-8 h-8 mb-2 opacity-40" />
-          <p className="text-[13px]">No upcoming events</p>
+          <p className="text-[13px]">Sin eventos próximos</p>
         </div>
       ) : (
         <div>

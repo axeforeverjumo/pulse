@@ -102,7 +102,7 @@ export default function OnboardingSidebarPreview({
                 <div className="w-4 h-4 rounded-full bg-[#5BA4A4]" />
               )}
               <span className="text-xs text-gray-500 truncate">
-                {userName || "You"}{" "}
+                {userName || "Tú"}{" "}
                 <span className="text-gray-300">tú</span>
               </span>
             </div>

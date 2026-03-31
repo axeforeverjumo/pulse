@@ -35,7 +35,7 @@ export default function ProjectsSettingsDropdown({
             className={itemClass}
           >
             <Icon icon={Pencil} size={16} className="text-text-secondary" />
-            <span>Board settings</span>
+            <span>Ajustes del tablero</span>
           </button>
         )}
 

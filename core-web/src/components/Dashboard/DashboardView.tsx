@@ -14,7 +14,7 @@ export default function DashboardView() {
   if (!workspace) {
     return (
       <div className="flex-1 flex items-center justify-center bg-background-primary">
-        <p className="text-text-tertiary">Workspace not found</p>
+        <p className="text-text-tertiary">Espacio de trabajo no encontrado</p>
       </div>
     );
   }

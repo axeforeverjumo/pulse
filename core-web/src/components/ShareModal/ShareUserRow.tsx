@@ -54,8 +54,8 @@ export default function ShareUserRow({ permission, onChangePermission, onRevoke 
         <button
           onClick={() => onRevoke(permission.id)}
           className="p-1.5 text-text-tertiary hover:text-text-body hover:bg-bg-gray rounded-md transition-colors"
-          title="Remove access"
-          aria-label="Remove access"
+          title="Eliminar acceso"
+          aria-label="Eliminar acceso"
         >
           <XMarkIcon className="w-4 h-4" />
         </button>
