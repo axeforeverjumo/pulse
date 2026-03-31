@@ -595,61 +595,65 @@ function EditAgentModal({
 
 type ThinkingState = "connecting" | "processing" | "waiting" | null;
 
-const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
-function ThinkingBubble({
-  agent,
-  thinkingState,
-  elapsedSeconds,
-}: {
-  agent: OpenClawAgent;
-  thinkingState: ThinkingState;
-  elapsedSeconds: number;
-}) {
-  const expanded = true;  // Always show steps
 
-  if (!thinkingState) return null;
+function getThinkingSteps(message: string, agentName: string): string[] {
+  const msg = message.toLowerCase();
+  const steps: string[] = [];
+  
+  // First step: always understanding
+  if (msg.includes("contrato") || msg.includes("legal") || msg.includes("ley"))
+    steps.push(`Analizando consulta legal...`, `Revisando normativa aplicable...`, `Preparando respuesta jurídica...`);
+  else if (msg.includes("correo") || msg.includes("email") || msg.includes("mail"))
+    steps.push(`Buscando correos relevantes...`, `Analizando contenido...`, `Redactando respuesta...`);
+  else if (msg.includes("web") || msg.includes("seo") || msg.includes("página"))
+    steps.push(`Analizando la web...`, `Evaluando métricas...`, `Preparando diagnóstico...`);
+  else if (msg.includes("tarea") || msg.includes("proyecto") || msg.includes("kanban"))
+    steps.push(`Revisando tablero de proyectos...`, `Organizando tareas...`, `Preparando actualización...`);
+  else if (msg.includes("busca") || msg.includes("investiga") || msg.includes("encuentra"))
+    steps.push(`Buscando información...`, `Analizando resultados...`, `Sintetizando hallazgos...`);
+  else if (msg.includes("crea") || msg.includes("escribe") || msg.includes("redacta") || msg.includes("genera"))
+    steps.push(`Entendiendo lo que necesitas...`, `Generando contenido...`, `Puliendo el resultado...`);
+  else if (msg.includes("documento") || msg.includes("drive") || msg.includes("archivo"))
+    steps.push(`Accediendo a Google Drive...`, `Procesando documento...`, `Preparando respuesta...`);
+  else if (msg.includes("calendario") || msg.includes("evento") || msg.includes("reunión"))
+    steps.push(`Consultando calendario...`, `Organizando agenda...`, `Confirmando detalles...`);
+  else if (msg.includes("venta") || msg.includes("cliente") || msg.includes("propuesta"))
+    steps.push(`Analizando contexto comercial...`, `Evaluando oportunidad...`, `Preparando recomendación...`);
+  else
+    steps.push(`${agentName} está pensando...`, `Procesando tu mensaje...`, `Preparando respuesta...`);
+  
+  return steps;
+}
+
+function ThinkingBubble({ agent, state, elapsed, message }: { agent: OpenClawAgent; state: string; elapsed: number; message?: string }) {
+  const steps = getThinkingSteps(message || "", agent.name);
+  const stateIndex = state === "connecting" ? 0 : state === "processing" ? 1 : 2;
+  const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
   return (
-    <div className="flex gap-3 items-start">
-      <div className="shrink-0 animate-pulse">
-        <AgentAvatar agent={agent} size="sm" />
-      </div>
-      <div className="bg-gray-50 rounded-2xl rounded-bl-md px-4 py-3 max-w-md">
-        {/* Animated dots + timer */}
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <span className="font-medium">Pensando</span>
-          <span className="flex gap-0.5 text-lg leading-none">
-            <span className="animate-bounce inline-block" style={{ animationDelay: "0ms" }}>&middot;</span>
-            <span className="animate-bounce inline-block" style={{ animationDelay: "150ms" }}>&middot;</span>
-            <span className="animate-bounce inline-block" style={{ animationDelay: "300ms" }}>&middot;</span>
-          </span>
-          <span className="text-xs tabular-nums text-gray-400">{formatTime(elapsedSeconds)}</span>
+    <div className="flex gap-3 items-start mb-4">
+      <AgentAvatar agent={agent} size="sm" />
+      <div className="bg-gray-50 rounded-2xl px-4 py-3 max-w-sm">
+        <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+          <span className="font-medium">{steps[stateIndex] || "Procesando..."}</span>
+          <span className="text-xs text-gray-400">{formatTime(elapsed)}</span>
         </div>
-
-        {/* Collapsible activity log */}
-        
-        {expanded && (
-          <div className="mt-2 text-xs space-y-1">
-            <div className={thinkingState === "connecting" ? "text-blue-500" : "text-green-500"}>
-              {thinkingState === "connecting" ? "🔄" : "✓"} Conectando con {agent.name}...
+        <div className="space-y-1.5">
+          {steps.map((step, i) => (
+            <div key={i} className={`flex items-center gap-1.5 text-xs ${
+              i < stateIndex ? "text-green-600" : i === stateIndex ? "text-blue-500" : "text-gray-300"
+            }`}>
+              <span>{i < stateIndex ? "✓" : i === stateIndex ? "→" : "○"}</span>
+              <span className={i === stateIndex ? "animate-pulse" : ""}>{step}</span>
             </div>
-            {(thinkingState === "processing" || thinkingState === "waiting") && (
-              <div className={thinkingState === "processing" ? "text-blue-500" : "text-green-500"}>
-                {thinkingState === "processing" ? "🧠" : "✓"} Procesando tu mensaje...
-              </div>
-            )}
-            {thinkingState === "waiting" && (
-              <div className="text-blue-500">
-                ⏳ Esperando respuesta del agente...
-              </div>
-            )}
-          </div>
-        )}
+          ))}
+        </div>
       </div>
     </div>
   );
 }
+
 
 /* ------------------------------------------------------------------ */
 /*  Chat View                                                          */
@@ -794,8 +798,8 @@ function AgentChatView({
         {thinkingState && (
           <ThinkingBubble
             agent={agent}
-            thinkingState={thinkingState}
-            elapsedSeconds={elapsedSeconds}
+            state={thinkingState}
+            elapsed={elapsedSeconds}
           />
         )}
       </div>
