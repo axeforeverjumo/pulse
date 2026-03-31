@@ -117,17 +117,19 @@ export default function SidebarChatInput({
     const mentionMatch = textBeforeCursor.match(/(^|[\s])@(\w*)$/);
 
     if (mentionMatch) {
-      // Remove the @query text — the mention is shown as a pill only
-      const prefix = mentionMatch[1]; // leading whitespace or empty
+      // Insert @DisplayName inline in the text (replaces partial @query)
       const start = cursorPos - mentionMatch[0].length;
-      const newValue = value.substring(0, start) + prefix + value.substring(cursorPos);
+      const prefix = mentionMatch[1]; // leading whitespace or empty
+      const insertText = `@${data.displayName} `;
+      const newValue = value.substring(0, start) + prefix + insertText + value.substring(cursorPos);
 
       onChange(newValue);
       onMentionSelect?.(data);
 
+      const newCursorPos = start + prefix.length + insertText.length;
       requestAnimationFrame(() => {
-        textarea.selectionStart = start;
-        textarea.selectionEnd = start;
+        textarea.selectionStart = newCursorPos;
+        textarea.selectionEnd = newCursorPos;
         textarea.focus();
       });
     }

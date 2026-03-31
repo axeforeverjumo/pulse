@@ -61,6 +61,8 @@ export default function SidebarChat() {
   }, [contextMention, messages.length]);
 
   const handleMentionSelect = useCallback((data: MentionData) => {
+    // Agent mentions are inserted inline as @Name text, not as chips
+    if (data.entityType === 'agent') return;
     setMentions((prev) => {
       if (prev.some((m) => m.entityId === data.entityId)) return prev;
       return [...prev, data];
