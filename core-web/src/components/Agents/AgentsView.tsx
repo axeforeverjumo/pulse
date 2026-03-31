@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { useParams } from "react-router-dom";
-import { Brain, Send, ArrowLeft, Loader2, Users, Building2, Plus, X, Check } from "lucide-react";
+import { Brain, Send, ArrowLeft, Loader2, Users, Building2, Plus, X, Trash2 } from "lucide-react";
 import { Icon } from "../ui/Icon";
 import { api } from "../../api/client";
 import { SIDEBAR } from "../../lib/sidebar";
@@ -55,8 +55,6 @@ async function sendChatMessage(
 async function createAgent(payload: {
   name: string;
   expertise: string;
-  tier: string;
-  tools: string[];
 }): Promise<{ agent: OpenClawAgent; message: string }> {
   return api<{ agent: OpenClawAgent; message: string }>(
     `/openclaw-agents/create`,
@@ -65,6 +63,13 @@ async function createAgent(payload: {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     }
+  );
+}
+
+async function deleteAgentApi(agentId: string): Promise<{ success: boolean; message: string }> {
+  return api<{ success: boolean; message: string }>(
+    `/openclaw-agents/${agentId}`,
+    { method: "DELETE" }
   );
 }
 
@@ -160,8 +165,55 @@ function TierBadge({ tier }: { tier: string }) {
           : "bg-blue-100 text-blue-700"
       }`}
     >
-      {tier}
+      {isAdvance ? "OPENCLAW" : "CORE"}
     </span>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Delete Confirmation Modal                                          */
+/* ------------------------------------------------------------------ */
+
+function DeleteConfirmModal({
+  agent,
+  onClose,
+  onConfirm,
+  deleting,
+}: {
+  agent: OpenClawAgent;
+  onClose: () => void;
+  onConfirm: () => void;
+  deleting: boolean;
+}) {
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{position:"fixed",top:0,left:0,right:0,bottom:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden" style={{width:"400px",maxWidth:"90vw"}}>
+        <div className="px-6 py-5">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Eliminar agente</h3>
+          <p className="text-sm text-gray-600">
+            ¿Eliminar a <strong>{agent.name}</strong>? Esta acción no se puede deshacer.
+          </p>
+        </div>
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-100">
+          <button
+            onClick={onClose}
+            disabled={deleting}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={deleting}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+          >
+            {deleting ? <Loader2 size={14} className="animate-spin" /> : <Icon icon={Trash2} size={14} />}
+            Eliminar
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -173,17 +225,21 @@ function AgentCard({
   agent,
   selected,
   onClick,
+  onDelete,
 }: {
   agent: OpenClawAgent;
   selected: boolean;
   onClick: () => void;
+  onDelete?: () => void;
 }) {
+  const isCore = !agent.tier.toLowerCase().includes("advance");
+
   return (
-    <button
-      onClick={onClick}
-      className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors cursor-pointer ${
+    <div
+      className={`group w-full text-left px-3 py-2.5 rounded-lg transition-colors cursor-pointer relative ${
         selected ? SIDEBAR.selected : `${SIDEBAR.item} hover:bg-black/5`
       }`}
+      onClick={onClick}
     >
       <div className="flex items-start gap-2.5">
         <AgentAvatar agent={agent} size="md" />
@@ -197,23 +253,24 @@ function AgentCard({
           </p>
           <span className="text-[10px] text-text-tertiary opacity-60">{agent.category}</span>
         </div>
+        {/* Delete button for Core agents only */}
+        {isCore && onDelete && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition-all shrink-0 mt-0.5"
+            title="Eliminar agente"
+          >
+            <Icon icon={Trash2} size={13} />
+          </button>
+        )}
       </div>
-    </button>
+    </div>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/*  Create Agent Modal                                                 */
+/*  Create Agent Modal (Core only — no tier selection)                 */
 /* ------------------------------------------------------------------ */
-
-const AVAILABLE_TOOLS = [
-  { id: "web_search", label: "Buscar en la web", icon: "🌐" },
-  { id: "memory", label: "Memoria persistente", icon: "🧠" },
-  { id: "exec", label: "Ejecutar comandos", icon: "⚡" },
-  { id: "read_write", label: "Leer/Escribir archivos", icon: "📁" },
-  { id: "browser", label: "Navegar sitios web", icon: "🖥️" },
-  { id: "google_drive", label: "Google Drive", icon: "📄" },
-];
 
 function CreateAgentModal({
   onClose,
@@ -222,24 +279,10 @@ function CreateAgentModal({
   onClose: () => void;
   onCreated: (agent: OpenClawAgent) => void;
 }) {
-  const [step, setStep] = useState<"tier" | "form">("tier");
-  const [tier, setTier] = useState<"core" | "advance">("core");
   const [name, setName] = useState("");
   const [expertise, setExpertise] = useState("");
-  const [selectedTools, setSelectedTools] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const toggleTool = (toolId: string) => {
-    setSelectedTools((prev) =>
-      prev.includes(toolId) ? prev.filter((t) => t !== toolId) : [...prev, toolId]
-    );
-  };
-
-  const handleSelectTier = (t: "core" | "advance") => {
-    setTier(t);
-    setStep("form");
-  };
 
   const handleCreate = async () => {
     if (!name.trim() || !expertise.trim()) return;
@@ -249,8 +292,6 @@ function CreateAgentModal({
       const result = await createAgent({
         name: name.trim(),
         expertise: expertise.trim(),
-        tier,
-        tools: tier === "advance" ? selectedTools : [],
       });
       if (result.agent) {
         onCreated(result.agent);
@@ -269,13 +310,13 @@ function CreateAgentModal({
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden" style={{width:"500px",maxWidth:"90vw",minHeight:"300px"}}>
+      <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden" style={{width:"500px",maxWidth:"90vw",minHeight:"260px"}}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Crear agente</h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              {step === "tier" ? "Elige el tipo de agente" : `Configurar agente ${tier === "core" ? "Core" : "Advance"}`}
+              Agente Core con personalidad propia
             </p>
           </div>
           <button
@@ -287,136 +328,61 @@ function CreateAgentModal({
         </div>
 
         {/* Content */}
-        <div className="px-6 py-5">
-          {step === "tier" ? (
-            <div className="grid grid-cols-2 gap-3">
-              {/* Core card */}
-              <button
-                onClick={() => handleSelectTier("core")}
-                className="group text-left p-4 rounded-xl border-2 border-gray-200 hover:border-blue-400 hover:bg-blue-50/50 transition-all"
-              >
-                <div className="text-2xl mb-2">⭐</div>
-                <div className="font-semibold text-gray-900 text-sm">Core</div>
-                <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                  Chat IA especializado. Solo conversación inteligente con personalidad propia.
-                </p>
-                <div className="mt-3 text-[10px] text-blue-600 font-medium uppercase tracking-wide">
-                  Cualquier usuario
-                </div>
-              </button>
+        <div className="px-6 py-5 space-y-4">
+          {/* Name */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ej: Marco, Asistente Legal, TradingBot..."
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 transition-colors"
+              disabled={creating}
+              autoFocus
+            />
+          </div>
 
-              {/* Advance card */}
-              <button
-                onClick={() => handleSelectTier("advance")}
-                className="group text-left p-4 rounded-xl border-2 border-gray-200 hover:border-purple-400 hover:bg-purple-50/50 transition-all"
-              >
-                <div className="text-2xl mb-2">🚀</div>
-                <div className="font-semibold text-gray-900 text-sm">Advance</div>
-                <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                  Con herramientas reales. Puede ejecutar acciones, buscar, leer archivos y más.
-                </p>
-                <div className="mt-3 text-[10px] text-purple-600 font-medium uppercase tracking-wide">
-                  Requiere permiso admin
-                </div>
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Back to tier selection */}
-              <button
-                onClick={() => setStep("tier")}
-                className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors -mt-1 mb-2"
-              >
-                <Icon icon={ArrowLeft} size={12} />
-                Cambiar tipo
-              </button>
+          {/* Expertise */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              ¿En qué es experto?
+            </label>
+            <textarea
+              value={expertise}
+              onChange={(e) => setExpertise(e.target.value)}
+              placeholder="Describe la especialidad del agente. Ej: Experto en derecho laboral español, ayuda a redactar contratos y resolver dudas legales..."
+              rows={3}
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 transition-colors resize-none"
+              disabled={creating}
+            />
+          </div>
 
-              {/* Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Ej: Marco, Asistente Legal, TradingBot..."
-                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 transition-colors"
-                  disabled={creating}
-                  autoFocus
-                />
-              </div>
-
-              {/* Expertise */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  ¿En qué es experto?
-                </label>
-                <textarea
-                  value={expertise}
-                  onChange={(e) => setExpertise(e.target.value)}
-                  placeholder="Describe la especialidad del agente. Ej: Experto en derecho laboral español, ayuda a redactar contratos y resolver dudas legales..."
-                  rows={3}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 transition-colors resize-none"
-                  disabled={creating}
-                />
-              </div>
-
-              {/* Tools (advance only) */}
-              {tier === "advance" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Herramientas
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {AVAILABLE_TOOLS.map((tool) => (
-                      <button
-                        key={tool.id}
-                        type="button"
-                        onClick={() => toggleTool(tool.id)}
-                        disabled={creating}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-left text-xs transition-all ${
-                          selectedTools.includes(tool.id)
-                            ? "border-indigo-400 bg-indigo-50 text-indigo-700"
-                            : "border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50"
-                        }`}
-                      >
-                        <span>{tool.icon}</span>
-                        <span className="flex-1">{tool.label}</span>
-                        {selectedTools.includes(tool.id) && (
-                          <Icon icon={Check} size={12} className="text-indigo-500" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Error */}
-              {error && (
-                <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-xs text-red-600">
-                  {error}
-                </div>
-              )}
-
-              {/* Submit */}
-              <button
-                onClick={handleCreate}
-                disabled={creating || !name.trim() || !expertise.trim()}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {creating ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin" />
-                    Creando agente...
-                  </>
-                ) : (
-                  <>
-                    <Icon icon={Plus} size={14} />
-                    Crear agente
-                  </>
-                )}
-              </button>
+          {/* Error */}
+          {error && (
+            <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-xs text-red-600">
+              {error}
             </div>
           )}
+
+          {/* Submit */}
+          <button
+            onClick={handleCreate}
+            disabled={creating || !name.trim() || !expertise.trim()}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {creating ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                Creando agente...
+              </>
+            ) : (
+              <>
+                <Icon icon={Plus} size={14} />
+                Crear agente
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>
@@ -677,6 +643,8 @@ export default function AgentsView() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"agentes" | "oficina">("agentes");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [agentToDelete, setAgentToDelete] = useState<OpenClawAgent | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const loadAgents = useCallback(async () => {
     if (!workspaceId) return;
@@ -709,6 +677,26 @@ export default function AgentsView() {
     loadAgents().then(() => {
       setSelectedAgent(agent);
     });
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!agentToDelete) return;
+    setDeleting(true);
+    try {
+      await deleteAgentApi(agentToDelete.id);
+      // Clear chat from localStorage
+      localStorage.removeItem(`pulse-agent-chat-${agentToDelete.id}`);
+      // If the deleted agent was selected, deselect
+      if (selectedAgent?.id === agentToDelete.id) {
+        setSelectedAgent(null);
+      }
+      setAgentToDelete(null);
+      loadAgents();
+    } catch (err) {
+      console.error("Failed to delete agent:", err);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const isOficina = activeTab === "oficina";
@@ -777,6 +765,7 @@ export default function AgentsView() {
                       agent={agent}
                       selected={selectedAgent?.id === agent.id}
                       onClick={() => setSelectedAgent(agent)}
+                      onDelete={() => setAgentToDelete(agent)}
                     />
                   ))}
                 </div>
@@ -820,6 +809,17 @@ export default function AgentsView() {
         <CreateAgentModal
           onClose={() => setShowCreateModal(false)}
           onCreated={handleAgentCreated}
+        />,
+        document.body
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {agentToDelete && createPortal(
+        <DeleteConfirmModal
+          agent={agentToDelete}
+          onClose={() => setAgentToDelete(null)}
+          onConfirm={handleDeleteConfirm}
+          deleting={deleting}
         />,
         document.body
       )}

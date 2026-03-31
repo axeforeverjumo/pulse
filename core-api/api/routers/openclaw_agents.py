@@ -125,32 +125,60 @@ async def handle_agent_mention(
     # Get user profile
     profile = await _get_user_profile(user_id)
 
-    # Build context for group mention
-    # OpenClaw loads agent identity from workspace
+    # Core agents: call Haiku directly
+    if agent.get("tier") == "core":
+        import anthropic
+        from api.config import settings
 
-    # Call OpenClaw bridge
-    try:
-        async with httpx.AsyncClient(timeout=180.0) as client:
-            response = await client.post(
-                OPENCLAW_BRIDGE_URL,
-                json={
-                    "model": f"openclaw:{agent['openclaw_agent_id']}",
-                    "messages": [
-                        {"role": "user", "content": f"[Pulse #{request.channel_name} - {profile.get('name', 'Usuario')}] {request.message_content}"}
-                    ]
-                }
+        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+
+        system_prompt = f"""Eres {agent['name']}.
+
+{agent.get('soul_md', '')}
+
+{agent.get('identity_md', '')}
+
+Responde siempre en español. Sé útil, directo y mantén tu personalidad."""
+
+        haiku_messages = [
+            {"role": "user", "content": f"[Pulse #{request.channel_name} - {profile.get('name', 'Usuario')}] {request.message_content}"}
+        ]
+
+        try:
+            response = await client.messages.create(
+                model=agent.get("model", "claude-haiku-4-5-20251001"),
+                max_tokens=2048,
+                system=system_prompt,
+                messages=haiku_messages,
             )
+            assistant_message = response.content[0].text
+        except Exception as e:
+            logger.error(f"Haiku API error on mention: {e}")
+            raise HTTPException(502, "El agente no está disponible")
+    else:
+        # Advance: proxy to OpenClaw bridge
+        try:
+            async with httpx.AsyncClient(timeout=180.0) as client:
+                response = await client.post(
+                    OPENCLAW_BRIDGE_URL,
+                    json={
+                        "model": f"openclaw:{agent['openclaw_agent_id']}",
+                        "messages": [
+                            {"role": "user", "content": f"[Pulse #{request.channel_name} - {profile.get('name', 'Usuario')}] {request.message_content}"}
+                        ]
+                    }
+                )
 
-            if response.status_code != 200:
-                logger.error(f"OpenClaw bridge error on mention: {response.status_code} {response.text}")
-                raise HTTPException(502, "El agente no está disponible")
+                if response.status_code != 200:
+                    logger.error(f"OpenClaw bridge error on mention: {response.status_code} {response.text}")
+                    raise HTTPException(502, "El agente no está disponible")
 
-            data = response.json()
-            assistant_message = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-    except httpx.TimeoutException:
-        raise HTTPException(504, "El agente tardó demasiado en responder")
-    except httpx.ConnectError:
-        raise HTTPException(502, "No se pudo conectar con el agente")
+                data = response.json()
+                assistant_message = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        except httpx.TimeoutException:
+            raise HTTPException(504, "El agente tardó demasiado en responder")
+        except httpx.ConnectError:
+            raise HTTPException(502, "No se pudo conectar con el agente")
 
     # Save the agent's response as a channel message
     await supabase.table("channel_messages").insert({
@@ -214,7 +242,7 @@ async def chat_with_agent(
     user_jwt: str = Depends(get_current_user_jwt),
     user_id: str = Depends(get_current_user_id),
 ):
-    """Send a message to an OpenClaw agent via the HTTP bridge."""
+    """Send a message to an agent. Core → Haiku direct. Advance → OpenClaw bridge."""
     # Get agent info
     supabase = await get_async_service_role_client()
     agent_result = await supabase.table("openclaw_agents")\
@@ -227,28 +255,57 @@ async def chat_with_agent(
         raise HTTPException(status_code=404, detail="Agente no encontrado")
     
     agent = agent_result.data
-    openclaw_id = agent["openclaw_agent_id"]
     
     # Get user context
     profile = await _get_user_profile(user_id)
-    email = await _get_user_email(user_id)
     user_name = profile.get("name", "Usuario")
-    
-    # OpenClaw loads agent identity from workspace (SOUL.md, IDENTITY.md)
-    
-    # Build messages for OpenClaw bridge
-    # Don't send system message - OpenClaw already loads SOUL.md + IDENTITY.md
-    # Just prefix the last user message with who is talking
+
+    # ── Core agents: call Haiku directly ──
+    if agent.get("tier") == "core":
+        import anthropic
+        from api.config import settings
+
+        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+
+        system_prompt = f"""Eres {agent['name']}.
+
+{agent.get('soul_md', '')}
+
+{agent.get('identity_md', '')}
+
+Responde siempre en español. Sé útil, directo y mantén tu personalidad."""
+
+        haiku_messages = []
+        for msg in request.messages:
+            haiku_messages.append({"role": msg.role, "content": msg.content})
+
+        try:
+            response = await client.messages.create(
+                model=agent.get("model", "claude-haiku-4-5-20251001"),
+                max_tokens=2048,
+                system=system_prompt,
+                messages=haiku_messages,
+            )
+
+            return {
+                "message": {"role": "assistant", "content": response.content[0].text},
+                "agent": {"id": agent["id"], "name": agent["name"]}
+            }
+        except Exception as e:
+            logger.error(f"Haiku API error: {e}")
+            raise HTTPException(502, f"Error al contactar con el agente: {str(e)}")
+
+    # ── Advance agents: proxy to OpenClaw bridge ──
+    openclaw_id = agent["openclaw_agent_id"]
+
     bridge_messages = []
     for msg in request.messages:
         if msg.role == "user" and msg == request.messages[-1]:
-            # Add user context only to the last message
             prefix = f"[Pulse: {user_name}] "
             bridge_messages.append({"role": "user", "content": prefix + msg.content})
         else:
             bridge_messages.append({"role": msg.role, "content": msg.content})
     
-    # Call OpenClaw HTTP bridge
     try:
         async with httpx.AsyncClient(timeout=180.0) as client:
             response = await client.post(
@@ -283,6 +340,33 @@ async def chat_with_agent(
         raise HTTPException(status_code=504, detail="El agente tardó demasiado en responder")
     except httpx.ConnectError:
         raise HTTPException(status_code=502, detail="No se pudo conectar con el agente")
+
+
+# ── Delete agent endpoint ──
+
+@router.delete("/{agent_id}")
+async def delete_agent(
+    agent_id: str,
+    user_id: str = Depends(get_current_user_id),
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Delete a Core agent. Advance agents cannot be deleted (they come from OpenClaw)."""
+    supabase = await get_async_service_role_client()
+
+    # Check agent exists and is Core
+    agent_result = await supabase.table("openclaw_agents").select("*").eq("id", agent_id).maybe_single().execute()
+    if not agent_result or not agent_result.data:
+        raise HTTPException(404, "Agente no encontrado")
+
+    agent = agent_result.data
+    if agent["tier"] == "advance":
+        raise HTTPException(400, "Los agentes Advance se gestionan desde OpenClaw")
+
+    # Delete assignments first, then agent
+    await supabase.table("workspace_agent_assignments").delete().eq("agent_id", agent_id).execute()
+    await supabase.table("openclaw_agents").delete().eq("id", agent_id).execute()
+
+    return {"success": True, "message": f"Agente '{agent['name']}' eliminado"}
 
 
 # ── Admin endpoints ──
@@ -342,13 +426,11 @@ async def admin_unassign_agent(
     return {"success": True}
 
 
-# ── Phase 3: Agent Creation ──
+# ── Agent Creation (Core only) ──
 
 class CreateAgentRequest(BaseModel):
     name: str
     expertise: str
-    tier: str = "core"
-    tools: list = []
 
 
 @router.post("/create")
@@ -357,18 +439,11 @@ async def create_agent(
     user_jwt: str = Depends(get_current_user_jwt),
     user_id: str = Depends(get_current_user_id),
 ):
-    """Create a new Core or Advance agent from Pulse UI."""
+    """Create a new Core agent. Haiku generates personality, stored in DB. No OpenClaw workspace."""
     import json as json_mod
     import re
-    import random
-    import subprocess
     import anthropic
     from api.config import settings
-
-    # Advance tier requires admin permission
-    if request.tier == "advance":
-        if not await _is_admin(user_id):
-            raise HTTPException(403, "Solo administradores pueden crear agentes Advance")
 
     # Generate agent config using Haiku
     try:
@@ -377,7 +452,7 @@ async def create_agent(
         prompt = f"""Genera la configuración para un agente de IA con estas características:
 - Nombre: {request.name}
 - Especialidad: {request.expertise}
-- Tipo: {"Chat especializado (solo conversación)" if request.tier == "core" else "Agente con herramientas (puede ejecutar acciones)"}
+- Tipo: Chat especializado (solo conversación)
 
 Responde SOLO con JSON válido con esta estructura exacta:
 {{
@@ -409,89 +484,20 @@ Responde SOLO con JSON válido con esta estructura exacta:
     # Generate slug from name
     agent_slug = re.sub(r"[^a-z0-9]+", "-", request.name.lower()).strip("-")
 
-    # Create workspace on OpenClaw filesystem
-    workspace_path = f"/home/claude/.openclaw/workspaces/{agent_slug}"
-    try:
-        subprocess.run(["mkdir", "-p", workspace_path], check=True)
-
-        with open(f"{workspace_path}/SOUL.md", "w") as f:
-            f.write(f"# {request.name}\n\n{config['soul']}\n")
-
-        with open(f"{workspace_path}/IDENTITY.md", "w") as f:
-            f.write(
-                f"# IDENTITY.md - {request.name}\n\n"
-                f"- **Name:** {request.name}\n"
-                f"- **Creature:** {config['description']}\n"
-                f"- **Vibe:** {config['soul']}\n\n"
-                f"## Mi rol\n{config['identity']}\n"
-            )
-
-        if request.tier == "advance" and request.tools:
-            with open(f"{workspace_path}/TOOLS.md", "w") as f:
-                f.write(f"# Tools disponibles para {request.name}\n\n")
-                for tool in request.tools:
-                    f.write(f"- {tool}\n")
-
-        with open(f"{workspace_path}/MEMORY.md", "w") as f:
-            f.write(f"# Memoria de {request.name}\n\n_Sin memorias aún._\n")
-
-        subprocess.run(["chown", "-R", "claude:claude", workspace_path], check=True)
-    except Exception as e:
-        logger.error(f"Failed to create workspace: {e}")
-        raise HTTPException(500, "Error al crear el workspace del agente")
-
-    # Register in openclaw.json
-    try:
-        config_path = "/home/claude/.openclaw/openclaw.json"
-        with open(config_path) as f:
-            oc_config = json_mod.load(f)
-
-        agent_model = "openai-codex/gpt-5.4" if request.tier == "advance" else "ollama/qwen2.5:3b"
-        agents_list = oc_config.get("agents", {}).get("list", [])
-        agents_list.append({
-            "id": agent_slug,
-            "name": request.name,
-            "workspace": workspace_path,
-            "model": agent_model,
-        })
-        oc_config["agents"]["list"] = agents_list
-
-        with open(config_path, "w") as f:
-            json_mod.dump(oc_config, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        logger.error(f"Failed to update openclaw.json: {e}")
-        # Non-fatal: continue with Supabase registration
-
-    # Generate avatar
-    avatar_styles = ["bottts-neutral", "avataaars", "fun-emoji", "icons"]
-    colors = ["0284c7", "7c3aed", "059669", "dc2626", "d97706", "0891b2", "4f46e5"]
-    style = random.choice(avatar_styles)
-    color = random.choice(colors)
-
-    avatar_path = f"/opt/pulse/core-web/public/agent-avatars/{agent_slug}.svg"
-    avatar_url_api = f"https://api.dicebear.com/9.x/{style}/svg?seed={agent_slug}&backgroundColor={color}"
-    try:
-        subprocess.run(["mkdir", "-p", "/opt/pulse/core-web/public/agent-avatars"], check=True)
-        subprocess.run(["curl", "-sL", avatar_url_api, "-o", avatar_path], check=True, timeout=15)
-        subprocess.run(["mkdir", "-p", "/opt/pulse/core-web/dist/agent-avatars"], check=True)
-        subprocess.run(["cp", avatar_path, f"/opt/pulse/core-web/dist/agent-avatars/{agent_slug}.svg"])
-    except Exception as e:
-        logger.warning(f"Failed to generate avatar: {e}")
-
-    # Register in Supabase
+    # Register in Supabase (no filesystem, no OpenClaw)
     try:
         supabase = await get_async_service_role_client()
         result = await supabase.table("openclaw_agents").insert({
             "openclaw_agent_id": agent_slug,
             "name": request.name,
             "description": config.get("description", ""),
-            "tier": request.tier,
+            "tier": "core",
             "category": config.get("category", "general"),
-            "model": "openai-codex/gpt-5.4" if request.tier == "advance" else "ollama/qwen2.5:3b",
-            "tools": request.tools if request.tier == "advance" else [],
+            "model": "claude-haiku-4-5-20251001",
+            "tools": [],
             "soul_md": config.get("soul", ""),
             "identity_md": config.get("identity", ""),
-            "avatar_url": f"/agent-avatars/{agent_slug}.svg",
+            "avatar_url": f"https://api.dicebear.com/9.x/bottts-neutral/svg?seed={agent_slug}",
             "created_by": user_id,
             "is_active": True,
         }).execute()
