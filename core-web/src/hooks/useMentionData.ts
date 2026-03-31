@@ -205,7 +205,8 @@ export function useMentionData(workspaceId: string | null) {
 
           const appResults = filtered.filter((i) => i.hasChildren);
           const peopleResults = filtered.filter((i) => i.entityType === 'person');
-          return [...appResults, ...fileItems, ...peopleResults];
+          const agentResults = filtered.filter((i) => i.entityType === 'agent');
+          return [...appResults, ...fileItems, ...peopleResults, ...agentResults];
         }
       }
 
