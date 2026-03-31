@@ -1,8 +1,73 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { EllipsisHorizontalIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { avatarGradient } from '../../../utils/avatarGradient';
 import type { IssueComment, ContentBlock } from '../../../api/client';
 import { formatDistanceToNow } from 'date-fns';
+
+/** Parse simple markdown: **bold**, *italic*, `code`, [text](url), <url>, and newlines */
+function renderMarkdown(text: string): React.ReactNode[] {
+  const lines = text.split('\n');
+  const result: React.ReactNode[] = [];
+
+  lines.forEach((line, lineIdx) => {
+    if (lineIdx > 0) result.push(<br key={`br-${lineIdx}`} />);
+
+    // Split line into tokens: **bold**, *italic*, `code`, [text](url), <url>
+    const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`|\[(.+?)\]\((.+?)\)|<(https?:\/\/[^\s>]+)>|(https?:\/\/[^\s<]+))/g;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = regex.exec(line)) !== null) {
+      // Text before this match
+      if (match.index > lastIndex) {
+        result.push(line.slice(lastIndex, match.index));
+      }
+
+      const key = `${lineIdx}-${match.index}`;
+
+      if (match[2]) {
+        // **bold**
+        result.push(<strong key={key} className="font-semibold">{match[2]}</strong>);
+      } else if (match[3]) {
+        // *italic*
+        result.push(<em key={key}>{match[3]}</em>);
+      } else if (match[4]) {
+        // `code`
+        result.push(<code key={key} className="px-1 py-0.5 bg-gray-100 rounded text-[12px] font-mono">{match[4]}</code>);
+      } else if (match[5] && match[6]) {
+        // [text](url)
+        result.push(
+          <a key={key} href={match[6]} target="_blank" rel="noopener noreferrer" className="text-violet-600 hover:text-violet-700 underline">
+            {match[5]}
+          </a>
+        );
+      } else if (match[7]) {
+        // <url>
+        result.push(
+          <a key={key} href={match[7]} target="_blank" rel="noopener noreferrer" className="text-violet-600 hover:text-violet-700 underline break-all">
+            {match[7]}
+          </a>
+        );
+      } else if (match[8]) {
+        // bare url
+        result.push(
+          <a key={key} href={match[8]} target="_blank" rel="noopener noreferrer" className="text-violet-600 hover:text-violet-700 underline break-all">
+            {match[8]}
+          </a>
+        );
+      }
+
+      lastIndex = regex.lastIndex;
+    }
+
+    // Remaining text after last match
+    if (lastIndex < line.length) {
+      result.push(line.slice(lastIndex));
+    }
+  });
+
+  return result;
+}
 
 interface CommentItemProps {
   comment: IssueComment;
@@ -43,9 +108,10 @@ export default function CommentItem({
 
     return comment.blocks.map((block, idx) => {
       if (block.type === 'text') {
+        const content = (block.data as { content?: string }).content || '';
         return (
           <span key={idx} className="whitespace-pre-wrap">
-            {(block.data as { content?: string }).content || ''}
+            {renderMarkdown(content)}
           </span>
         );
       }
@@ -178,13 +244,13 @@ export default function CommentItem({
                 onClick={saveEdit}
                 className="px-3 py-1.5 text-[12px] font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800"
               >
-                Save
+                Guardar
               </button>
               <button
                 onClick={cancelEdit}
                 className="px-3 py-1.5 text-[12px] font-medium text-gray-500 hover:text-gray-700"
               >
-                Cancel
+                Cancelar
               </button>
             </div>
           </div>
@@ -275,7 +341,7 @@ export default function CommentItem({
                   className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   <PencilIcon className="w-3.5 h-3.5" />
-                  Edit
+                  Editar
                 </button>
                 <button
                   onClick={() => {
@@ -285,7 +351,7 @@ export default function CommentItem({
                   className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-red-600 hover:bg-red-50 transition-colors"
                 >
                   <TrashIcon className="w-3.5 h-3.5" />
-                  Delete
+                  Eliminar
                 </button>
               </div>
             </>
