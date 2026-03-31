@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import { useParams } from "react-router-dom";
 import { Brain, Send, ArrowLeft, Loader2, Users, Building2, Plus, X, Check } from "lucide-react";
 import { Icon } from "../ui/Icon";
@@ -815,11 +816,12 @@ export default function AgentsView() {
       </div>
 
       {/* Create Agent Modal */}
-      {showCreateModal && (
+      {showCreateModal && createPortal(
         <CreateAgentModal
           onClose={() => setShowCreateModal(false)}
           onCreated={handleAgentCreated}
-        />
+        />,
+        document.body
       )}
     </div>
   );
