@@ -574,3 +574,118 @@ Responde SOLO con JSON válido:
             logger.warning(f"Failed to auto-assign agent: {e}")
 
     return {"agent": new_agent, "message": f"Agente {request.name} creado exitosamente"}
+
+
+# ── Multi-agent dispatch (sidebar chat @mentions) ──
+
+class MultiAgentRequest(BaseModel):
+    message: str
+    workspace_id: str
+
+
+@router.post("/dispatch")
+async def dispatch_to_agents(
+    request: MultiAgentRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Detect agent mentions in a message and dispatch to each agent in parallel."""
+    import asyncio
+    from api.config import settings
+
+    supabase = await get_async_service_role_client()
+
+    # Get all agents in this workspace
+    result = await supabase.table("workspace_agent_assignments")\
+        .select("agent_id, openclaw_agents(*)")\
+        .eq("workspace_id", request.workspace_id)\
+        .execute()
+
+    agents = [r["openclaw_agents"] for r in (result.data or []) if r.get("openclaw_agents")]
+
+    if not agents:
+        return {"responses": [], "agents_found": 0}
+
+    # Detect which agents are mentioned by name (case-insensitive)
+    message_lower = request.message.lower()
+    mentioned_agents = []
+    for agent in agents:
+        name_parts = agent["name"].lower().split()
+        for part in name_parts:
+            if len(part) > 2 and part in message_lower:
+                mentioned_agents.append(agent)
+                break
+
+    if not mentioned_agents:
+        return {"responses": [], "agents_found": 0}
+
+    # Get user profile for context
+    profile = await _get_user_profile(user_id)
+    user_name = profile.get("name", "Usuario")
+
+    # Dispatch to each agent in parallel
+    async def call_agent(agent):
+        try:
+            if agent["tier"] == "core":
+                import anthropic
+                client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+                system_prompt = f"""Eres {agent["name"]}.
+
+{agent.get(soul_md, )}
+
+{agent.get(identity_md, )}
+
+Responde siempre en español. Sé útil, directo y mantén tu personalidad.
+El usuario te ha mencionado en un mensaje grupal. Responde SOLO a la parte que va dirigida a ti."""
+
+                response = await client.messages.create(
+                    model=agent.get("model", "claude-haiku-4-5-20251001"),
+                    max_tokens=2048,
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": f"[{user_name}]: {request.message}"}],
+                )
+                return {
+                    "agent_id": agent["id"],
+                    "agent_name": agent["name"],
+                    "avatar_url": agent.get("avatar_url", ""),
+                    "tier": agent["tier"],
+                    "content": response.content[0].text,
+                }
+            else:
+                async with httpx.AsyncClient(timeout=180.0) as http_client:
+                    response = await http_client.post(
+                        OPENCLAW_BRIDGE_URL,
+                        json={
+                            "model": f"openclaw:{agent[openclaw_agent_id]}",
+                            "messages": [{"role": "user", "content": f"[Pulse: {user_name}] {request.message}"}],
+                        },
+                    )
+                    if response.status_code == 200:
+                        data = response.json()
+                        text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                        return {
+                            "agent_id": agent["id"],
+                            "agent_name": agent["name"],
+                            "avatar_url": agent.get("avatar_url", ""),
+                            "tier": agent["tier"],
+                            "content": text,
+                        }
+                    return {
+                        "agent_id": agent["id"],
+                        "agent_name": agent["name"],
+                        "avatar_url": agent.get("avatar_url", ""),
+                        "tier": agent["tier"],
+                        "content": f"Error: {agent["name"]} no está disponible ahora mismo.",
+                    }
+        except Exception as e:
+            logger.error(f"Dispatch error for agent {agent["name"]}: {e}")
+            return {
+                "agent_id": agent["id"],
+                "agent_name": agent["name"],
+                "avatar_url": agent.get("avatar_url", ""),
+                "tier": agent["tier"],
+                "content": f"Error al contactar con {agent["name"]}: {str(e)}",
+            }
+
+    responses = await asyncio.gather(*[call_agent(a) for a in mentioned_agents])
+    return {"responses": list(responses), "agents_found": len(mentioned_agents)}

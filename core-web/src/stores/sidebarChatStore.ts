@@ -2,8 +2,11 @@ import { create } from 'zustand';
 
 export interface DisplayMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant" | "agent";
   content: string;
+  agentName?: string;
+  agentAvatar?: string;
+  agentTier?: string;
 }
 
 interface SidebarChatState {

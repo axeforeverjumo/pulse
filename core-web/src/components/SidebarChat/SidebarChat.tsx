@@ -5,7 +5,7 @@ import {
   ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import { motion, AnimatePresence } from "motion/react";
-import { streamMessage, createConversation } from "../../api/client";
+import { streamMessage, createConversation, api } from "../../api/client";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useUIStore } from "../../stores/uiStore";
 import { useSidebarChatStore } from "../../stores/sidebarChatStore";
@@ -195,6 +195,45 @@ export default function SidebarChat() {
     // Add user message immediately (display text only, no hint metadata)
     const tempUserId = `temp-${Date.now()}`;
     addMessage({ id: tempUserId, role: "user", content: displayText || "📎 Image" });
+
+    // Background: dispatch to mentioned agents (non-blocking)
+    if (workspaceId) {
+      (async () => {
+        try {
+          const dispatchResult = await api<{
+            responses: Array<{
+              agent_id: string;
+              agent_name: string;
+              avatar_url: string;
+              tier: string;
+              content: string;
+            }>;
+            agents_found: number;
+          }>("/openclaw-agents/dispatch", {
+            method: "POST",
+            body: JSON.stringify({
+              message: displayText,
+              workspace_id: workspaceId,
+            }),
+          });
+          if (dispatchResult.responses && dispatchResult.responses.length > 0) {
+            const store = useSidebarChatStore.getState();
+            for (const agentResp of dispatchResult.responses) {
+              store.addMessage({
+                id: `agent-${agentResp.agent_id}-${Date.now()}`,
+                role: "agent",
+                content: agentResp.content,
+                agentName: agentResp.agent_name,
+                agentAvatar: agentResp.avatar_url,
+                agentTier: agentResp.tier,
+              });
+            }
+          }
+        } catch (err) {
+          console.error("Agent dispatch failed:", err);
+        }
+      })();
+    }
 
     try {
       // Create conversation if needed
@@ -517,7 +556,12 @@ export default function SidebarChat() {
               <div className="py-4">
                 {messages.map((message) => (
                   <div key={message.id}>
-                    <ChatMessage role={message.role} content={message.content} />
+                    <ChatMessage
+                      role={message.role}
+                      content={message.content}
+                      agentName={message.agentName}
+                      agentAvatar={message.agentAvatar}
+                    />
                   </div>
                 ))}
 

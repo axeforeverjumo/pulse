@@ -3,9 +3,11 @@ import { DocumentDuplicateIcon, CheckIcon } from '@heroicons/react/24/outline';
 import StreamingText from '../Chat/StreamingText';
 
 interface ChatMessageProps {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'agent';
   content: string;
   isStreaming?: boolean;
+  agentName?: string;
+  agentAvatar?: string;
 }
 
 // User message - right aligned bubble (compact)
@@ -65,9 +67,58 @@ function AssistantMessage({ content, isStreaming }: { content: string; isStreami
   );
 }
 
-function SidebarChatMessage({ role, content, isStreaming }: ChatMessageProps) {
+// Agent message - left aligned with avatar and name
+function AgentMessage({ content, agentName, agentAvatar }: { content: string; agentName?: string; agentAvatar?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyMessage = async () => {
+    await navigator.clipboard.writeText(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="group py-1.5 px-4">
+      <div className="flex gap-2 items-start max-w-[95%]">
+        {agentAvatar ? (
+          <img src={agentAvatar} alt={agentName || "Agent"} className="w-6 h-6 rounded-full shrink-0 mt-0.5" />
+        ) : (
+          <div className="w-6 h-6 rounded-full bg-violet-100 flex items-center justify-center shrink-0 mt-0.5">
+            <span className="text-xs text-violet-600 font-semibold">{(agentName || "A")[0]}</span>
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <span className="text-xs font-semibold text-violet-700 block mb-0.5">{agentName || "Agent"}</span>
+          <StreamingText
+            content={content}
+            isStreaming={false}
+            variant="compact"
+          />
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-1">
+            <button
+              onClick={handleCopyMessage}
+              className="p-1 text-text-tertiary hover:text-text-body hover:bg-bg-gray rounded transition-colors"
+              title="Copy"
+            >
+              {copied ? (
+                <CheckIcon className="w-3.5 h-3.5 stroke-2" />
+              ) : (
+                <DocumentDuplicateIcon className="w-3.5 h-3.5" />
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SidebarChatMessage({ role, content, isStreaming, agentName, agentAvatar }: ChatMessageProps) {
   if (role === 'user') {
     return <UserMessage content={content} />;
+  }
+  if (role === 'agent') {
+    return <AgentMessage content={content} agentName={agentName} agentAvatar={agentAvatar} />;
   }
   return <AssistantMessage content={content} isStreaming={isStreaming} />;
 }
