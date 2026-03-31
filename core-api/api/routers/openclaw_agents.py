@@ -216,6 +216,258 @@ async def list_mentionable_agents(
     return {"agents": agents}
 
 
+@router.post("/dispatch")
+async def dispatch_to_agents(
+    request: MultiAgentRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Detect agent mentions in a message and dispatch to each agent in parallel."""
+    import asyncio
+    from api.config import settings
+
+    supabase = await get_async_service_role_client()
+
+    # Get all agents in this workspace
+    result = await supabase.table("workspace_agent_assignments")\
+        .select("agent_id, openclaw_agents(*)")\
+        .eq("workspace_id", request.workspace_id)\
+        .execute()
+
+    agents = [r["openclaw_agents"] for r in (result.data or []) if r.get("openclaw_agents")]
+
+    if not agents:
+        return {"responses": [], "agents_found": 0}
+
+        # Detect @mentions: only activate agents when explicitly mentioned with @
+    import re as _re
+    
+    # Find all @mentions in the message
+    mentions = _re.findall(r'@(\w+(?:\s\w+)?)', request.message, _re.IGNORECASE)
+    
+    if not mentions:
+        return {"responses": [], "agents_found": 0}
+    
+    # Match mentions to agents
+    mentioned_agents = []
+    agent_messages = {}  # agent_id -> their specific part of the message
+    
+    for agent in agents:
+        agent_name_lower = agent["name"].lower()
+        first_name = agent_name_lower.split()[0]
+        
+        for mention in mentions:
+            mention_lower = mention.lower().strip()
+            if mention_lower == first_name or mention_lower in agent_name_lower or agent_name_lower.startswith(mention_lower):
+                mentioned_agents.append(agent)
+                break
+    
+    if not mentioned_agents:
+        return {"responses": [], "agents_found": 0}
+    
+    # Split message by @mentions — each agent gets their directed part
+    # Pattern: @Agent1 message for agent1 @Agent2 message for agent2
+    parts = _re.split(r'(?=@\w)', request.message)
+    
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        # Find which agent this part is for
+        for agent in mentioned_agents:
+            first_name = agent["name"].split()[0].lower()
+            part_lower = part.lower()
+            if part_lower.startswith(f"@{first_name}") or any(
+                part_lower.startswith(f"@{m.lower()}") 
+                for m in [agent["name"].split()[0]]
+            ):
+                # Remove the @mention from the text
+                clean_part = _re.sub(r'^@\w+\s*', '', part, count=1).strip()
+                if clean_part:
+                    agent_messages[agent["id"]] = clean_part
+                break
+
+    # Get user profile for context
+    profile = await _get_user_profile(user_id)
+    user_name = profile.get("name", "Usuario")
+
+    # Dispatch to each agent in parallel
+    async def call_agent(agent):
+        try:
+            if agent["tier"] == "core":
+                import anthropic
+                client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+                system_prompt = f"""Eres {agent["name"]}.
+
+{agent.get('soul_md', '')}
+
+{agent.get('identity_md', '')}
+
+Responde siempre en español. Sé útil, directo y mantén tu personalidad.
+El usuario te ha mencionado en un mensaje grupal. Responde SOLO a la parte que va dirigida a ti."""
+
+                response = await client.messages.create(
+                    model=agent.get("model", "claude-haiku-4-5-20251001"),
+                    max_tokens=2048,
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": f"[{user_name}]: {agent_messages.get(agent['id'], request.message)}"}],
+                )
+                return {
+                    "agent_id": agent["id"],
+                    "agent_name": agent["name"],
+                    "avatar_url": agent.get("avatar_url", ""),
+                    "tier": agent["tier"],
+                    "content": response.content[0].text,
+                }
+            else:
+                async with httpx.AsyncClient(timeout=180.0) as http_client:
+                    response = await http_client.post(
+                        OPENCLAW_BRIDGE_URL,
+                        json={
+                            "model": f"openclaw:{agent["openclaw_agent_id"]}",
+                            "messages": [{"role": "user", "content": f"[Pulse: {user_name}] {request.message}"}],
+                        },
+                    )
+                    if response.status_code == 200:
+                        data = response.json()
+                        text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                        return {
+                            "agent_id": agent["id"],
+                            "agent_name": agent["name"],
+                            "avatar_url": agent.get("avatar_url", ""),
+                            "tier": agent["tier"],
+                            "content": text,
+                        }
+                    return {
+                        "agent_id": agent["id"],
+                        "agent_name": agent["name"],
+                        "avatar_url": agent.get("avatar_url", ""),
+                        "tier": agent["tier"],
+                        "content": f"Error: {agent["name"]} no está disponible ahora mismo.",
+                    }
+        except Exception as e:
+            logger.error(f"Dispatch error for agent {agent["name"]}: {e}")
+            return {
+                "agent_id": agent["id"],
+                "agent_name": agent["name"],
+                "avatar_url": agent.get("avatar_url", ""),
+                "tier": agent["tier"],
+                "content": f"Error al contactar con {agent["name"]}: {str(e)}",
+            }
+
+    responses = await asyncio.gather(*[call_agent(a) for a in mentioned_agents])
+    return {"responses": list(responses), "agents_found": len(mentioned_agents)}
+
+@router.post("/create")
+async def create_agent(
+    request: CreateAgentRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Create a new Core agent. Haiku generates personality, stored in DB. No OpenClaw workspace."""
+    import json as json_mod
+    import re
+    import anthropic
+    from api.config import settings
+
+    # Generate agent config using Haiku
+    try:
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+
+        prompt = f"""Eres un diseñador de agentes de IA. El usuario quiere crear un agente con estos datos:
+- Nombre que el usuario le puso: {request.name}
+- Lo que el usuario describió: {request.expertise}
+
+Tu trabajo es crear una personalidad PROFESIONAL y COMPLETA para este agente.
+
+IMPORTANTE:
+- El "name" debe ser un nombre propio limpio (sin "Eres", sin descripciones). Si el usuario puso "Eres Abogado Factoria", el nombre sería "Abogado de Factoría IA" o simplemente el nombre que tenga sentido.
+- La "soul" debe definir CÓMO habla el agente: su tono, estilo, si es formal o informal, si usa humor, etc.
+- La "identity" debe definir QUÉ sabe hacer: sus conocimientos, especialidades, límites claros.
+- La "description" es lo que verán otros usuarios en la tarjeta del agente.
+
+Responde SOLO con JSON válido:
+{{
+    "name": "Nombre limpio y profesional del agente",
+    "description": "Descripción corta y atractiva (1-2 frases) para la tarjeta del agente",
+    "soul": "Personalidad detallada: tono de comunicación, estilo, valores, cómo se dirige al usuario. 3-5 frases en español.",
+    "identity": "Rol y conocimientos: qué sabe hacer, en qué es experto, qué límites tiene, cuándo derivar a un profesional humano. 3-5 frases en español.",
+    "category": "una palabra: general, desarrollo, marketing, ventas, soporte, legal, finanzas, educacion, trading, oficina"
+}}"""
+
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=500,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        raw_text = response.content[0].text.strip()
+        # Extract JSON from possible markdown code block
+        if raw_text.startswith("```"):
+            raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
+            raw_text = re.sub(r"\s*```$", "", raw_text)
+        config = json_mod.loads(raw_text)
+    except json_mod.JSONDecodeError as e:
+        logger.error(f"Failed to parse Haiku response: {e}")
+        raise HTTPException(500, "Error al generar la configuración del agente")
+    except Exception as e:
+        logger.error(f"Haiku API error: {e}")
+        raise HTTPException(500, f"Error al contactar con IA: {str(e)}")
+
+    # Generate slug from name
+    agent_slug = re.sub(r"[^a-z0-9]+", "-", request.name.lower()).strip("-")
+
+    # Register in Supabase (no filesystem, no OpenClaw)
+    try:
+        supabase = await get_async_service_role_client()
+        result = await supabase.table("openclaw_agents").insert({
+            "openclaw_agent_id": agent_slug,
+            "name": config.get("name", request.name),
+            "description": config.get("description", ""),
+            "tier": "core",
+            "category": config.get("category", "general"),
+            "model": "claude-haiku-4-5-20251001",
+            "tools": [],
+            "soul_md": config.get("soul", ""),
+            "identity_md": config.get("identity", ""),
+            "avatar_url": f"https://api.dicebear.com/9.x/bottts-neutral/svg?seed={agent_slug}",
+            "created_by": user_id,
+            "is_active": True,
+        }).execute()
+
+        new_agent = result.data[0] if result.data else None
+    except Exception as e:
+        logger.error(f"Supabase insert error: {e}")
+        raise HTTPException(500, f"Error al registrar agente en base de datos: {str(e)}")
+
+    # Auto-assign to creator workspaces
+    if new_agent:
+        try:
+            ws_result = await supabase.table("workspace_members").select("workspace_id").eq("user_id", user_id).execute()
+            for ws in (ws_result.data or []):
+                try:
+                    await supabase.table("workspace_agent_assignments").insert({
+                        "workspace_id": ws["workspace_id"],
+                        "agent_id": new_agent["id"],
+                        "assigned_by": user_id,
+                    }).execute()
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"Failed to auto-assign agent: {e}")
+
+    return {"agent": new_agent, "message": f"Agente {request.name} creado exitosamente"}
+
+
+# ── Multi-agent dispatch (sidebar chat @mentions) ──
+
+class MultiAgentRequest(BaseModel):
+    message: str
+    workspace_id: str
+
+
+
+
 @router.get("/{agent_id}")
 async def get_agent(
     agent_id: str,
@@ -475,252 +727,4 @@ class CreateAgentRequest(BaseModel):
     expertise: str
 
 
-@router.post("/create")
-async def create_agent(
-    request: CreateAgentRequest,
-    user_jwt: str = Depends(get_current_user_jwt),
-    user_id: str = Depends(get_current_user_id),
-):
-    """Create a new Core agent. Haiku generates personality, stored in DB. No OpenClaw workspace."""
-    import json as json_mod
-    import re
-    import anthropic
-    from api.config import settings
 
-    # Generate agent config using Haiku
-    try:
-        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-
-        prompt = f"""Eres un diseñador de agentes de IA. El usuario quiere crear un agente con estos datos:
-- Nombre que el usuario le puso: {request.name}
-- Lo que el usuario describió: {request.expertise}
-
-Tu trabajo es crear una personalidad PROFESIONAL y COMPLETA para este agente.
-
-IMPORTANTE:
-- El "name" debe ser un nombre propio limpio (sin "Eres", sin descripciones). Si el usuario puso "Eres Abogado Factoria", el nombre sería "Abogado de Factoría IA" o simplemente el nombre que tenga sentido.
-- La "soul" debe definir CÓMO habla el agente: su tono, estilo, si es formal o informal, si usa humor, etc.
-- La "identity" debe definir QUÉ sabe hacer: sus conocimientos, especialidades, límites claros.
-- La "description" es lo que verán otros usuarios en la tarjeta del agente.
-
-Responde SOLO con JSON válido:
-{{
-    "name": "Nombre limpio y profesional del agente",
-    "description": "Descripción corta y atractiva (1-2 frases) para la tarjeta del agente",
-    "soul": "Personalidad detallada: tono de comunicación, estilo, valores, cómo se dirige al usuario. 3-5 frases en español.",
-    "identity": "Rol y conocimientos: qué sabe hacer, en qué es experto, qué límites tiene, cuándo derivar a un profesional humano. 3-5 frases en español.",
-    "category": "una palabra: general, desarrollo, marketing, ventas, soporte, legal, finanzas, educacion, trading, oficina"
-}}"""
-
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=500,
-            messages=[{"role": "user", "content": prompt}],
-        )
-
-        raw_text = response.content[0].text.strip()
-        # Extract JSON from possible markdown code block
-        if raw_text.startswith("```"):
-            raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
-            raw_text = re.sub(r"\s*```$", "", raw_text)
-        config = json_mod.loads(raw_text)
-    except json_mod.JSONDecodeError as e:
-        logger.error(f"Failed to parse Haiku response: {e}")
-        raise HTTPException(500, "Error al generar la configuración del agente")
-    except Exception as e:
-        logger.error(f"Haiku API error: {e}")
-        raise HTTPException(500, f"Error al contactar con IA: {str(e)}")
-
-    # Generate slug from name
-    agent_slug = re.sub(r"[^a-z0-9]+", "-", request.name.lower()).strip("-")
-
-    # Register in Supabase (no filesystem, no OpenClaw)
-    try:
-        supabase = await get_async_service_role_client()
-        result = await supabase.table("openclaw_agents").insert({
-            "openclaw_agent_id": agent_slug,
-            "name": config.get("name", request.name),
-            "description": config.get("description", ""),
-            "tier": "core",
-            "category": config.get("category", "general"),
-            "model": "claude-haiku-4-5-20251001",
-            "tools": [],
-            "soul_md": config.get("soul", ""),
-            "identity_md": config.get("identity", ""),
-            "avatar_url": f"https://api.dicebear.com/9.x/bottts-neutral/svg?seed={agent_slug}",
-            "created_by": user_id,
-            "is_active": True,
-        }).execute()
-
-        new_agent = result.data[0] if result.data else None
-    except Exception as e:
-        logger.error(f"Supabase insert error: {e}")
-        raise HTTPException(500, f"Error al registrar agente en base de datos: {str(e)}")
-
-    # Auto-assign to creator workspaces
-    if new_agent:
-        try:
-            ws_result = await supabase.table("workspace_members").select("workspace_id").eq("user_id", user_id).execute()
-            for ws in (ws_result.data or []):
-                try:
-                    await supabase.table("workspace_agent_assignments").insert({
-                        "workspace_id": ws["workspace_id"],
-                        "agent_id": new_agent["id"],
-                        "assigned_by": user_id,
-                    }).execute()
-                except Exception:
-                    pass
-        except Exception as e:
-            logger.warning(f"Failed to auto-assign agent: {e}")
-
-    return {"agent": new_agent, "message": f"Agente {request.name} creado exitosamente"}
-
-
-# ── Multi-agent dispatch (sidebar chat @mentions) ──
-
-class MultiAgentRequest(BaseModel):
-    message: str
-    workspace_id: str
-
-
-@router.post("/dispatch")
-async def dispatch_to_agents(
-    request: MultiAgentRequest,
-    user_jwt: str = Depends(get_current_user_jwt),
-    user_id: str = Depends(get_current_user_id),
-):
-    """Detect agent mentions in a message and dispatch to each agent in parallel."""
-    import asyncio
-    from api.config import settings
-
-    supabase = await get_async_service_role_client()
-
-    # Get all agents in this workspace
-    result = await supabase.table("workspace_agent_assignments")\
-        .select("agent_id, openclaw_agents(*)")\
-        .eq("workspace_id", request.workspace_id)\
-        .execute()
-
-    agents = [r["openclaw_agents"] for r in (result.data or []) if r.get("openclaw_agents")]
-
-    if not agents:
-        return {"responses": [], "agents_found": 0}
-
-        # Detect @mentions: only activate agents when explicitly mentioned with @
-    import re as _re
-    
-    # Find all @mentions in the message
-    mentions = _re.findall(r'@(\w+(?:\s\w+)?)', request.message, _re.IGNORECASE)
-    
-    if not mentions:
-        return {"responses": [], "agents_found": 0}
-    
-    # Match mentions to agents
-    mentioned_agents = []
-    agent_messages = {}  # agent_id -> their specific part of the message
-    
-    for agent in agents:
-        agent_name_lower = agent["name"].lower()
-        first_name = agent_name_lower.split()[0]
-        
-        for mention in mentions:
-            mention_lower = mention.lower().strip()
-            if mention_lower == first_name or mention_lower in agent_name_lower or agent_name_lower.startswith(mention_lower):
-                mentioned_agents.append(agent)
-                break
-    
-    if not mentioned_agents:
-        return {"responses": [], "agents_found": 0}
-    
-    # Split message by @mentions — each agent gets their directed part
-    # Pattern: @Agent1 message for agent1 @Agent2 message for agent2
-    parts = _re.split(r'(?=@\w)', request.message)
-    
-    for part in parts:
-        part = part.strip()
-        if not part:
-            continue
-        # Find which agent this part is for
-        for agent in mentioned_agents:
-            first_name = agent["name"].split()[0].lower()
-            part_lower = part.lower()
-            if part_lower.startswith(f"@{first_name}") or any(
-                part_lower.startswith(f"@{m.lower()}") 
-                for m in [agent["name"].split()[0]]
-            ):
-                # Remove the @mention from the text
-                clean_part = _re.sub(r'^@\w+\s*', '', part, count=1).strip()
-                if clean_part:
-                    agent_messages[agent["id"]] = clean_part
-                break
-
-    # Get user profile for context
-    profile = await _get_user_profile(user_id)
-    user_name = profile.get("name", "Usuario")
-
-    # Dispatch to each agent in parallel
-    async def call_agent(agent):
-        try:
-            if agent["tier"] == "core":
-                import anthropic
-                client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-                system_prompt = f"""Eres {agent["name"]}.
-
-{agent.get('soul_md', '')}
-
-{agent.get('identity_md', '')}
-
-Responde siempre en español. Sé útil, directo y mantén tu personalidad.
-El usuario te ha mencionado en un mensaje grupal. Responde SOLO a la parte que va dirigida a ti."""
-
-                response = await client.messages.create(
-                    model=agent.get("model", "claude-haiku-4-5-20251001"),
-                    max_tokens=2048,
-                    system=system_prompt,
-                    messages=[{"role": "user", "content": f"[{user_name}]: {agent_messages.get(agent['id'], request.message)}"}],
-                )
-                return {
-                    "agent_id": agent["id"],
-                    "agent_name": agent["name"],
-                    "avatar_url": agent.get("avatar_url", ""),
-                    "tier": agent["tier"],
-                    "content": response.content[0].text,
-                }
-            else:
-                async with httpx.AsyncClient(timeout=180.0) as http_client:
-                    response = await http_client.post(
-                        OPENCLAW_BRIDGE_URL,
-                        json={
-                            "model": f"openclaw:{agent["openclaw_agent_id"]}",
-                            "messages": [{"role": "user", "content": f"[Pulse: {user_name}] {request.message}"}],
-                        },
-                    )
-                    if response.status_code == 200:
-                        data = response.json()
-                        text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-                        return {
-                            "agent_id": agent["id"],
-                            "agent_name": agent["name"],
-                            "avatar_url": agent.get("avatar_url", ""),
-                            "tier": agent["tier"],
-                            "content": text,
-                        }
-                    return {
-                        "agent_id": agent["id"],
-                        "agent_name": agent["name"],
-                        "avatar_url": agent.get("avatar_url", ""),
-                        "tier": agent["tier"],
-                        "content": f"Error: {agent["name"]} no está disponible ahora mismo.",
-                    }
-        except Exception as e:
-            logger.error(f"Dispatch error for agent {agent["name"]}: {e}")
-            return {
-                "agent_id": agent["id"],
-                "agent_name": agent["name"],
-                "avatar_url": agent.get("avatar_url", ""),
-                "tier": agent["tier"],
-                "content": f"Error al contactar con {agent["name"]}: {str(e)}",
-            }
-
-    responses = await asyncio.gather(*[call_agent(a) for a in mentioned_agents])
-    return {"responses": list(responses), "agents_found": len(mentioned_agents)}
