@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { useParams } from "react-router-dom";
-import { Brain, Send, ArrowLeft, Loader2, Users, Building2, Plus, X, Trash2 } from "lucide-react";
+import { Brain, Send, ArrowLeft, Loader2, Users, Building2, Plus, X, Trash2, Pencil } from "lucide-react";
 import { Icon } from "../ui/Icon";
 import { api } from "../../api/client";
 import { SIDEBAR } from "../../lib/sidebar";
@@ -19,6 +19,8 @@ interface OpenClawAgent {
   model: string;
   tools: string[];
   avatar_url?: string;
+  soul_md?: string;
+  identity_md?: string;
 }
 
 interface ChatMessage {
@@ -70,6 +72,20 @@ async function deleteAgentApi(agentId: string): Promise<{ success: boolean; mess
   return api<{ success: boolean; message: string }>(
     `/openclaw-agents/${agentId}`,
     { method: "DELETE" }
+  );
+}
+
+async function updateAgentApi(
+  agentId: string,
+  data: { name?: string; description?: string; soul_md?: string; identity_md?: string; category?: string }
+): Promise<{ agent: OpenClawAgent }> {
+  return api<{ agent: OpenClawAgent }>(
+    `/openclaw-agents/${agentId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }
   );
 }
 
@@ -226,11 +242,13 @@ function AgentCard({
   selected,
   onClick,
   onDelete,
+  onEdit,
 }: {
   agent: OpenClawAgent;
   selected: boolean;
   onClick: () => void;
   onDelete?: () => void;
+  onEdit?: () => void;
 }) {
   const isCore = !agent.tier.toLowerCase().includes("advance");
 
@@ -253,15 +271,28 @@ function AgentCard({
           </p>
           <span className="text-[10px] text-text-tertiary opacity-60">{agent.category}</span>
         </div>
-        {/* Delete button for Core agents only */}
-        {isCore && onDelete && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition-all shrink-0 mt-0.5"
-            title="Eliminar agente"
-          >
-            <Icon icon={Trash2} size={13} />
-          </button>
+        {/* Edit & Delete buttons for Core agents only */}
+        {isCore && (
+          <div className="flex items-center gap-0.5 shrink-0 mt-0.5">
+            {onEdit && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-indigo-100 text-gray-400 hover:text-indigo-500 transition-all"
+                title="Editar agente"
+              >
+                <Icon icon={Pencil} size={13} />
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition-all"
+                title="Eliminar agente"
+              >
+                <Icon icon={Trash2} size={13} />
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -389,6 +420,174 @@ function CreateAgentModal({
   );
 }
 
+
+
+
+/* ------------------------------------------------------------------ */
+/*  Edit Agent Modal                                                   */
+/* ------------------------------------------------------------------ */
+
+const AGENT_CATEGORIES = [
+  "general", "desarrollo", "marketing", "ventas", "soporte",
+  "legal", "finanzas", "educacion", "trading", "oficina",
+];
+
+function EditAgentModal({
+  agent,
+  onClose,
+  onUpdated,
+}: {
+  agent: OpenClawAgent;
+  onClose: () => void;
+  onUpdated: (agent: OpenClawAgent) => void;
+}) {
+  const [name, setName] = useState(agent.name);
+  const [description, setDescription] = useState(agent.description || "");
+  const [soulMd, setSoulMd] = useState(agent.soul_md || "");
+  const [identityMd, setIdentityMd] = useState(agent.identity_md || "");
+  const [category, setCategory] = useState(agent.category || "general");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const result = await updateAgentApi(agent.id, {
+        name: name.trim(),
+        description: description.trim(),
+        soul_md: soulMd.trim(),
+        identity_md: identityMd.trim(),
+        category,
+      });
+      if (result.agent) {
+        onUpdated(result.agent);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Error al actualizar el agente";
+      setError(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{position:"fixed",top:0,left:0,right:0,bottom:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden" style={{width:"540px",maxWidth:"90vw",maxHeight:"90vh"}}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Editar agente</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Modifica los datos de tu agente Core</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <Icon icon={X} size={18} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="px-6 py-5 space-y-4 overflow-y-auto" style={{maxHeight:"calc(90vh - 140px)"}}>
+          {/* Name */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 transition-colors"
+              disabled={saving}
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Descripcion</label>
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 transition-colors"
+              disabled={saving}
+            />
+          </div>
+
+          {/* Soul */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Personalidad / Soul</label>
+            <textarea
+              value={soulMd}
+              onChange={(e) => setSoulMd(e.target.value)}
+              rows={4}
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 transition-colors resize-none"
+              disabled={saving}
+              placeholder="Como habla el agente, su tono, estilo..."
+            />
+          </div>
+
+          {/* Identity */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Identidad / Rol</label>
+            <textarea
+              value={identityMd}
+              onChange={(e) => setIdentityMd(e.target.value)}
+              rows={4}
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 transition-colors resize-none"
+              disabled={saving}
+              placeholder="Que sabe hacer, sus conocimientos, limites..."
+            />
+          </div>
+
+          {/* Category */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 transition-colors bg-white"
+              disabled={saving}
+            >
+              {AGENT_CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-xs text-red-600">
+              {error}
+            </div>
+          )}
+
+          {/* Buttons */}
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              onClick={onClose}
+              disabled={saving}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || !name.trim()}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+            >
+              {saving ? <Loader2 size={14} className="animate-spin" /> : null}
+              Guardar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /*  Thinking states & bubble                                           */
@@ -645,6 +844,7 @@ export default function AgentsView() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [agentToDelete, setAgentToDelete] = useState<OpenClawAgent | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [agentToEdit, setAgentToEdit] = useState<OpenClawAgent | null>(null);
 
   const loadAgents = useCallback(async () => {
     if (!workspaceId) return;
@@ -676,6 +876,13 @@ export default function AgentsView() {
     setShowCreateModal(false);
     loadAgents().then(() => {
       setSelectedAgent(agent);
+    });
+  };
+
+  const handleAgentUpdated = (updatedAgent: OpenClawAgent) => {
+    setAgentToEdit(null);
+    loadAgents().then(() => {
+      setSelectedAgent(updatedAgent);
     });
   };
 
@@ -766,6 +973,7 @@ export default function AgentsView() {
                       selected={selectedAgent?.id === agent.id}
                       onClick={() => setSelectedAgent(agent)}
                       onDelete={() => setAgentToDelete(agent)}
+                      onEdit={() => setAgentToEdit(agent)}
                     />
                   ))}
                 </div>
@@ -820,6 +1028,16 @@ export default function AgentsView() {
           onClose={() => setAgentToDelete(null)}
           onConfirm={handleDeleteConfirm}
           deleting={deleting}
+        />,
+        document.body
+      )}
+
+      {/* Edit Agent Modal */}
+      {agentToEdit && createPortal(
+        <EditAgentModal
+          agent={agentToEdit}
+          onClose={() => setAgentToEdit(null)}
+          onUpdated={handleAgentUpdated}
         />,
         document.body
       )}

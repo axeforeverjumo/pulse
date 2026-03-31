@@ -342,6 +342,48 @@ Responde siempre en español. Sé útil, directo y mantén tu personalidad."""
         raise HTTPException(status_code=502, detail="No se pudo conectar con el agente")
 
 
+
+
+# -- Update agent endpoint --
+
+class UpdateAgentRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    soul_md: Optional[str] = None
+    identity_md: Optional[str] = None
+    category: Optional[str] = None
+
+@router.patch("/{agent_id}")
+async def update_agent(
+    agent_id: str,
+    request: UpdateAgentRequest,
+    user_id: str = Depends(get_current_user_id),
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Update a Core agent's details."""
+    supabase = await get_async_service_role_client()
+
+    agent_result = await supabase.table("openclaw_agents").select("*").eq("id", agent_id).maybe_single().execute()
+    if not agent_result or not agent_result.data:
+        raise HTTPException(404, "Agente no encontrado")
+
+    if agent_result.data["tier"] == "advance":
+        raise HTTPException(400, "Los agentes Advance se gestionan desde OpenClaw")
+
+    update_data = {}
+    if request.name is not None: update_data["name"] = request.name
+    if request.description is not None: update_data["description"] = request.description
+    if request.soul_md is not None: update_data["soul_md"] = request.soul_md
+    if request.identity_md is not None: update_data["identity_md"] = request.identity_md
+    if request.category is not None: update_data["category"] = request.category
+
+    if not update_data:
+        return {"agent": agent_result.data}
+
+    result = await supabase.table("openclaw_agents").update(update_data).eq("id", agent_id).execute()
+    return {"agent": result.data[0] if result.data else agent_result.data}
+
+
 # ── Delete agent endpoint ──
 
 @router.delete("/{agent_id}")
@@ -449,16 +491,24 @@ async def create_agent(
     try:
         client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
-        prompt = f"""Genera la configuración para un agente de IA con estas características:
-- Nombre: {request.name}
-- Especialidad: {request.expertise}
-- Tipo: Chat especializado (solo conversación)
+        prompt = f"""Eres un diseñador de agentes de IA. El usuario quiere crear un agente con estos datos:
+- Nombre que el usuario le puso: {request.name}
+- Lo que el usuario describió: {request.expertise}
 
-Responde SOLO con JSON válido con esta estructura exacta:
+Tu trabajo es crear una personalidad PROFESIONAL y COMPLETA para este agente.
+
+IMPORTANTE:
+- El "name" debe ser un nombre propio limpio (sin "Eres", sin descripciones). Si el usuario puso "Eres Abogado Factoria", el nombre sería "Abogado de Factoría IA" o simplemente el nombre que tenga sentido.
+- La "soul" debe definir CÓMO habla el agente: su tono, estilo, si es formal o informal, si usa humor, etc.
+- La "identity" debe definir QUÉ sabe hacer: sus conocimientos, especialidades, límites claros.
+- La "description" es lo que verán otros usuarios en la tarjeta del agente.
+
+Responde SOLO con JSON válido:
 {{
-    "description": "Descripción corta del agente en español (1-2 frases)",
-    "soul": "Personalidad del agente: cómo habla, su tono, sus valores, su estilo. En español. 3-4 frases.",
-    "identity": "Rol detallado: qué sabe hacer, sus límites, su especialidad. En español. 3-4 frases.",
+    "name": "Nombre limpio y profesional del agente",
+    "description": "Descripción corta y atractiva (1-2 frases) para la tarjeta del agente",
+    "soul": "Personalidad detallada: tono de comunicación, estilo, valores, cómo se dirige al usuario. 3-5 frases en español.",
+    "identity": "Rol y conocimientos: qué sabe hacer, en qué es experto, qué límites tiene, cuándo derivar a un profesional humano. 3-5 frases en español.",
     "category": "una palabra: general, desarrollo, marketing, ventas, soporte, legal, finanzas, educacion, trading, oficina"
 }}"""
 
@@ -489,7 +539,7 @@ Responde SOLO con JSON válido con esta estructura exacta:
         supabase = await get_async_service_role_client()
         result = await supabase.table("openclaw_agents").insert({
             "openclaw_agent_id": agent_slug,
-            "name": request.name,
+            "name": config.get("name", request.name),
             "description": config.get("description", ""),
             "tier": "core",
             "category": config.get("category", "general"),
