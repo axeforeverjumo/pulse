@@ -472,6 +472,9 @@ async def create_or_refresh_workspace_invitation(
         if not invitation:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create invitation")
 
+    # Email sending is best-effort: invitation is created even if email fails.
+    # The invite can still be accepted via share link or in-app notification.
+    email_sent = False
     try:
         await send_workspace_invitation_email(
             recipient_email=normalized_email,
@@ -480,37 +483,30 @@ async def create_or_refresh_workspace_invitation(
             role=role,
             token=invitation["token"],
         )
+        email_sent = True
     except Exception as send_error:
         error_text = str(send_error)
-        logger.error("Failed to send invitation email for workspace %s: %s", workspace_id, error_text)
+        logger.warning("Failed to send invitation email for workspace %s: %s (invitation still created)", workspace_id, error_text)
 
-        if created_new:
-            await client.table("workspace_invitations").delete().eq("id", invitation["id"]).execute()
-        elif previous_state:
-            await client.table("workspace_invitations") \
-                .update(
-                    {
-                        "token": previous_state["token"],
-                        "expires_at": previous_state["expires_at"],
-                        "role": previous_state["role"],
-                        "invited_by_user_id": previous_state["invited_by_user_id"],
-                        "last_email_sent_at": previous_state["last_email_sent_at"],
-                        "last_email_error": error_text,
-                    }
-                ) \
-                .eq("id", invitation["id"]) \
-                .execute()
+        await client.table("workspace_invitations") \
+            .update({"last_email_error": error_text}) \
+            .eq("id", invitation["id"]) \
+            .execute()
 
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Failed to send invitation email",
-        )
-
-    refreshed = await client.table("workspace_invitations") \
-        .update({"last_email_sent_at": _now_iso(), "last_email_error": None}) \
-        .eq("id", invitation["id"]) \
-        .execute()
-    invitation = (refreshed.data or [invitation])[0]
+    if email_sent:
+        refreshed = await client.table("workspace_invitations") \
+            .update({"last_email_sent_at": _now_iso(), "last_email_error": None}) \
+            .eq("id", invitation["id"]) \
+            .execute()
+        invitation = (refreshed.data or [invitation])[0]
+    else:
+        # Re-fetch invitation to get current state
+        refetch = await client.table("workspace_invitations") \
+            .select("*") \
+            .eq("id", invitation["id"]) \
+            .maybe_single() \
+            .execute()
+        invitation = refetch.data if refetch and refetch.data else invitation
 
     if invited_user:
         await _ensure_invitation_notification(
