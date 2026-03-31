@@ -27,7 +27,7 @@ import {
   ArrowUturnLeftIcon,
 } from "@heroicons/react/24/outline";
 import Dropdown from "../Dropdown/Dropdown";
-import { Plus, Users } from 'lucide-react';
+import { Plus, Users, Video } from 'lucide-react';
 import { Icon } from '../ui/Icon';
 import { useMessagesStore } from "../../stores/messagesStore";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
@@ -2718,6 +2718,27 @@ export default function MessagesView() {
                 )}
               </div>
               <div className="flex items-center gap-2">
+                {/* Google Meet button */}
+                <button
+                  onClick={() => {
+                    // Open Google Meet in new tab
+                    window.open("https://meet.google.com/new", "_blank");
+                    // Post a message in the channel announcing the call
+                    const userName = (user?.user_metadata?.name as string) || user?.email?.split("@")[0] || "Alguien";
+                    const meetBlocks = [{
+                      type: "text" as const,
+                      data: {
+                        content: `\u{1F4F9} ${userName} ha iniciado una videollamada \u2014 Unirse a Google Meet: https://meet.google.com/new`,
+                        html: `<p>\u{1F4F9} <strong>${userName} ha iniciado una videollamada</strong> \u2014 <a href="https://meet.google.com/new" target="_blank" class="text-blue-600 underline">Unirse a Google Meet</a></p>`,
+                      },
+                    }];
+                    sendMessage(meetBlocks);
+                  }}
+                  title="Iniciar videollamada"
+                  className="w-7 h-7 flex items-center justify-center rounded-md text-[#323232] hover:bg-gray-50 transition-all outline-none focus:outline-none"
+                >
+                  <Video size={20} />
+                </button>
                 <HeaderButtons
                   onSettingsClick={() => setShowSettingsDropdown(prev => !prev)}
                   settingsButtonRef={settingsButtonRef}

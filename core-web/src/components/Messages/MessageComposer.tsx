@@ -20,6 +20,7 @@ import { UniversalMentionMark } from "../Mentions/MentionMark";
 import { MENTION_ICONS } from "../../types/mention";
 import type { MentionData } from "../../types/mention";
 import { sanitizeStrictHtml } from "../../utils/sanitizeHtml";
+import { GoogleDrivePicker } from "./GoogleDrivePicker";
 
 // Use a ref-based approach so the editor keydown handler always calls the latest send function
 function useLatestCallback<T extends (...args: never[]) => unknown>(fn: T): T {
@@ -231,6 +232,21 @@ function ToolbarButton({
   );
 }
 
+
+// Google Drive triangle icon
+function GoogleDriveIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
+      <path d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3L27.5 55H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066DA"/>
+      <path d="M43.65 25L29.85 0c-1.35.8-2.5 1.9-3.3 3.3L1.2 44.5C.4 45.9 0 47.45 0 49h27.5z" fill="#00AC47"/>
+      <path d="M43.65 25L57.45 0c-1.35-.8-2.85-1.2-4.35-1.2H34.55c-1.5 0-3 .45-4.35 1.2z" fill="#EA4335"/>
+      <path d="M59.8 55H27.5l-13.75 21.8c1.35.8 2.85 1.2 4.35 1.2h50.6c1.5 0 3-.45 4.35-1.2z" fill="#00832D"/>
+      <path d="M73.55 26.5L57.45 0l-13.8 25 16.2 28h27.5c0-1.55-.4-3.1-1.2-4.5z" fill="#2684FC"/>
+      <path d="M86.1 49H59.8l13.75 21.8c1.35-.8 2.5-1.9 3.3-3.3L86.1 49z" fill="#FFBA00"/>
+    </svg>
+  );
+}
+
 interface MessageComposerProps {
   placeholder?: string;
   onSend: (blocks: ContentBlock[]) => void;
@@ -262,12 +278,14 @@ export function MessageComposer({
   const prevChannelIdRef = useRef<string>(channelId);
   const [showFormatting, setShowFormatting] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showDrivePicker, setShowDrivePicker] = useState(false);
   const [showMentionAutocomplete, setShowMentionAutocomplete] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
   const [hasContent, setHasContent] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const composerRef = useRef<HTMLDivElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const drivePickerRef = useRef<HTMLDivElement>(null);
   const dragCounter = useRef(0);
   const placeholderRef = useRef(placeholder);
 
@@ -487,6 +505,33 @@ export function MessageComposer({
       if (!editor) return;
       editor.chain().focus().insertContent(emoji).run();
       setShowEmojiPicker(false);
+    },
+    [editor],
+  );
+
+
+  const handleDriveFileSelect = useCallback(
+    (file: { id: string; name: string; mimeType: string; webViewLink?: string }) => {
+      if (!editor || !file.webViewLink) return;
+      const link = file.webViewLink;
+      const name = file.name;
+      // Insert as a rich HTML link with Drive icon
+      editor
+        .chain()
+        .focus()
+        .insertContent({
+          type: "text",
+          text: `\u{1F4C4} ${name}`,
+          marks: [
+            {
+              type: "link",
+              attrs: { href: link, target: "_blank" },
+            },
+          ],
+        })
+        .insertContent({ type: "text", text: " " })
+        .run();
+      setShowDrivePicker(false);
     },
     [editor],
   );
@@ -739,6 +784,23 @@ export function MessageComposer({
             >
               <PaperClipIcon className="w-4.5 h-4.5" />
             </button>
+
+            {/* Google Drive */}
+            <div className="relative" ref={drivePickerRef}>
+              <button
+                type="button"
+                onClick={() => setShowDrivePicker(!showDrivePicker)}
+                className="p-1.5 text-text-tertiary hover:text-text-body hover:bg-bg-gray rounded transition-colors"
+                title="Adjuntar desde Google Drive"
+              >
+                <GoogleDriveIcon className="w-4 h-4" />
+              </button>
+              <GoogleDrivePicker
+                isOpen={showDrivePicker}
+                onClose={() => setShowDrivePicker(false)}
+                onFileSelect={handleDriveFileSelect}
+              />
+            </div>
 
             {/* Emoji */}
             <div className="relative">
