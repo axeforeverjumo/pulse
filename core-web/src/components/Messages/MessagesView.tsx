@@ -61,6 +61,7 @@ import type { MentionEntityType } from "../../types/mention";
 import { useMentionNavigation } from "../../hooks/useMentionNavigation";
 import { HeaderButtons } from "../MiniAppHeader";
 import MessagesSettingsDropdown from "./MessagesSettingsDropdown";
+import ChannelCalendar from "./ChannelCalendar";
 import { resolveUploadMimeType } from "../../utils/uploadMime";
 import { SIDEBAR } from "../../lib/sidebar";
 import { sanitizeStrictHtml } from "../../utils/sanitizeHtml";
@@ -142,6 +143,11 @@ function isImageFile(mimeType: string): boolean {
 // Helper to check if a file is a video
 function isVideoFile(mimeType: string): boolean {
   return mimeType?.startsWith("video/");
+}
+
+// Helper to check if a file is audio
+function isAudioFile(mimeType: string): boolean {
+  return mimeType?.startsWith("audio/");
 }
 
 // Helper to get image dimensions from a File object
@@ -274,6 +280,23 @@ function renderTextContent(
             {block.data.content as string}
           </code>
         );
+      case "embed":
+        if (block.data?.type === "gif") {
+          return (
+            <div key={index} className="max-w-[300px] rounded-xl overflow-hidden mt-1">
+              <img
+                src={block.data.url as string}
+                alt={(block.data.title as string) || "GIF"}
+                width={block.data.width as number}
+                height={block.data.height as number}
+                className="w-full h-auto rounded-xl"
+                loading="lazy"
+                style={{ maxHeight: "250px", objectFit: "contain" }}
+              />
+            </div>
+          );
+        }
+        return null;
       case "shared_message":
         // Handled at Message component level (rendered above the message)
         return null;
@@ -507,6 +530,28 @@ function renderFileContent(blocks: ContentBlock[], onImageClick?: (url: string) 
       );
     }
 
+    if (isAudioFile(mimeType)) {
+      return (
+        <div key={`file-${index}-${inlineUrl}`} className="mt-2 max-w-[320px] bg-gray-50 rounded-xl p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
+              <svg className="w-4 h-4 text-violet-600" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+              </svg>
+            </div>
+            <span className="text-xs text-gray-500">Mensaje de voz</span>
+          </div>
+          <audio
+            src={inlineUrl}
+            controls
+            preload="metadata"
+            className="w-full"
+            style={{ height: '32px' }}
+          />
+        </div>
+      );
+    }
+
     return (
       <a
         key={`file-${index}-${inlineUrl}`}
@@ -654,6 +699,7 @@ function Message({
               if (b.type === "text") return (b.data.content ?? b.data.text) as string || "";
               if (b.type === "mention") return `@${b.data.display_name as string}`;
               if (b.type === "file") return `[${b.data.filename as string || "file"}]`;
+              if (b.type === "embed" && b.data?.type === "gif") return "[GIF]";
               return "";
             })
             .filter(Boolean)
@@ -1075,6 +1121,7 @@ function ForwardPreviewBar({
       if (block.type === "text") return (block.data.content ?? block.data.text) as string || "";
       if (block.type === "mention") return `@${block.data.display_name as string}`;
       if (block.type === "file") return `[${block.data.filename as string || "file"}]`;
+      if (block.type === "embed" && block.data?.type === "gif") return "[GIF]";
       return "";
     })
     .filter(Boolean)
@@ -1206,6 +1253,7 @@ export default function MessagesView() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
+  const [channelTab, setChannelTab] = useState<'chat' | 'calendar'>('chat');
 
   const [forwardingMessage, setForwardingMessage] = useState<ChannelMessage | null>(null);
   const [threadPendingFiles, setThreadPendingFiles] = useState<
@@ -1393,9 +1441,10 @@ export default function MessagesView() {
     }
   }, [channels.length, dms.length, preloadAllChannels]);
 
-  // Reset scroll flag when channel changes (must be useLayoutEffect to run before scroll logic)
+  // Reset scroll flag and tab when channel changes (must be useLayoutEffect to run before scroll logic)
   useLayoutEffect(() => {
     hasScrolledRef.current = false;
+    setChannelTab('chat');
   }, [activeConversationId]);
 
   // Fetch channel members when active channel changes (for header count and modal)
@@ -2009,6 +2058,26 @@ export default function MessagesView() {
           (pf) => pf.preview && URL.revokeObjectURL(pf.preview),
         );
       }
+    }
+  };
+
+  // Handle sending audio recordings directly (bypasses pendingFiles)
+  const handleSendAudio = async (audioFile: File) => {
+    const filesToUpload = [{ file: audioFile, preview: undefined }];
+    setIsUploading(true);
+    try {
+      const { blocks: fileBlocks, failedFiles } = await uploadFiles(filesToUpload);
+      if (failedFiles.length > 0) {
+        throw new Error("Failed to upload audio message. Please retry.");
+      }
+      await sendMessage(fileBlocks);
+    } catch (err) {
+      console.error("Failed to send audio message:", err);
+      setUploadError(
+        err instanceof Error ? err.message : "Failed to send audio. Please retry.",
+      );
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -2716,6 +2785,31 @@ export default function MessagesView() {
                     )}
                   </>
                 )}
+                {/* Tab buttons - only show for non-DM channels */}
+                {!isInDM && (
+                  <div className="flex items-center gap-1 ml-4">
+                    <button
+                      onClick={() => setChannelTab('chat')}
+                      className={`px-3 py-1 text-[12px] font-medium rounded-md transition-colors ${
+                        channelTab === 'chat'
+                          ? 'bg-gray-100 text-gray-900'
+                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      Chat
+                    </button>
+                    <button
+                      onClick={() => setChannelTab('calendar')}
+                      className={`px-3 py-1 text-[12px] font-medium rounded-md transition-colors ${
+                        channelTab === 'calendar'
+                          ? 'bg-gray-100 text-gray-900'
+                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      Calendario
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 {/* Google Meet button */}
@@ -2746,7 +2840,21 @@ export default function MessagesView() {
               </div>
             </div>
 
-            {/* Content area below header - relative for overlay panels */}
+            {/* Content area below header - tab-switched */}
+            {channelTab === 'calendar' && !isInDM ? (
+              <ChannelCalendar
+                channelId={activeConversationId || ''}
+                channelName={currentChannel?.name || ''}
+                memberEmails={
+                  safeChannelMembers
+                    .map(cm => {
+                      const wm = safeWorkspaceMembers.find(w => w.user_id === cm.user_id);
+                      return wm?.email;
+                    })
+                    .filter(Boolean) as string[]
+                }
+              />
+            ) : (
             <div className="flex-1 min-h-0 flex flex-col relative">
             {/* Messages - column-reverse anchors scroll to bottom; when inline edits expand, earlier messages push up */}
             <div
@@ -2955,9 +3063,11 @@ export default function MessagesView() {
                 onTyping={() =>
                   activeConversationId && broadcastTyping(activeConversationId)
                 }
+                onSendAudio={handleSendAudio}
               />
             </div>
             </div>
+            )}
           </div>
 
           {/* Thread Panel */}

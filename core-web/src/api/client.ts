@@ -1422,6 +1422,7 @@ export async function createCalendarEvent(event: {
   location?: string;
   meeting_link?: string;
   add_google_meet?: boolean;
+  attendees?: string[];
 }): Promise<CalendarEvent> {
   const response = await api<any>('/calendar/events', {
     method: 'POST',

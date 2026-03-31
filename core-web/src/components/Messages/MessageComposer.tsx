@@ -13,6 +13,7 @@ import {
   ArrowPathIcon,
   XMarkIcon,
   DocumentIcon,
+  MicrophoneIcon,
 } from "@heroicons/react/24/outline";
 import type { ContentBlock } from "../../api/client";
 import { UniversalMentionAutocomplete } from "../Mentions/UniversalMentionAutocomplete";
@@ -21,6 +22,8 @@ import { MENTION_ICONS } from "../../types/mention";
 import type { MentionData } from "../../types/mention";
 import { sanitizeStrictHtml } from "../../utils/sanitizeHtml";
 import { GoogleDrivePicker } from "./GoogleDrivePicker";
+import GifPicker from "./GifPicker";
+import type { GifResult } from "./GifPicker";
 
 // Use a ref-based approach so the editor keydown handler always calls the latest send function
 function useLatestCallback<T extends (...args: never[]) => unknown>(fn: T): T {
@@ -258,6 +261,7 @@ interface MessageComposerProps {
   isUploading: boolean;
   disabled?: boolean;
   onTyping?: () => void;
+  onSendAudio?: (file: File) => void;
 }
 
 // Module-level storage for drafts to persist across component re-renders
@@ -274,11 +278,13 @@ export function MessageComposer({
   isUploading,
   disabled,
   onTyping,
+  onSendAudio,
 }: MessageComposerProps) {
   const prevChannelIdRef = useRef<string>(channelId);
   const [showFormatting, setShowFormatting] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showDrivePicker, setShowDrivePicker] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
   const [showMentionAutocomplete, setShowMentionAutocomplete] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
   const [hasContent, setHasContent] = useState(false);
@@ -288,6 +294,101 @@ export function MessageComposer({
   const drivePickerRef = useRef<HTMLDivElement>(null);
   const dragCounter = useRef(0);
   const placeholderRef = useRef(placeholder);
+
+  // Audio recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const sendAudioMessage = useCallback(
+    async (blob: Blob) => {
+      const file = new File([blob], `audio-message-${Date.now()}.webm`, {
+        type: "audio/webm",
+      });
+      if (onSendAudio) {
+        onSendAudio(file);
+      } else {
+        // Fallback: add as pending file and trigger send
+        onFileSelect([file]);
+      }
+    },
+    [onSendAudio, onFileSelect],
+  );
+
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : "audio/webm";
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        if (chunksRef.current.length > 0) {
+          await sendAudioMessage(blob);
+        }
+      };
+
+      mediaRecorder.start(100);
+      setIsRecording(true);
+      setRecordingTime(0);
+      timerRef.current = setInterval(
+        () => setRecordingTime((t) => t + 1),
+        1000,
+      );
+    } catch (err) {
+      console.error("Microphone access denied:", err);
+    }
+  }, [sendAudioMessage]);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current?.state === "recording") {
+      mediaRecorderRef.current.stop();
+    }
+    if (timerRef.current) clearInterval(timerRef.current);
+    setIsRecording(false);
+    setRecordingTime(0);
+  }, []);
+
+  const cancelRecording = useCallback(() => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.ondataavailable = null;
+      mediaRecorderRef.current.onstop = null;
+      if (mediaRecorderRef.current.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
+      mediaRecorderRef.current.stream
+        .getTracks()
+        .forEach((t) => t.stop());
+    }
+    if (timerRef.current) clearInterval(timerRef.current);
+    chunksRef.current = [];
+    setIsRecording(false);
+    setRecordingTime(0);
+  }, []);
+
+  // Cleanup recording on unmount
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current?.state === "recording") {
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current.stream
+          .getTracks()
+          .forEach((t) => t.stop());
+      }
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
 
   // Shift+Enter inside a list should create a new bullet, not a <br>.
   // splitListItem handles non-empty items; for empty items it returns false
@@ -536,6 +637,27 @@ export function MessageComposer({
     [editor],
   );
 
+  const handleGifSelect = useCallback(
+    (gif: GifResult) => {
+      setShowGifPicker(false);
+      const blocks: ContentBlock[] = [
+        {
+          type: "embed",
+          data: {
+            url: gif.url,
+            type: "gif",
+            title: gif.title,
+            width: gif.width,
+            height: gif.height,
+            preview_url: gif.preview,
+          },
+        },
+      ];
+      onSend(blocks);
+    },
+    [onSend],
+  );
+
   const triggerMention = useCallback(() => {
     if (!editor) return;
     editor.chain().focus().insertContent("@").run();
@@ -771,7 +893,36 @@ export function MessageComposer({
         {/* Editor area */}
         <EditorContent editor={editor} />
 
+        {/* Recording indicator */}
+        {isRecording && (
+          <div className="flex items-center gap-3 px-4 py-2 bg-red-50 border-t border-red-100">
+            <button
+              type="button"
+              onClick={cancelRecording}
+              className="text-gray-500 hover:text-gray-700 transition-colors"
+              title="Cancelar grabación"
+            >
+              <XMarkIcon className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-2 flex-1">
+              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-sm text-red-600 font-medium">
+                {Math.floor(recordingTime / 60)}:
+                {(recordingTime % 60).toString().padStart(2, "0")}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={stopRecording}
+              className="px-3 py-1 bg-red-500 text-white rounded-full text-sm font-medium hover:bg-red-600 transition-colors"
+            >
+              Enviar
+            </button>
+          </div>
+        )}
+
         {/* Bottom action bar */}
+        {!isRecording && (
         <div className="flex items-center justify-between px-2.5 py-1.5">
           <div className="flex items-center gap-0.5">
             {/* Attach file */}
@@ -832,6 +983,24 @@ export function MessageComposer({
               )}
             </div>
 
+            {/* GIF */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowGifPicker(!showGifPicker)}
+                className="p-1.5 text-text-tertiary hover:text-text-body hover:bg-bg-gray rounded transition-colors"
+                title="GIF"
+              >
+                <span className="text-[10px] font-bold leading-none px-0.5">GIF</span>
+              </button>
+              {showGifPicker && (
+                <GifPicker
+                  onSelect={handleGifSelect}
+                  onClose={() => setShowGifPicker(false)}
+                />
+              )}
+            </div>
+
             {/* Mention */}
             <button
               type="button"
@@ -840,6 +1009,17 @@ export function MessageComposer({
               title="Mención"
             >
               <AtSymbolIcon className="w-4.5 h-4.5" />
+            </button>
+
+            {/* Audio recording */}
+            <button
+              type="button"
+              onClick={startRecording}
+              disabled={isUploading}
+              className="p-1.5 text-text-tertiary hover:text-text-body hover:bg-bg-gray rounded transition-colors disabled:opacity-50"
+              title="Grabar mensaje de voz"
+            >
+              <MicrophoneIcon className="w-4.5 h-4.5" />
             </button>
 
             {/* Toggle formatting toolbar */}
@@ -875,6 +1055,7 @@ export function MessageComposer({
             )}
           </button>
         </div>
+        )}
       </div>
 
       {/* Mention autocomplete dropdown */}
