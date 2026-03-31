@@ -18,7 +18,8 @@ import { SwatchIcon } from "@heroicons/react/24/solid";
 import ConfirmModal from "./ConfirmModal";
 import Dropdown from "../../Dropdown/Dropdown";
 import { useProjectsStore } from "../../../stores/projectsStore";
-import { triggerAgentWork } from "../../../api/client";
+import { api, triggerAgentWork } from "../../../api/client";
+import { useQuery } from "@tanstack/react-query";
 
 const COLUMN_COLORS = [
   { value: "#94A3B8", name: "Slate" },
@@ -37,13 +38,18 @@ import {
   useDeleteState,
   useUpdateState,
   useProjectMembers,
-  useWorkspaceAgents,
   useAddAgentAssignee,
   type ProjectIssue,
   type ProjectState,
   type WorkspaceMember,
-  type AgentInstance,
 } from "../../../hooks/queries/useProjects";
+
+interface OpenClawAgent {
+  id: string;
+  name: string;
+  tier: string;
+  avatar_url?: string;
+}
 
 interface KanbanColumnProps {
   column: ProjectState;
@@ -83,7 +89,17 @@ const KanbanColumn = memo(function KanbanColumn({
   // Workspace data for assignee picker
   const workspaceId = useProjectsStore((state) => state.workspaceId);
   const { data: wsMembers = [] } = useProjectMembers(workspaceId);
-  const { data: wsAgents = [] } = useWorkspaceAgents(workspaceId);
+  // Fetch OpenClaw agents (the real agents: Jarvis, Donna, Claudia, etc.)
+  const { data: wsAgents = [] } = useQuery<OpenClawAgent[]>({
+    queryKey: ["openclaw-agents", workspaceId],
+    queryFn: async () => {
+      if (!workspaceId) return [];
+      const data = await api<{ agents: OpenClawAgent[] }>(`/openclaw-agents/?workspace_id=${workspaceId}`);
+      return data.agents || [];
+    },
+    enabled: !!workspaceId,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const cards = cardsOverride;
   const [isExpanded, setIsExpanded] = useState(false);
@@ -111,10 +127,10 @@ const KanbanColumn = memo(function KanbanColumn({
         .filter((m: WorkspaceMember) => !selectedIds.has(m.user_id) && (m.name || m.email || '').toLowerCase().includes(search))
         .map((m: WorkspaceMember) => ({ type: 'user' as const, id: m.user_id, name: m.name || m.email || 'Usuario', avatarUrl: m.avatar_url }));
 
-    const agents: Array<{ type: 'user' | 'agent'; id: string; name: string; avatarUrl?: string }> =
+    const agents: Array<{ type: 'user' | 'agent'; id: string; name: string; avatarUrl?: string; tier?: string }> =
       wsAgents
-        .filter((a: AgentInstance) => !selectedIds.has(a.id) && (a.name || '').toLowerCase().includes(search))
-        .map((a: AgentInstance) => ({ type: 'agent' as const, id: a.id, name: a.name, avatarUrl: a.avatar_url }));
+        .filter((a) => !selectedIds.has(a.id) && (a.name || '').toLowerCase().includes(search))
+        .map((a) => ({ type: 'agent' as const, id: a.id, name: a.name, avatarUrl: a.avatar_url, tier: a.tier }));
 
     return [...members, ...agents];
   }, [wsMembers, wsAgents, newCardAssignees, assigneeSearch]);
@@ -539,40 +555,69 @@ const KanbanColumn = memo(function KanbanColumn({
                             className="w-full px-2 py-1.5 text-[12px] bg-gray-50 rounded-lg border-0 focus:outline-none focus:ring-1 focus:ring-violet-200"
                           />
                         </div>
-                        <div className="max-h-48 overflow-y-auto p-1">
+                        <div className="max-h-56 overflow-y-auto p-1">
                           {assigneeOptions.length === 0 ? (
                             <div className="px-3 py-4 text-center text-[11px] text-gray-400">
                               No hay más personas disponibles
                             </div>
                           ) : (
-                            assigneeOptions.map((opt) => (
-                              <button
-                                key={opt.id}
-                                onClick={() => {
-                                  setNewCardAssignees(prev => [...prev, opt]);
-                                  setAssigneeSearch("");
-                                }}
-                                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
-                              >
-                                {opt.avatarUrl ? (
-                                  <img src={opt.avatarUrl} className="w-6 h-6 rounded-full" alt="" />
-                                ) : (
-                                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white ${
-                                    opt.type === 'agent' ? 'bg-gradient-to-br from-purple-400 to-violet-600' : 'bg-gradient-to-br from-blue-400 to-blue-600'
-                                  }`}>
-                                    {opt.name[0]?.toUpperCase()}
-                                  </span>
-                                )}
-                                <div className="flex-1 min-w-0 text-left">
+                            <>
+                              {/* Members section */}
+                              {assigneeOptions.some(o => o.type === 'user') && (
+                                <div className="px-2 pt-1 pb-0.5 text-[10px] font-medium text-gray-400 uppercase tracking-wide">Miembros</div>
+                              )}
+                              {assigneeOptions.filter(o => o.type === 'user').map((opt) => (
+                                <button
+                                  key={opt.id}
+                                  onClick={() => {
+                                    setNewCardAssignees(prev => [...prev, opt]);
+                                    setAssigneeSearch("");
+                                  }}
+                                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+                                >
+                                  {opt.avatarUrl ? (
+                                    <img src={opt.avatarUrl} className="w-6 h-6 rounded-full object-cover" alt="" />
+                                  ) : (
+                                    <span className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-blue-400 to-blue-600">
+                                      {opt.name[0]?.toUpperCase()}
+                                    </span>
+                                  )}
                                   <div className="text-[12px] text-gray-900 truncate">{opt.name}</div>
-                                </div>
-                                {opt.type === 'agent' && (
-                                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-600 font-medium shrink-0">
-                                    Agente
+                                </button>
+                              ))}
+                              {/* Agents section */}
+                              {assigneeOptions.some(o => o.type === 'agent') && (
+                                <div className="px-2 pt-2 pb-0.5 text-[10px] font-medium text-gray-400 uppercase tracking-wide">Agentes</div>
+                              )}
+                              {assigneeOptions.filter(o => o.type === 'agent').map((opt) => (
+                                <button
+                                  key={opt.id}
+                                  onClick={() => {
+                                    setNewCardAssignees(prev => [...prev, opt]);
+                                    setAssigneeSearch("");
+                                  }}
+                                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+                                >
+                                  {opt.avatarUrl ? (
+                                    <img src={opt.avatarUrl} className="w-6 h-6 rounded-full object-cover" alt="" />
+                                  ) : (
+                                    <span className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-purple-400 to-violet-600">
+                                      {opt.name[0]?.toUpperCase()}
+                                    </span>
+                                  )}
+                                  <div className="flex-1 min-w-0 text-left">
+                                    <div className="text-[12px] text-gray-900 truncate">{opt.name}</div>
+                                  </div>
+                                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${
+                                    ('tier' in opt && opt.tier === 'core')
+                                      ? 'bg-blue-100 text-blue-600'
+                                      : 'bg-purple-100 text-purple-600'
+                                  }`}>
+                                    {('tier' in opt && opt.tier === 'core') ? 'CORE' : 'ADVANCE'}
                                   </span>
-                                )}
-                              </button>
-                            ))
+                                </button>
+                              ))}
+                            </>
                           )}
                         </div>
                       </div>
