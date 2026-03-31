@@ -9,12 +9,6 @@ from pydantic import BaseModel
 from api.dependencies import get_current_user_jwt, get_current_user_id
 from lib.supabase_client import get_async_service_role_client, get_authenticated_async_client
 
-logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/openclaw-agents", tags=["openclaw-agents"])
-
-OPENCLAW_BRIDGE_URL = "http://127.0.0.1:4200"
-
-
 # ── Models ──
 
 class ChatMessage(BaseModel):
@@ -34,6 +28,42 @@ class MultiAgentRequest(BaseModel):
 
 
 # ── Helper: get user profile ──
+
+class MentionRequest(BaseModel):
+    channel_id: str
+    message_id: str
+    agent_id: str
+    message_content: str
+    channel_name: str = ""
+    sender_name: str = ""
+
+class UpdateAgentRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    soul_md: Optional[str] = None
+    identity_md: Optional[str] = None
+    category: Optional[str] = None
+
+
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/api/openclaw-agents", tags=["openclaw-agents"])
+
+OPENCLAW_BRIDGE_URL = "http://127.0.0.1:4200"
+
+
+# ── Models ──
+
+
+
+
+
+
+class CreateAgentRequest(BaseModel):
+    name: str
+    expertise: str
+
+
+
 
 async def _get_user_profile(user_id: str):
     """Get user name and email for agent context."""
@@ -100,14 +130,6 @@ async def list_my_agents(
 
 
 # ── Mention endpoints ──
-
-class MentionRequest(BaseModel):
-    channel_id: str
-    message_id: str
-    agent_id: str
-    message_content: str
-    channel_name: str = ""
-    sender_name: str = ""
 
 
 @router.post("/mention")
@@ -598,12 +620,6 @@ Responde siempre en español. Sé útil, directo y mantén tu personalidad."""
 
 # -- Update agent endpoint --
 
-class UpdateAgentRequest(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    soul_md: Optional[str] = None
-    identity_md: Optional[str] = None
-    category: Optional[str] = None
 
 @router.patch("/{agent_id}")
 async def update_agent(
@@ -721,10 +737,4 @@ async def admin_unassign_agent(
 
 
 # ── Agent Creation (Core only) ──
-
-class CreateAgentRequest(BaseModel):
-    name: str
-    expertise: str
-
-
 
