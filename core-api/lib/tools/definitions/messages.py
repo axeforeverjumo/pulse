@@ -52,7 +52,7 @@ _MESSAGE_SELECT = (
     "thread_parent_id, reply_count, "
     "channel:channels(id, name, workspace_app:workspace_apps(workspace:workspaces(name))), "
     "user:users(id, name, email, avatar_url), "
-    "agent:agent_instances(id, name, avatar_url)"
+    "agent:openclaw_agents(id, name, avatar_url)"
 )
 
 

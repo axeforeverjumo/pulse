@@ -68,7 +68,7 @@ async def get_messages(
     try:
         query = (
             supabase.table("channel_messages")
-            .select("*, user:users(id, email, name, avatar_url), agent:agent_instances(id, name, avatar_url), reactions:message_reactions(*)")
+            .select("*, user:users(id, email, name, avatar_url), agent:openclaw_agents(id, name, avatar_url), reactions:message_reactions(*)")
             .eq("channel_id", channel_id)
         )
 
@@ -138,7 +138,7 @@ async def get_message(
     try:
         result = await (
             supabase.table("channel_messages")
-            .select("*, user:users(id, email, name, avatar_url), agent:agent_instances(id, name, avatar_url), reactions:message_reactions(*)")
+            .select("*, user:users(id, email, name, avatar_url), agent:openclaw_agents(id, name, avatar_url), reactions:message_reactions(*)")
             .eq("id", message_id)
             .limit(1)
             .execute()
@@ -408,7 +408,7 @@ async def get_thread_replies(
     try:
         result = await (
             supabase.table("channel_messages")
-            .select("*, user:users(id, email, name, avatar_url), agent:agent_instances(id, name, avatar_url), reactions:message_reactions(*)")
+            .select("*, user:users(id, email, name, avatar_url), agent:openclaw_agents(id, name, avatar_url), reactions:message_reactions(*)")
             .eq("thread_parent_id", parent_message_id)
             .order("created_at")
             .range(offset, offset + limit - 1)
