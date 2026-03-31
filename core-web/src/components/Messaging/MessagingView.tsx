@@ -1,0 +1,465 @@
+import { useState, useEffect, useRef } from "react";
+import { api } from "../../api/client";
+import {
+  PaperAirplaneIcon,
+  PhoneIcon,
+  SparklesIcon,
+  QrCodeIcon,
+  ArrowPathIcon,
+} from "@heroicons/react/24/outline";
+
+interface ExternalAccount {
+  id: string;
+  provider: "whatsapp" | "telegram";
+  status: string;
+  phone_number?: string;
+  away_mode: boolean;
+  away_message?: string;
+}
+
+interface ExternalChat {
+  id: string;
+  account_id: string;
+  remote_jid: string;
+  contact_name: string;
+  contact_phone?: string;
+  contact_avatar_url?: string;
+  is_group: boolean;
+  unread_count: number;
+  last_message_at?: string;
+  last_message_preview?: string;
+  auto_reply_enabled?: boolean;
+  muted?: boolean;
+  account?: { provider: string };
+}
+
+interface ExternalMessage {
+  id: string;
+  chat_id: string;
+  direction: "in" | "out";
+  content: string;
+  media_type?: string;
+  media_url?: string;
+  is_auto_reply: boolean;
+  sender_name?: string;
+  status: string;
+  created_at: string;
+}
+
+export default function MessagingView() {
+  const [accounts, setAccounts] = useState<ExternalAccount[]>([]);
+  const [chats, setChats] = useState<ExternalChat[]>([]);
+  const [activeChat, setActiveChat] = useState<ExternalChat | null>(null);
+  const [messages, setMessages] = useState<ExternalMessage[]>([]);
+  const [newMessage, setNewMessage] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [activeTab, setActiveTab] = useState<"whatsapp" | "telegram">(
+    "whatsapp",
+  );
+  const [showSetup, setShowSetup] = useState(false);
+  const [qrCode, setQrCode] = useState("");
+  const [suggesting, setSuggesting] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Load accounts on mount
+  useEffect(() => {
+    loadAccounts();
+  }, []);
+
+  // Load chats when accounts change
+  useEffect(() => {
+    if (accounts.length > 0) loadChats();
+  }, [accounts, activeTab]);
+
+  // Poll for new messages in active chat
+  useEffect(() => {
+    if (!activeChat) return;
+    loadMessages(activeChat.id);
+
+    pollRef.current = setInterval(() => {
+      loadMessages(activeChat.id);
+      loadChats(); // refresh unread counts
+    }, 5000);
+
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [activeChat?.id]);
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const loadAccounts = async () => {
+    try {
+      const data = await api<{ accounts: ExternalAccount[] }>(
+        "/messaging/accounts",
+      );
+      setAccounts(data.accounts);
+    } catch (err) {
+      console.error("Failed to load accounts:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadChats = async () => {
+    try {
+      const data = await api<{ chats: ExternalChat[] }>(
+        `/messaging/chats?provider=${activeTab}`,
+      );
+      setChats(data.chats);
+    } catch (err) {
+      console.error("Failed to load chats:", err);
+    }
+  };
+
+  const loadMessages = async (chatId: string) => {
+    try {
+      const data = await api<{ messages: ExternalMessage[] }>(
+        `/messaging/chats/${chatId}/messages`,
+      );
+      setMessages(data.messages);
+    } catch (err) {
+      console.error("Failed to load messages:", err);
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !activeChat || sending) return;
+    const text = newMessage.trim();
+    setNewMessage("");
+    setSending(true);
+
+    // Optimistic add
+    const tempMsg: ExternalMessage = {
+      id: `temp-${Date.now()}`,
+      chat_id: activeChat.id,
+      direction: "out",
+      content: text,
+      is_auto_reply: false,
+      status: "pending",
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, tempMsg]);
+
+    try {
+      await api("/messaging/chats/" + activeChat.id + "/send", {
+        method: "POST",
+        body: JSON.stringify({ chat_id: activeChat.id, content: text }),
+      });
+    } catch (err) {
+      console.error("Failed to send:", err);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const suggestReply = async () => {
+    if (!activeChat || suggesting) return;
+    setSuggesting(true);
+    try {
+      const data = await api<{ suggestion: string }>(
+        "/messaging/suggest-reply",
+        {
+          method: "POST",
+          body: JSON.stringify({ chat_id: activeChat.id }),
+        },
+      );
+      setNewMessage(data.suggestion);
+    } catch (err) {
+      console.error("Failed to suggest:", err);
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  const linkWhatsApp = async () => {
+    try {
+      const workspaceId = localStorage.getItem("lastWorkspaceId") || "";
+      const data = await api<{ qr_code: string }>(
+        "/messaging/whatsapp/link",
+        {
+          method: "POST",
+          body: JSON.stringify({ workspace_id: workspaceId }),
+        },
+      );
+      setQrCode(data.qr_code);
+      setShowSetup(true);
+    } catch (err) {
+      console.error("Failed to link:", err);
+    }
+  };
+
+  const currentAccount = accounts.find((a) => a.provider === activeTab);
+
+  const formatTime = (iso: string) => {
+    const d = new Date(iso);
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    if (isToday)
+      return d.toLocaleTimeString("es-ES", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    return d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+  };
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-gray-400">
+        Cargando...
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 flex h-full">
+      {/* Left sidebar - Chat list */}
+      <div className="w-80 border-r border-gray-200 flex flex-col bg-white">
+        {/* Header with tabs */}
+        <div className="h-12 border-b border-gray-200 flex items-center px-4 gap-2">
+          <button
+            onClick={() => setActiveTab("whatsapp")}
+            className={`px-3 py-1 text-[12px] font-medium rounded-md transition-colors ${
+              activeTab === "whatsapp"
+                ? "bg-green-50 text-green-700"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            WhatsApp
+          </button>
+          <button
+            onClick={() => setActiveTab("telegram")}
+            className={`px-3 py-1 text-[12px] font-medium rounded-md transition-colors ${
+              activeTab === "telegram"
+                ? "bg-blue-50 text-blue-700"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Telegram
+          </button>
+          <div className="flex-1" />
+          {currentAccount && (
+            <div
+              className={`w-2 h-2 rounded-full ${
+                currentAccount.status === "connected"
+                  ? "bg-green-500"
+                  : "bg-red-400"
+              }`}
+              title={currentAccount.status}
+            />
+          )}
+        </div>
+
+        {/* Connect prompt or chat list */}
+        {!currentAccount || currentAccount.status !== "connected" ? (
+          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+            {showSetup && qrCode ? (
+              <>
+                <QrCodeIcon className="w-8 h-8 text-green-500 mb-3" />
+                <p className="text-sm font-medium text-gray-900 mb-2">
+                  Escanea el QR con WhatsApp
+                </p>
+                <img
+                  src={`data:image/png;base64,${qrCode}`}
+                  alt="QR"
+                  className="w-48 h-48 rounded-lg mb-3"
+                />
+                <button
+                  onClick={loadAccounts}
+                  className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                >
+                  <ArrowPathIcon className="w-3.5 h-3.5" /> Verificar
+                  conexion
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center mb-3">
+                  <PhoneIcon className="w-6 h-6 text-green-600" />
+                </div>
+                <p className="text-sm font-medium text-gray-900 mb-1">
+                  {activeTab === "whatsapp"
+                    ? "Conecta tu WhatsApp"
+                    : "Conecta tu Telegram"}
+                </p>
+                <p className="text-xs text-gray-500 mb-4">
+                  {activeTab === "whatsapp"
+                    ? "Escanea un codigo QR para vincular tu WhatsApp"
+                    : "Vincula tu cuenta de Telegram con nuestro bot"}
+                </p>
+                <button
+                  onClick={
+                    activeTab === "whatsapp" ? linkWhatsApp : undefined
+                  }
+                  className="px-4 py-2 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors"
+                >
+                  Vincular{" "}
+                  {activeTab === "whatsapp" ? "WhatsApp" : "Telegram"}
+                </button>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto">
+            {chats.length === 0 ? (
+              <div className="p-6 text-center text-sm text-gray-400">
+                No hay conversaciones aun
+              </div>
+            ) : (
+              chats.map((chat) => (
+                <button
+                  key={chat.id}
+                  onClick={() => setActiveChat(chat)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 ${
+                    activeChat?.id === chat.id ? "bg-gray-50" : ""
+                  }`}
+                >
+                  {/* Avatar */}
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-white font-medium text-sm shrink-0">
+                    {chat.contact_name?.[0]?.toUpperCase() || "?"}
+                  </div>
+                  {/* Info */}
+                  <div className="flex-1 min-w-0 text-left">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[13px] font-medium text-gray-900 truncate">
+                        {chat.contact_name}
+                      </span>
+                      <span className="text-[10px] text-gray-400 shrink-0">
+                        {chat.last_message_at
+                          ? formatTime(chat.last_message_at)
+                          : ""}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between mt-0.5">
+                      <span className="text-[12px] text-gray-500 truncate">
+                        {chat.last_message_preview || ""}
+                      </span>
+                      {chat.unread_count > 0 && (
+                        <span className="ml-2 w-5 h-5 rounded-full bg-green-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                          {chat.unread_count > 99
+                            ? "99+"
+                            : chat.unread_count}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Right side - Conversation */}
+      <div className="flex-1 flex flex-col bg-[#F0F0F0]">
+        {activeChat ? (
+          <>
+            {/* Chat header */}
+            <div className="h-12 bg-white border-b border-gray-200 flex items-center px-4 gap-3">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-white font-medium text-xs">
+                {activeChat.contact_name?.[0]?.toUpperCase() || "?"}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-medium text-gray-900">
+                  {activeChat.contact_name}
+                </div>
+                <div className="text-[11px] text-gray-500">
+                  {activeChat.contact_phone || activeChat.remote_jid}
+                </div>
+              </div>
+              {activeChat.auto_reply_enabled && (
+                <span className="px-2 py-0.5 bg-violet-100 text-violet-600 text-[10px] font-medium rounded-full">
+                  Auto-respuesta activa
+                </span>
+              )}
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1.5">
+              {messages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`flex ${msg.direction === "out" ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`max-w-[70%] px-3 py-2 rounded-xl text-[13px] leading-relaxed ${
+                      msg.direction === "out"
+                        ? msg.is_auto_reply
+                          ? "bg-violet-100 text-violet-900"
+                          : "bg-green-100 text-gray-900"
+                        : "bg-white text-gray-900 shadow-sm"
+                    }`}
+                  >
+                    {msg.is_auto_reply && (
+                      <div className="text-[10px] text-violet-500 font-medium mb-0.5">
+                        Auto-respuesta
+                      </div>
+                    )}
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    <div
+                      className={`text-[10px] mt-1 text-right ${
+                        msg.direction === "out"
+                          ? "text-green-600"
+                          : "text-gray-400"
+                      }`}
+                    >
+                      {formatTime(msg.created_at)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input */}
+            <div className="bg-white border-t border-gray-200 px-4 py-3">
+              <div className="flex items-end gap-2">
+                <button
+                  onClick={suggestReply}
+                  disabled={suggesting}
+                  className="p-2 rounded-lg text-violet-500 hover:bg-violet-50 transition-colors shrink-0"
+                  title="Sugerir respuesta con IA"
+                >
+                  <SparklesIcon
+                    className={`w-5 h-5 ${suggesting ? "animate-pulse" : ""}`}
+                  />
+                </button>
+                <textarea
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage();
+                    }
+                  }}
+                  placeholder="Escribe un mensaje..."
+                  rows={1}
+                  className="flex-1 px-3 py-2 text-[13px] bg-gray-50 rounded-xl border-0 focus:outline-none focus:ring-1 focus:ring-green-300 resize-none"
+                />
+                <button
+                  onClick={sendMessage}
+                  disabled={!newMessage.trim() || sending}
+                  className="p-2 rounded-lg bg-green-500 text-white hover:bg-green-600 disabled:opacity-40 transition-colors shrink-0"
+                >
+                  <PaperAirplaneIcon className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
+            <PhoneIcon className="w-12 h-12 mb-3 text-gray-300" />
+            <p className="text-sm">Selecciona una conversacion</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
