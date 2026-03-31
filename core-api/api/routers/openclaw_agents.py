@@ -631,9 +631,9 @@ async def dispatch_to_agents(
                 client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
                 system_prompt = f"""Eres {agent["name"]}.
 
-{agent.get(soul_md, )}
+{agent.get('soul_md', '')}
 
-{agent.get(identity_md, )}
+{agent.get('identity_md', '')}
 
 Responde siempre en español. Sé útil, directo y mantén tu personalidad.
 El usuario te ha mencionado en un mensaje grupal. Responde SOLO a la parte que va dirigida a ti."""
@@ -656,7 +656,7 @@ El usuario te ha mencionado en un mensaje grupal. Responde SOLO a la parte que v
                     response = await http_client.post(
                         OPENCLAW_BRIDGE_URL,
                         json={
-                            "model": f"openclaw:{agent[openclaw_agent_id]}",
+                            "model": f"openclaw:{agent["openclaw_agent_id"]}",
                             "messages": [{"role": "user", "content": f"[Pulse: {user_name}] {request.message}"}],
                         },
                     )
