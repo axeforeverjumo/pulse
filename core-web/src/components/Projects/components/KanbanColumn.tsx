@@ -79,6 +79,8 @@ const KanbanColumn = memo(function KanbanColumn({
   const visibleCards = isExpanded ? cards : cards.slice(0, VISIBLE_CARD_LIMIT);
   const hiddenCount = cards.length - VISIBLE_CARD_LIMIT;
   const [newCardTitle, setNewCardTitle] = useState("");
+  const [newCardDescription, setNewCardDescription] = useState("");
+  const [newCardPriority, setNewCardPriority] = useState(0);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -129,12 +131,22 @@ const KanbanColumn = memo(function KanbanColumn({
       return;
     }
 
+    const description = newCardDescription.trim();
+    const priority = newCardPriority;
+
     // Close form and clear input immediately
     setNewCardTitle("");
+    setNewCardDescription("");
+    setNewCardPriority(0);
     setIsAddingCard(false);
 
     // React Query handles optimistic update
-    createIssue.mutate({ state_id: column.id, title });
+    createIssue.mutate({
+      state_id: column.id,
+      title,
+      ...(description && { description }),
+      ...(priority > 0 && { priority }),
+    });
   };
 
   const handleDeleteColumn = () => {
@@ -183,6 +195,8 @@ const KanbanColumn = memo(function KanbanColumn({
     } else if (e.key === "Escape") {
       setIsAddingCard(false);
       setNewCardTitle("");
+      setNewCardDescription("");
+      setNewCardPriority(0);
     }
   };
 
@@ -302,21 +316,21 @@ const KanbanColumn = memo(function KanbanColumn({
                 className="w-full px-3 py-1.5 text-left text-sm text-text-body hover:bg-bg-gray flex items-center gap-2"
               >
                 <PencilIcon className="w-3.5 h-3.5" />
-                Rename
+                Renombrar
               </button>
               <button
                 onClick={handleColorPickerFromMenu}
                 className="w-full px-3 py-1.5 text-left text-sm text-text-body hover:bg-bg-gray flex items-center gap-2"
               >
                 <SwatchIcon className="w-3.5 h-3.5" />
-                Change color
+                Cambiar color
               </button>
               <button
                 onClick={handleDeleteColumn}
                 className="w-full px-3 py-1.5 text-left text-sm text-red-500 hover:bg-bg-gray flex items-center gap-2"
               >
                 <TrashIcon className="w-3.5 h-3.5" />
-                Delete
+                Eliminar
               </button>
             </Dropdown>
           </div>
@@ -354,33 +368,57 @@ const KanbanColumn = memo(function KanbanColumn({
 
           {/* Add Card Input - appears directly below cards when adding */}
           {isAddingCard && (
-            <div className="mt-2 p-4 bg-white rounded-lg border border-gray-100">
+            <div className="mt-2 p-4 bg-white rounded-lg border border-gray-100 shadow-sm">
               <input
                 type="text"
                 autoFocus
                 value={newCardTitle}
                 onChange={(e) => setNewCardTitle(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Enter a title..."
+                placeholder="Título de la tarea..."
                 className="w-full px-0 py-1 font-medium text-[13px] text-gray-900 placeholder:text-gray-400 placeholder:font-normal bg-transparent border-0 focus:outline-none focus:ring-0"
               />
-              <div className="flex items-center justify-end gap-2 mt-4">
-                <button
-                  onClick={() => {
-                    setIsAddingCard(false);
-                    setNewCardTitle("");
-                  }}
-                  className="px-3 py-2 text-[12px] text-gray-500 hover:text-gray-700 font-medium transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAddCard}
-                  disabled={!newCardTitle.trim()}
-                  className="px-3 py-2 text-[12px] bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                >
-                  Añadir tarjeta
-                </button>
+              <textarea
+                value={newCardDescription}
+                onChange={(e) => setNewCardDescription(e.target.value)}
+                placeholder="Descripción (opcional)..."
+                rows={2}
+                className="w-full mt-2 px-0 py-1 text-[12px] text-gray-700 placeholder:text-gray-400 bg-transparent border-0 focus:outline-none focus:ring-0 resize-none"
+              />
+              <div className="flex items-center justify-between gap-2 mt-3">
+                <div className="flex items-center gap-2">
+                  <select
+                    value={newCardPriority}
+                    onChange={(e) => setNewCardPriority(Number(e.target.value))}
+                    className="text-[11px] text-gray-500 bg-gray-50 border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-gray-300"
+                  >
+                    <option value={0}>Sin prioridad</option>
+                    <option value={1}>🔴 Urgente</option>
+                    <option value={2}>🟠 Alta</option>
+                    <option value={3}>🟡 Media</option>
+                    <option value={4}>🔵 Baja</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setIsAddingCard(false);
+                      setNewCardTitle("");
+                      setNewCardDescription("");
+                      setNewCardPriority(0);
+                    }}
+                    className="px-3 py-1.5 text-[12px] text-gray-500 hover:text-gray-700 font-medium transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleAddCard}
+                    disabled={!newCardTitle.trim()}
+                    className="px-3 py-1.5 text-[12px] bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  >
+                    Crear tarea
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -399,7 +437,7 @@ const KanbanColumn = memo(function KanbanColumn({
               ) : (
                 <>
                   <ChevronDownIcon className="w-3.5 h-3.5" />
-                  <span>See all ({hiddenCount} more)</span>
+                  <span>Ver todo ({hiddenCount} más)</span>
                 </>
               )}
             </button>
@@ -422,7 +460,7 @@ const KanbanColumn = memo(function KanbanColumn({
       <ConfirmModal
         isOpen={showDeleteConfirm}
         title="Eliminar columna"
-        message={`¿Estás seguro de que quieres eliminar "${column.name}"? All cards in this column will also be deleted.`}
+        message={`¿Estás seguro de que quieres eliminar "${column.name}"? Todas las tarjetas de esta columna también se eliminarán.`}
         confirmLabel="Eliminar"
         onConfirm={handleDeleteConfirm}
         onCancel={() => setShowDeleteConfirm(false)}

@@ -6,7 +6,8 @@ export type MentionEntityType =
   | 'project_board'
   | 'project_issue'
   | 'todo'
-  | 'agent';
+  | 'agent'
+  | 'google_doc';
 
 /** Data stored on a mention mark / content block */
 export interface MentionData {
@@ -14,6 +15,7 @@ export interface MentionData {
   entityId: string;
   displayName: string;
   icon?: string;
+  metadata?: Record<string, string>;
 }
 
 /** A single row in the autocomplete dropdown */
@@ -29,6 +31,8 @@ export interface MentionMenuItem {
   appId?: string;
   /** For drill-down: the app type (files, projects, messages, tasks) */
   appType?: string;
+  /** Extra metadata (e.g. webViewLink, mimeType for Google Drive files) */
+  metadata?: Record<string, string>;
 }
 
 /** One level of the drill-down menu stack */
@@ -46,4 +50,5 @@ export const MENTION_ICONS: Record<MentionEntityType, string> = {
   project_issue: '📋',
   todo: '✓',
   agent: '🤖',
+  google_doc: '📝',
 };

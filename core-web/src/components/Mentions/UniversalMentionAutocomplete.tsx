@@ -149,6 +149,7 @@ export function UniversalMentionAutocomplete({
         entityId: item.id,
         displayName: item.displayName,
         icon: item.icon || MENTION_ICONS[item.entityType],
+        metadata: item.metadata,
       });
     },
     [drillInto, onSelect],
@@ -307,7 +308,7 @@ export function UniversalMentionAutocomplete({
                     <div className="my-1 border-t border-border-gray" />
                   )}
                   <div className="px-3 py-1 text-xs font-medium text-text-tertiary uppercase tracking-wide">
-                    Files
+                    {inlineFileItems.some((i) => i.entityType === 'google_doc') ? 'Files & Drive' : 'Files'}
                   </div>
                   {inlineFileItems.map(renderItem)}
                 </>

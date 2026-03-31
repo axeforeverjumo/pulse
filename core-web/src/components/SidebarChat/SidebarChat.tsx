@@ -5,6 +5,7 @@ import {
   ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import { motion, AnimatePresence } from "motion/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { streamMessage, createConversation, api } from "../../api/client";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useUIStore } from "../../stores/uiStore";
@@ -17,6 +18,7 @@ import SidebarChatInput from "./SidebarChatInput";
 import { useViewContextStore } from "../../stores/viewContextStore";
 
 export default function SidebarChat() {
+  const queryClient = useQueryClient();
   const setSidebarChatOpen = useUIStore((s) => s.setSidebarChatOpen);
   const addConversation = useConversationStore(
     (state) => state.addConversation,
@@ -186,7 +188,12 @@ export default function SidebarChat() {
 
     if (mentions.length > 0) {
       const mentionHints = mentions
-        .map((m) => `[User referenced: ${m.displayName} (${m.entityType}, id: ${m.entityId})]`)
+        .map((m) => {
+          if (m.entityType === 'google_doc') {
+            return `[El usuario ha referenciado el documento de Google Drive: "${m.displayName}" (ID: ${m.entityId}). Usa la herramienta read_document para leer su contenido si necesitas.]`;
+          }
+          return `[User referenced: ${m.displayName} (${m.entityType}, id: ${m.entityId})]`;
+        })
         .join('\n');
       apiMessage = displayText ? `${displayText}\n\n${mentionHints}` : mentionHints;
     }
@@ -340,6 +347,26 @@ export default function SidebarChat() {
         const currentStreamingId = useSidebarChatStore.getState().streamingConversationId;
         if (currentStreamingId === convId) {
           setStreamingConversationId(null);
+        }
+
+        // Invalidate project queries when AI creates/moves/updates tasks
+        if (storedContent && (
+          storedContent.includes('creado la tarea') ||
+          storedContent.includes('creada la tarea') ||
+          storedContent.includes('creé la tarea') ||
+          storedContent.includes('he creado') ||
+          storedContent.includes('tarea creada') ||
+          storedContent.includes('issue') ||
+          storedContent.includes('movido la tarea') ||
+          storedContent.includes('actualizado la tarea') ||
+          storedContent.includes('eliminado la tarea') ||
+          storedContent.includes('created the task') ||
+          storedContent.includes('moved the task') ||
+          storedContent.includes('create_project_issue') ||
+          storedContent.includes('move_project_issue') ||
+          storedContent.includes('update_project_issue')
+        )) {
+          queryClient.invalidateQueries({ queryKey: ['projects'] });
         }
       };
 

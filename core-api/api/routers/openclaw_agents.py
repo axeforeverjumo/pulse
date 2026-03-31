@@ -211,19 +211,21 @@ Responde siempre en español. Sé útil, directo y mantén tu personalidad."""
     await supabase.table("channel_messages").insert({
         "channel_id": request.channel_id,
         "content": assistant_message,
-        "user_id": user_id,
-        "author_type": "agent",
+        "user_id": None,
         "agent_id": str(agent["id"]),
         "blocks": [{"type": "text", "data": {"content": assistant_message}}],
     }).execute()
 
     # Record the mention
-    await supabase.table("agent_mentions").insert({
-        "channel_message_id": request.message_id,
-        "agent_id": request.agent_id,
-        "responded": True,
-        "response": assistant_message[:500]
-    }).execute()
+    try:
+        await supabase.table("agent_mentions").insert({
+            "channel_message_id": request.message_id,
+            "agent_id": request.agent_id,
+            "responded": True,
+            "response": assistant_message[:500]
+        }).execute()
+    except Exception as e:
+        logger.warning(f"Could not record mention: {e}")
 
     return {"response": assistant_message, "agent": {"id": agent["id"], "name": agent["name"]}}
 

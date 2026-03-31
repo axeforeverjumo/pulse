@@ -19,10 +19,24 @@ const APP_EMOJIS: Record<string, string> = {
   files: '📁',
   projects: '📋',
   messages: '💬',
+  google_drive: '🗂️',
 };
 
 // App types that support @ mention drill-down
 const MENTIONABLE_APP_TYPES = ['files', 'projects', 'messages'];
+
+interface DriveFileEntry { id: string; name: string; mimeType: string; webViewLink?: string; }
+
+function getGoogleDriveMentionIcon(mimeType: string): string {
+  if (mimeType === 'application/vnd.google-apps.folder') return '📁';
+  if (mimeType === 'application/vnd.google-apps.document') return '📝';
+  if (mimeType === 'application/vnd.google-apps.spreadsheet') return '📊';
+  if (mimeType === 'application/vnd.google-apps.presentation') return '📽️';
+  if (mimeType === 'application/vnd.google-apps.form') return '📋';
+  if (mimeType.startsWith('image/')) return '🖼️';
+  if (mimeType === 'application/pdf') return '📕';
+  return '📄';
+}
 
 export function useMentionData(workspaceId: string | null) {
   const workspace = useWorkspaceStore((s) => s.workspaces.find((w) => w.id === workspaceId));
@@ -51,6 +65,18 @@ export function useMentionData(workspaceId: string | null) {
     return () => { cancelled = true; };
   }, [workspaceId]);
 
+  // Fetch Google Drive files for mention drill-down
+  const [driveFiles, setDriveFiles] = useState<DriveFileEntry[]>([]);
+  const [driveLoaded, setDriveLoaded] = useState(false);
+  useEffect(() => {
+    if (!workspaceId) return;
+    let cancelled = false;
+    api<{ files: DriveFileEntry[] }>('/drive/files')
+      .then((data) => { if (!cancelled) { setDriveFiles(data.files || []); setDriveLoaded(true); } })
+      .catch(() => { if (!cancelled) setDriveLoaded(true); /* no Drive account, ignore */ });
+    return () => { cancelled = true; };
+  }, [workspaceId]);
+
   // Ensure files data is loaded when mention hook is used
   const hasFileData = Object.keys(documentsByFolder).length > 0;
   useEffect(() => {
@@ -72,6 +98,17 @@ export function useMentionData(workspaceId: string | null) {
       appType: app.type,
     }));
 
+    // Google Drive item (only show if files loaded or still loading)
+    const driveItem: MentionMenuItem | null = driveLoaded && driveFiles.length > 0 ? {
+      id: '__google_drive__',
+      entityType: 'folder' as const,
+      displayName: 'Google Drive',
+      icon: '🗂️',
+      hasChildren: true,
+      appId: '__google_drive__',
+      appType: 'google_drive',
+    } : null;
+
     const peopleItems: MentionMenuItem[] = (members || []).map((m) => ({
       id: m.user_id,
       entityType: 'person' as const,
@@ -91,9 +128,9 @@ export function useMentionData(workspaceId: string | null) {
 
     return {
       title: 'Mention',
-      items: [...appItems, ...peopleItems, ...agentItems],
+      items: [...appItems, ...(driveItem ? [driveItem] : []), ...peopleItems, ...agentItems],
     };
-  }, [workspace?.apps, members, mentionableAgents]);
+  }, [workspace?.apps, members, mentionableAgents, driveLoaded, driveFiles]);
 
   const getDrillDown = useCallback(
     (item: MentionMenuItem): MentionMenuLevel | null => {
@@ -147,11 +184,29 @@ export function useMentionData(workspaceId: string | null) {
           };
         }
 
+        case 'google_drive': {
+          return {
+            title: 'Google Drive',
+            items: driveFiles
+              .filter((f) => f.mimeType !== 'application/vnd.google-apps.folder')
+              .map((f) => ({
+                id: f.id,
+                entityType: 'google_doc' as const,
+                displayName: f.name,
+                icon: getGoogleDriveMentionIcon(f.mimeType),
+                metadata: {
+                  ...(f.webViewLink ? { webViewLink: f.webViewLink } : {}),
+                  mimeType: f.mimeType,
+                },
+              })),
+          };
+        }
+
         default:
           return null;
       }
     },
-    [documentsByFolder, channels, boards],
+    [documentsByFolder, channels, boards, driveFiles],
   );
 
   const getDrillDownForFolder = useCallback(
@@ -183,7 +238,7 @@ export function useMentionData(workspaceId: string | null) {
           (item.subtitle && item.subtitle.toLowerCase().includes(q)),
       );
 
-      // At root level, also search across all files for direct matches
+      // At root level, also search across all files and Google Drive for direct matches
       const hasAppItems = level.items.some((i) => i.hasChildren);
       if (hasAppItems && q.length >= 1) {
         const allDocs = Object.values(documentsByFolder).flat();
@@ -195,7 +250,13 @@ export function useMentionData(workspaceId: string | null) {
           return (doc.title || '').toLowerCase().includes(q);
         }).slice(0, 8);
 
-        if (matchingDocs.length > 0) {
+        // Also search Google Drive files
+        const matchingDriveFiles = driveFiles.filter((f) => {
+          if (f.mimeType === 'application/vnd.google-apps.folder') return false;
+          return f.name.toLowerCase().includes(q);
+        }).slice(0, 5);
+
+        if (matchingDocs.length > 0 || matchingDriveFiles.length > 0) {
           const fileItems: MentionMenuItem[] = matchingDocs.map((doc) => ({
             id: doc.id,
             entityType: 'file' as const,
@@ -203,16 +264,27 @@ export function useMentionData(workspaceId: string | null) {
             icon: '📄',
           }));
 
+          const driveFileItems: MentionMenuItem[] = matchingDriveFiles.map((f) => ({
+            id: f.id,
+            entityType: 'google_doc' as const,
+            displayName: f.name,
+            icon: getGoogleDriveMentionIcon(f.mimeType),
+            metadata: {
+              ...(f.webViewLink ? { webViewLink: f.webViewLink } : {}),
+              mimeType: f.mimeType,
+            },
+          }));
+
           const appResults = filtered.filter((i) => i.hasChildren);
           const peopleResults = filtered.filter((i) => i.entityType === 'person');
           const agentResults = filtered.filter((i) => i.entityType === 'agent');
-          return [...appResults, ...fileItems, ...peopleResults, ...agentResults];
+          return [...appResults, ...fileItems, ...driveFileItems, ...peopleResults, ...agentResults];
         }
       }
 
       return filtered;
     },
-    [documentsByFolder],
+    [documentsByFolder, driveFiles],
   );
 
   return {
