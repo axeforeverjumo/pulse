@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { EllipsisHorizontalIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { avatarGradient } from '../../../utils/avatarGradient';
 import type { IssueComment, ContentBlock } from '../../../api/client';
