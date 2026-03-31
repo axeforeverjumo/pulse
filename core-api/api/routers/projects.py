@@ -302,6 +302,18 @@ class IssueLabelJunctionResponse(BaseModel):
 
 
 
+class AssigneeResponse(BaseModel):
+    """Response model for a single assignee."""
+    id: Optional[str] = None
+    issue_id: Optional[str] = None
+    user_id: Optional[str] = None
+    agent_id: Optional[str] = None
+    assignee_type: Optional[str] = None
+    created_at: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
 class AssigneeListResponse(BaseModel):
     """Response model for assignee list."""
     assignees: List[AssigneeResponse]

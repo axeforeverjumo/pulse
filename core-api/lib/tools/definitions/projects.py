@@ -434,3 +434,336 @@ async def get_project_issue(args: Dict, ctx: ToolContext) -> ToolResult:
         {"issue": issue_data},
         f"Read issue {issue_data.get('reference') or issue_id}",
     )
+
+
+# =============================================================================
+# MUTATION TOOLS - Create, update, move, assign issues
+# =============================================================================
+
+
+@tool(
+    name="create_project_issue",
+    description=(
+        "Create a new task/issue on a project board. Use this when the user asks to create a task, "
+        "add a card, or make a new issue. You need a board_id and title at minimum. "
+        "Use list_project_boards to find the board_id first, and list_project_states to find the state_id."
+    ),
+    params={
+        "board_id": "Project board ID where the issue will be created",
+        "title": "Title/name of the new issue",
+        "description": "Optional detailed description of the issue",
+        "state_id": "Optional state/column ID (use list_project_states to find valid IDs). If omitted, uses the first state.",
+        "priority": "Priority level: 0=none, 1=urgent, 2=high, 3=medium, 4=low (default 0)",
+    },
+    required=["board_id", "title"],
+    category=ToolCategory.PROJECTS,
+    status="Creating project issue..."
+)
+async def create_project_issue(args: Dict, ctx: ToolContext) -> ToolResult:
+    from api.services.projects import create_issue, get_board_by_id, get_states
+
+    board_id = args.get("board_id")
+    title = args.get("title")
+    if not board_id or not title:
+        return error("board_id and title are required")
+
+    description = args.get("description")
+    state_id = args.get("state_id")
+    priority = 0
+    try:
+        priority = int(args.get("priority", 0))
+    except (TypeError, ValueError):
+        pass
+
+    logger.info("[CHAT] User %s creating issue on board %s: %s", ctx.user_id, board_id, title)
+
+    # Verify board exists and is in scope
+    board = await get_board_by_id(ctx.user_jwt, board_id)
+    if not board:
+        return error("Project board not found")
+    if ctx.workspace_ids and board.get("workspace_id") not in ctx.workspace_ids:
+        return error("Project board is outside the current workspace scope")
+
+    # If no state_id provided, use the first state on the board
+    if not state_id:
+        states = await get_states(ctx.user_jwt, board_id)
+        if not states:
+            return error("Board has no states/columns configured")
+        state_id = states[0]["id"]
+
+    issue = await create_issue(
+        user_id=ctx.user_id,
+        user_jwt=ctx.user_jwt,
+        board_id=board_id,
+        state_id=state_id,
+        title=title,
+        description=description,
+        priority=priority,
+    )
+
+    board_key = board.get("key")
+    reference = _format_reference(board_key, issue.get("number"))
+
+    return success(
+        {
+            "issue": {
+                "id": issue.get("id"),
+                "board_id": issue.get("board_id"),
+                "number": issue.get("number"),
+                "reference": reference,
+                "title": issue.get("title"),
+                "description": issue.get("description"),
+                "state_id": issue.get("state_id"),
+                "priority": issue.get("priority"),
+                "created_at": issue.get("created_at"),
+            }
+        },
+        f"Created issue {reference or issue.get('id')}: {title}",
+    )
+
+
+@tool(
+    name="update_project_issue",
+    description=(
+        "Update an existing project issue/task. Can change title, description, priority, or state. "
+        "Use get_project_issue first to read the current values if needed."
+    ),
+    params={
+        "issue_id": "ID of the issue to update",
+        "title": "New title (optional)",
+        "description": "New description (optional)",
+        "state_id": "New state/column ID to move the issue to (optional)",
+        "priority": "New priority: 0=none, 1=urgent, 2=high, 3=medium, 4=low (optional)",
+    },
+    required=["issue_id"],
+    category=ToolCategory.PROJECTS,
+    status="Updating project issue..."
+)
+async def update_project_issue(args: Dict, ctx: ToolContext) -> ToolResult:
+    from api.services.projects import get_issue_by_id, update_issue
+
+    issue_id = args.get("issue_id")
+    if not issue_id:
+        return error("issue_id is required")
+
+    # Check at least one field is being updated
+    title = args.get("title")
+    description = args.get("description")
+    state_id = args.get("state_id")
+    priority = None
+    if args.get("priority") is not None:
+        try:
+            priority = int(args["priority"])
+        except (TypeError, ValueError):
+            return error("priority must be an integer (0-4)")
+
+    if title is None and description is None and state_id is None and priority is None:
+        return error("At least one field (title, description, state_id, priority) must be provided")
+
+    logger.info("[CHAT] User %s updating issue %s", ctx.user_id, issue_id)
+
+    # Verify issue exists and is in scope
+    existing = await get_issue_by_id(ctx.user_jwt, issue_id)
+    if not existing:
+        return error("Project issue not found")
+    if ctx.workspace_ids and existing.get("workspace_id") not in ctx.workspace_ids:
+        return error("Project issue is outside the current workspace scope")
+
+    updated = await update_issue(
+        user_jwt=ctx.user_jwt,
+        issue_id=issue_id,
+        title=title,
+        description=description,
+        state_id=state_id,
+        priority=priority,
+    )
+
+    return success(
+        {
+            "issue": {
+                "id": updated.get("id"),
+                "title": updated.get("title"),
+                "description": _truncate_text(updated.get("description") or "", 200),
+                "state_id": updated.get("state_id"),
+                "priority": updated.get("priority"),
+                "updated_at": updated.get("updated_at"),
+            }
+        },
+        f"Updated issue {issue_id}",
+    )
+
+
+@tool(
+    name="move_project_issue",
+    description=(
+        "Move a project issue/task to a different state/column on the board. "
+        "Use list_project_states to find valid state IDs for the board."
+    ),
+    params={
+        "issue_id": "ID of the issue to move",
+        "state_id": "Target state/column ID to move the issue to",
+    },
+    required=["issue_id", "state_id"],
+    category=ToolCategory.PROJECTS,
+    status="Moving project issue..."
+)
+async def move_project_issue_tool(args: Dict, ctx: ToolContext) -> ToolResult:
+    from api.services.projects import get_issue_by_id, get_states, move_issue
+
+    issue_id = args.get("issue_id")
+    state_id = args.get("state_id")
+    if not issue_id or not state_id:
+        return error("issue_id and state_id are required")
+
+    logger.info("[CHAT] User %s moving issue %s to state %s", ctx.user_id, issue_id, state_id)
+
+    # Verify issue exists and is in scope
+    existing = await get_issue_by_id(ctx.user_jwt, issue_id)
+    if not existing:
+        return error("Project issue not found")
+    if ctx.workspace_ids and existing.get("workspace_id") not in ctx.workspace_ids:
+        return error("Project issue is outside the current workspace scope")
+
+    # Get states to find the target state name and validate
+    states = await get_states(ctx.user_jwt, existing["board_id"])
+    state_lookup = {s["id"]: s for s in states}
+    target_state = state_lookup.get(state_id)
+    if not target_state:
+        valid_states = [{"id": s["id"], "name": s["name"]} for s in states]
+        return error(f"Invalid state_id. Valid states: {valid_states}")
+
+    # Move to position 0 (top of column)
+    updated = await move_issue(
+        user_jwt=ctx.user_jwt,
+        issue_id=issue_id,
+        target_state_id=state_id,
+        position=0,
+        current_user_id=ctx.user_id,
+    )
+
+    return success(
+        {
+            "issue": {
+                "id": updated.get("id"),
+                "title": updated.get("title"),
+                "state_id": state_id,
+                "state_name": target_state.get("name"),
+                "updated_at": updated.get("updated_at"),
+            }
+        },
+        f"Moved issue to '{target_state.get('name')}'",
+    )
+
+
+@tool(
+    name="assign_project_issue",
+    description=(
+        "Assign a project issue/task to a user or agent. Provide either user_id or agent_id. "
+        "Use this when the user asks to assign a task to someone."
+    ),
+    params={
+        "issue_id": "ID of the issue to assign",
+        "user_id": "User ID to assign (for human team members)",
+        "agent_id": "Agent instance ID to assign (for AI agents)",
+    },
+    required=["issue_id"],
+    category=ToolCategory.PROJECTS,
+    status="Assigning project issue..."
+)
+async def assign_project_issue(args: Dict, ctx: ToolContext) -> ToolResult:
+    from api.services.projects import add_agent_assignee, add_assignee, get_issue_by_id
+
+    issue_id = args.get("issue_id")
+    user_id = args.get("user_id")
+    agent_id = args.get("agent_id")
+
+    if not issue_id:
+        return error("issue_id is required")
+    if not user_id and not agent_id:
+        return error("Either user_id or agent_id must be provided")
+
+    logger.info(
+        "[CHAT] User %s assigning issue %s to user=%s agent=%s",
+        ctx.user_id, issue_id, user_id, agent_id,
+    )
+
+    # Verify issue exists and is in scope
+    existing = await get_issue_by_id(ctx.user_jwt, issue_id)
+    if not existing:
+        return error("Project issue not found")
+    if ctx.workspace_ids and existing.get("workspace_id") not in ctx.workspace_ids:
+        return error("Project issue is outside the current workspace scope")
+
+    assignee_info = {}
+    if user_id:
+        result = await add_assignee(
+            user_jwt=ctx.user_jwt,
+            issue_id=issue_id,
+            user_id=user_id,
+            current_user_id=ctx.user_id,
+        )
+        assignee_info = {"user_id": user_id, "type": "user"}
+    else:
+        result = await add_agent_assignee(
+            user_jwt=ctx.user_jwt,
+            issue_id=issue_id,
+            agent_id=agent_id,
+        )
+        assignee_info = {"agent_id": agent_id, "type": "agent"}
+
+    return success(
+        {
+            "issue_id": issue_id,
+            "assignee": assignee_info,
+            "assignee_record_id": result.get("id"),
+        },
+        f"Assigned {'user ' + user_id if user_id else 'agent ' + str(agent_id)} to issue {issue_id}",
+    )
+
+
+@tool(
+    name="list_project_states",
+    description=(
+        "List available states/columns for a project board. Use this to find valid state IDs "
+        "before creating or moving issues. States represent columns like 'To Do', 'In Progress', 'Done'."
+    ),
+    params={
+        "board_id": "Project board ID to list states for",
+    },
+    required=["board_id"],
+    category=ToolCategory.PROJECTS,
+    status="Loading board states..."
+)
+async def list_project_states(args: Dict, ctx: ToolContext) -> ToolResult:
+    from api.services.projects import get_board_by_id, get_states
+
+    board_id = args.get("board_id")
+    if not board_id:
+        return error("board_id is required")
+
+    logger.info("[CHAT] User %s listing states for board %s", ctx.user_id, board_id)
+
+    # Verify board exists and is in scope
+    board = await get_board_by_id(ctx.user_jwt, board_id)
+    if not board:
+        return error("Project board not found")
+    if ctx.workspace_ids and board.get("workspace_id") not in ctx.workspace_ids:
+        return error("Project board is outside the current workspace scope")
+
+    states = await get_states(ctx.user_jwt, board_id)
+
+    state_summaries = [
+        {
+            "id": state.get("id"),
+            "name": state.get("name"),
+            "color": state.get("color"),
+            "position": state.get("position"),
+            "is_done": state.get("is_done", False),
+        }
+        for state in states
+    ]
+
+    return success(
+        {"board_id": board_id, "board_name": board.get("name"), "states": state_summaries},
+        f"Found {len(state_summaries)} states for board '{board.get('name')}'",
+    )
