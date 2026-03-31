@@ -677,7 +677,7 @@ El usuario te ha mencionado en un mensaje grupal. Responde SOLO a la parte que v
                     model=agent.get("model", "claude-haiku-4-5-20251001"),
                     max_tokens=2048,
                     system=system_prompt,
-                    messages=[{"role": "user", "content": f"[{user_name}]: {agent_messages.get(agent[\"id\"], request.message)}"}],
+                    messages=[{"role": "user", "content": f"[{user_name}]: {agent_messages.get(agent['id'], request.message)}"}],
                 )
                 return {
                     "agent_id": agent["id"],
