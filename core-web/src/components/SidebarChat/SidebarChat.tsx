@@ -153,6 +153,8 @@ export default function SidebarChat() {
     // Separate display text from API text (hints are for AI only, not shown in UI)
     const displayText = input.trim();
     let apiMessage = displayText;
+    
+    // Agent context will be added after dispatch
     // Inject view context (email, project, task) for AI awareness
     const viewCtx = useViewContextStore.getState();
     if (viewCtx.currentEmail) {
@@ -198,11 +200,12 @@ export default function SidebarChat() {
     const tempUserId = `temp-${Date.now()}`;
     addMessage({ id: tempUserId, role: "user", content: displayText || "📎 Image" });
 
-    // Background: dispatch to mentioned agents (non-blocking)
-    if (workspaceId) {
-      (async () => {
-        try {
-          const dispatchResult = await api<{
+    // Dispatch to mentioned agents FIRST (before Haiku)
+    let agentResponses: Array<{agent_id:string;agent_name:string;avatar_url:string;tier:string;content:string}> = [];
+    if (workspaceId && displayText.includes("@")) {
+      try {
+        const emailCtx = useViewContextStore.getState().currentEmail;
+        const dispatchResult = await api<{
             responses: Array<{
               agent_id: string;
               agent_name: string;
@@ -216,6 +219,9 @@ export default function SidebarChat() {
             body: JSON.stringify({
               message: displayText,
               workspace_id: workspaceId,
+              email_context: emailCtx
+                ? `De: ${emailCtx.from || ""}\nAsunto: ${emailCtx.subject || ""}\nContenido: ${emailCtx.body?.substring(0, 2000) || ""}`
+                : "",
             }),
           });
           if (dispatchResult.responses && dispatchResult.responses.length > 0) {
@@ -229,12 +235,18 @@ export default function SidebarChat() {
                 agentAvatar: agentResp.avatar_url,
                 agentTier: agentResp.tier,
               });
+              agentResponses.push(agentResp);
             }
           }
-        } catch (err) {
-          console.error("Agent dispatch failed:", err);
-        }
-      })();
+      } catch (err) {
+        console.error("Agent dispatch failed:", err);
+      }
+    }
+    
+    // Now add agent responses as context for Haiku
+    if (agentResponses.length > 0) {
+      const agentContext = agentResponses.map((r: {agent_name:string;content:string}) => `[${r.agent_name} respondió]: ${r.content}`).join("\n\n");
+      apiMessage += `\n\n---\nRespuestas de agentes mencionados:\n${agentContext}\n---\nTen en cuenta lo que ya respondieron los agentes. No repitas su información. Complementa o coordina.`;
     }
 
     try {
