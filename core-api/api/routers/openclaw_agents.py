@@ -606,18 +606,53 @@ async def dispatch_to_agents(
     if not agents:
         return {"responses": [], "agents_found": 0}
 
-    # Detect which agents are mentioned by name (case-insensitive)
-    message_lower = request.message.lower()
+        # Detect @mentions: only activate agents when explicitly mentioned with @
+    import re as _re
+    
+    # Find all @mentions in the message
+    mentions = _re.findall(r'@(\w+(?:\s\w+)?)', request.message, _re.IGNORECASE)
+    
+    if not mentions:
+        return {"responses": [], "agents_found": 0}
+    
+    # Match mentions to agents
     mentioned_agents = []
+    agent_messages = {}  # agent_id -> their specific part of the message
+    
     for agent in agents:
-        name_parts = agent["name"].lower().split()
-        for part in name_parts:
-            if len(part) > 2 and part in message_lower:
+        agent_name_lower = agent["name"].lower()
+        first_name = agent_name_lower.split()[0]
+        
+        for mention in mentions:
+            mention_lower = mention.lower().strip()
+            if mention_lower == first_name or mention_lower in agent_name_lower or agent_name_lower.startswith(mention_lower):
                 mentioned_agents.append(agent)
                 break
-
+    
     if not mentioned_agents:
         return {"responses": [], "agents_found": 0}
+    
+    # Split message by @mentions — each agent gets their directed part
+    # Pattern: @Agent1 message for agent1 @Agent2 message for agent2
+    parts = _re.split(r'(?=@\w)', request.message)
+    
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        # Find which agent this part is for
+        for agent in mentioned_agents:
+            first_name = agent["name"].split()[0].lower()
+            part_lower = part.lower()
+            if part_lower.startswith(f"@{first_name}") or any(
+                part_lower.startswith(f"@{m.lower()}") 
+                for m in [agent["name"].split()[0]]
+            ):
+                # Remove the @mention from the text
+                clean_part = _re.sub(r'^@\w+\s*', '', part, count=1).strip()
+                if clean_part:
+                    agent_messages[agent["id"]] = clean_part
+                break
 
     # Get user profile for context
     profile = await _get_user_profile(user_id)
@@ -642,7 +677,7 @@ El usuario te ha mencionado en un mensaje grupal. Responde SOLO a la parte que v
                     model=agent.get("model", "claude-haiku-4-5-20251001"),
                     max_tokens=2048,
                     system=system_prompt,
-                    messages=[{"role": "user", "content": f"[{user_name}]: {request.message}"}],
+                    messages=[{"role": "user", "content": f"[{user_name}]: {agent_messages.get(agent[\"id\"], request.message)}"}],
                 )
                 return {
                     "agent_id": agent["id"],
