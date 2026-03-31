@@ -32,6 +32,8 @@ from api.services.projects import (
     get_issue_assignees,
     add_assignee,
     remove_assignee,
+    add_agent_assignee,
+    remove_agent_assignee,
     get_comments,
     create_comment,
     update_comment,
@@ -168,8 +170,13 @@ class UpdateLabelRequest(BaseModel):
 
 
 class AddAssigneeRequest(BaseModel):
-    """Request model for adding an assignee."""
+    """Request model for adding a user assignee."""
     user_id: str = Field(..., description="User UUID to assign")
+
+
+class AddAgentAssigneeRequest(BaseModel):
+    """Request model for adding an agent assignee."""
+    agent_id: str = Field(..., description="Agent instance UUID to assign")
 
 
 class ContentBlock(BaseModel):
@@ -284,15 +291,15 @@ class IssueLabelJunctionResponse(BaseModel):
         extra = "allow"
 
 
-class AssigneeResponse(BaseModel):
-    """Response model for an issue assignee."""
-    id: str
-    issue_id: str
-    user_id: str
-    created_at: Optional[str] = None
 
-    class Config:
-        extra = "allow"
+
+
+
+
+
+
+
+
 
 
 class AssigneeListResponse(BaseModel):
@@ -751,6 +758,44 @@ async def remove_assignee_endpoint(
         return await remove_assignee(user_jwt, issue_id, user_id)
     except Exception as e:
         handle_api_exception(e, "Failed to remove assignee", logger)
+
+
+@router.post("/issues/{issue_id}/agent-assignees", response_model=AssigneeResponse, status_code=status.HTTP_201_CREATED)
+async def add_agent_assignee_endpoint(
+    issue_id: str,
+    request: AddAgentAssigneeRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Add an agent assignee to an issue."""
+    try:
+        assignee = await add_agent_assignee(user_jwt, issue_id, request.agent_id)
+        return assignee
+    except Exception as e:
+        message = str(e).lower()
+        if "maximum of 10 assignees" in message:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Maximum of 10 assignees per issue reached",
+            )
+        if "duplicate key value violates unique constraint" in message:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Agent already assigned to this issue",
+            )
+        handle_api_exception(e, "Failed to add agent assignee", logger)
+
+
+@router.delete("/issues/{issue_id}/agent-assignees/{agent_id}", response_model=DeleteResponse)
+async def remove_agent_assignee_endpoint(
+    issue_id: str,
+    agent_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Remove an agent assignee from an issue."""
+    try:
+        return await remove_agent_assignee(user_jwt, issue_id, agent_id)
+    except Exception as e:
+        handle_api_exception(e, "Failed to remove agent assignee", logger)
 
 
 # ============================================================================

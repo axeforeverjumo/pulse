@@ -37,7 +37,7 @@ export default function UserSearchInput({ value, onValueChange, onSelect }: User
         })
         .catch(() => {
           setResults([]);
-          setError('Search failed. Por favor, inténtalo de nuevo.');
+          setError('Search failed. Por favor, intÃ©ntalo de nuevo.');
           setIsOpen(true);
         })
         .finally(() => setIsLoading(false));

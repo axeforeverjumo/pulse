@@ -737,7 +737,7 @@ class AuthService:
 
         # Fetch both Google and Microsoft accounts
         result = auth_supabase.table('ext_connections')\
-            .select('id, provider, provider_email, is_primary, account_order, is_active, metadata')\
+            .select('id, provider, provider_email, is_primary, account_order, is_active, metadata, email_signature')\
             .eq('user_id', user_id)\
             .in_('provider', SUPPORTED_PROVIDERS)\
             .eq('is_active', True)\
@@ -756,7 +756,8 @@ class AuthService:
                 'provider_avatar': metadata.get('picture') or metadata.get('avatar_url'),
                 'is_primary': conn.get('is_primary', False),
                 'account_order': conn.get('account_order', 0),
-                'is_active': conn['is_active']
+                'is_active': conn['is_active'],
+                'email_signature': conn.get('email_signature', '')
             })
 
         return accounts
@@ -1068,8 +1069,8 @@ class AuthService:
         """
         auth_supabase = get_authenticated_supabase_client(user_jwt)
 
-        # Only allow updating account_order for now
-        allowed_fields = {'account_order'}
+        # Allow updating account_order and email_signature
+        allowed_fields = {'account_order', 'email_signature'}
         filtered_data = {k: v for k, v in update_data.items() if k in allowed_fields}
 
         if not filtered_data:

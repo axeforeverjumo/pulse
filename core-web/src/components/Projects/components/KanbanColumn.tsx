@@ -379,7 +379,7 @@ const KanbanColumn = memo(function KanbanColumn({
                   disabled={!newCardTitle.trim()}
                   className="px-3 py-2 text-[12px] bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
-                  Añadir tarjeta
+                  AÃ±adir tarjeta
                 </button>
               </div>
             </div>
@@ -412,7 +412,7 @@ const KanbanColumn = memo(function KanbanColumn({
               className="w-full mt-2 py-3 text-[13px] text-gray-400 hover:text-gray-600 rounded-lg flex items-center justify-center gap-1.5 transition-colors duration-200 hover:bg-white/60"
             >
               <PlusIcon className="w-4 h-4 stroke-2" />
-              <span>Añadir tarjeta</span>
+              <span>AÃ±adir tarjeta</span>
             </button>
           )}
         </div>
@@ -422,7 +422,7 @@ const KanbanColumn = memo(function KanbanColumn({
       <ConfirmModal
         isOpen={showDeleteConfirm}
         title="Eliminar columna"
-        message={`¿Estás seguro de que quieres eliminar "${column.name}"? All cards in this column will also be deleted.`}
+        message={`Â¿EstÃ¡s seguro de que quieres eliminar "${column.name}"? All cards in this column will also be deleted.`}
         confirmLabel="Eliminar"
         onConfirm={handleDeleteConfirm}
         onCancel={() => setShowDeleteConfirm(false)}

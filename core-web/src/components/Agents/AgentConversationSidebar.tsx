@@ -49,7 +49,7 @@ export default function AgentConversationSidebar({
           className="w-full flex items-center gap-2 px-2 py-2 rounded-md text-sm text-text-secondary hover:bg-black/5 transition-colors focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-inset"
         >
           <Icon icon={Plus} size={14} aria-hidden="true" />
-          <span>Nueva conversación</span>
+          <span>Nueva conversaciÃ³n</span>
         </button>
       </div>
 

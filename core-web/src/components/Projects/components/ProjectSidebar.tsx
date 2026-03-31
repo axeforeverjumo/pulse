@@ -147,7 +147,7 @@ export default function ProjectSidebar({ onCreateClick, onSelectProject }: Proje
                           setOpenMenuId(openMenuId === board.id ? null : board.id);
                         }}
                         className="p-1 rounded text-text-tertiary hover:text-text-body hover:bg-bg-gray-light transition-colors focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:opacity-100"
-                        title="Más opciones"
+                        title="MÃ¡s opciones"
                         aria-label={`Options for ${board.name}`}
                       >
                         <EllipsisHorizontalIcon className="w-3.5 h-3.5" aria-hidden="true" />

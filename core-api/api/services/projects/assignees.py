@@ -1,5 +1,6 @@
 """
 Assignee service - operations for project issue multi-assignee management.
+Supports both user and agent assignees.
 
 Uses async Supabase client for non-blocking I/O.
 """
@@ -18,14 +19,7 @@ async def get_issue_assignees(
     issue_id: str,
 ) -> List[Dict[str, Any]]:
     """
-    Get all assignees for an issue.
-
-    Args:
-        user_jwt: User's Supabase JWT
-        issue_id: Issue UUID
-
-    Returns:
-        List of assignee dicts with user_id and created_at
+    Get all assignees for an issue (users and agents).
     """
     supabase = await get_authenticated_async_client(user_jwt)
 
@@ -45,16 +39,7 @@ async def add_assignee(
     current_user_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Add an assignee to an issue. DB trigger enforces max 10.
-
-    Args:
-        user_jwt: User's Supabase JWT
-        issue_id: Issue UUID
-        user_id: User UUID to assign
-        current_user_id: Who is performing the action (for notifications)
-
-    Returns:
-        Created assignee row
+    Add a user assignee to an issue. DB trigger enforces max 10.
     """
     supabase = await get_authenticated_async_client(user_jwt)
 
@@ -73,13 +58,14 @@ async def add_assignee(
         "workspace_id": issue["workspace_id"],
         "issue_id": issue_id,
         "user_id": user_id,
+        "assignee_type": "user",
     }
 
     result = await supabase.table("project_issue_assignees")\
         .insert(assignee_data)\
         .execute()
 
-    logger.info(f"Added assignee {user_id} to issue {issue_id}")
+    logger.info(f"Added user assignee {user_id} to issue {issue_id}")
 
     # Auto-subscribe assignee and notify
     try:
@@ -107,21 +93,49 @@ async def add_assignee(
     return result.data[0]
 
 
+async def add_agent_assignee(
+    user_jwt: str,
+    issue_id: str,
+    agent_id: str,
+) -> Dict[str, Any]:
+    """
+    Add an agent assignee to an issue.
+    """
+    supabase = await get_authenticated_async_client(user_jwt)
+
+    # Look up issue context
+    issue_result = await supabase.table("project_issues")\
+        .select("workspace_app_id, workspace_id, title, board_id")\
+        .eq("id", issue_id)\
+        .maybe_single()\
+        .execute()
+    issue = issue_result.data
+    if not issue:
+        raise ValueError(f"Issue not found: {issue_id}")
+
+    assignee_data: Dict[str, Any] = {
+        "workspace_app_id": issue["workspace_app_id"],
+        "workspace_id": issue["workspace_id"],
+        "issue_id": issue_id,
+        "agent_id": agent_id,
+        "assignee_type": "agent",
+    }
+
+    result = await supabase.table("project_issue_assignees")\
+        .insert(assignee_data)\
+        .execute()
+
+    logger.info(f"Added agent assignee {agent_id} to issue {issue_id}")
+    return result.data[0]
+
+
 async def remove_assignee(
     user_jwt: str,
     issue_id: str,
     user_id: str,
 ) -> Dict[str, Any]:
     """
-    Remove an assignee from an issue.
-
-    Args:
-        user_jwt: User's Supabase JWT
-        issue_id: Issue UUID
-        user_id: User UUID to remove
-
-    Returns:
-        Status dict
+    Remove a user assignee from an issue.
     """
     supabase = await get_authenticated_async_client(user_jwt)
 
@@ -131,5 +145,25 @@ async def remove_assignee(
         .eq("user_id", user_id)\
         .execute()
 
-    logger.info(f"Removed assignee {user_id} from issue {issue_id}")
+    logger.info(f"Removed user assignee {user_id} from issue {issue_id}")
     return {"status": "removed", "issue_id": issue_id, "user_id": user_id}
+
+
+async def remove_agent_assignee(
+    user_jwt: str,
+    issue_id: str,
+    agent_id: str,
+) -> Dict[str, Any]:
+    """
+    Remove an agent assignee from an issue.
+    """
+    supabase = await get_authenticated_async_client(user_jwt)
+
+    await supabase.table("project_issue_assignees")\
+        .delete()\
+        .eq("issue_id", issue_id)\
+        .eq("agent_id", agent_id)\
+        .execute()
+
+    logger.info(f"Removed agent assignee {agent_id} from issue {issue_id}")
+    return {"status": "removed", "issue_id": issue_id, "agent_id": agent_id}

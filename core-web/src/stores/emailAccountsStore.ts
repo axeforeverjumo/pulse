@@ -4,6 +4,7 @@ import {
   getEmailAccounts,
   addEmailAccount,
   removeEmailAccount,
+  updateEmailSignature as updateEmailSignatureApi,
   type EmailAccount,
 } from '../api/client';
 import {
@@ -25,6 +26,7 @@ interface EmailAccountsState {
   addGoogleAccount: () => Promise<void>;
   addMicrosoftAccount: () => Promise<void>;
   removeAccount: (id: string) => Promise<void>;
+  updateSignature: (id: string, signature: string) => Promise<void>;
 }
 
 export const useEmailAccountsStore = create<EmailAccountsState>()((set, get) => ({
@@ -117,6 +119,22 @@ export const useEmailAccountsStore = create<EmailAccountsState>()((set, get) => 
       } else {
         set({ error: message, isAdding: false });
       }
+    }
+  },
+
+  updateSignature: async (id: string, signature: string) => {
+    try {
+      await updateEmailSignatureApi(id, signature);
+      set((state) => ({
+        accounts: state.accounts.map((a) =>
+          a.id === id ? { ...a, email_signature: signature } : a
+        ),
+      }));
+    } catch (err) {
+      set({
+        error: err instanceof Error ? err.message : 'Failed to update signature',
+      });
+      throw err;
     }
   },
 

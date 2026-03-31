@@ -192,7 +192,7 @@ const KanbanCard = memo(function KanbanCard({
                   }`}
                   title="Sin prioridad"
                 >
-                  <span>–</span>
+                  <span>â</span>
                 </button>
                 {[1, 2, 3, 4].map((p) => (
                   <button
@@ -249,7 +249,7 @@ const KanbanCard = memo(function KanbanCard({
       <ConfirmModal
         isOpen={showDeleteConfirm}
         title="Eliminar tarjeta"
-        message={`�Est�s seguro de que quieres eliminar "${card.title}"? This action no se puede deshacer.`}
+        message={`¿Estás seguro de que quieres eliminar "${card.title}"? This action no se puede deshacer.`}
         confirmLabel="Eliminar"
         onConfirm={handleDeleteConfirm}
         onCancel={() => setShowDeleteConfirm(false)}

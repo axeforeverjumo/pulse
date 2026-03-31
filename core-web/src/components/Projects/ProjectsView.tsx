@@ -5,6 +5,7 @@ import { useProjectsStore } from "../../stores/projectsStore";
 import { useProjectBoards, usePrefetchBoards } from "../../hooks/queries/useProjects";
 import { updateProjectBoard, deleteProjectBoard } from "../../api/client";
 import { useQueryClient } from "@tanstack/react-query";
+import { useViewContextStore } from "../../stores/viewContextStore";
 import ProjectSidebar from "./components/ProjectSidebar";
 import KanbanBoard from "./components/KanbanBoard";
 import CreateProjectModal from "./components/CreateProjectModal";
@@ -100,6 +101,29 @@ export default function ProjectsView() {
     }
   }, [activeProjectId, workspaceId]);
 
+
+  // Set view context for sidebar chat
+  useEffect(() => {
+    useViewContextStore.getState().setCurrentView("projects");
+    return () => {
+      useViewContextStore.getState().setCurrentView(null);
+      useViewContextStore.getState().setCurrentProject(null);
+      useViewContextStore.getState().setCurrentTask(null);
+    };
+  }, []);
+
+  // Update project context when active board changes
+  useEffect(() => {
+    if (activeProjectId && activeBoard) {
+      useViewContextStore.getState().setCurrentProject({
+        id: activeProjectId,
+        name: activeBoard.name,
+        boardId: activeProjectId,
+      });
+    } else {
+      useViewContextStore.getState().setCurrentProject(null);
+    }
+  }, [activeProjectId, activeBoard]);
   const navigateToProject = useCallback((boardId: string) => {
     navigate(`/workspace/${workspaceId}/projects/${boardId}`);
   }, [navigate, workspaceId]);
@@ -165,7 +189,7 @@ export default function ProjectsView() {
           ) : (
             <div className="flex-1 flex items-center justify-center relative">
               <div className="text-center">
-                <p className="text-text-tertiary mb-4">Sin proyectos aún</p>
+                <p className="text-text-tertiary mb-4">Sin proyectos aÃºn</p>
                 <button
                   onClick={() => setShowCreateModal(true)}
                   className="px-4 py-2 bg-brand-primary text-white rounded-md hover:opacity-90 transition-opacity"

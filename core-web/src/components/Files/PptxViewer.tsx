@@ -313,7 +313,7 @@ export default function PptxViewer({ url, title, onClose }: PptxViewerProps) {
                 cursor: 'pointer',
                 textDecoration: 'none',
               }}
-              title="Descargar presentaci�n"
+              title="Descargar presentación"
             >
               <ArrowDownTrayIcon className="w-5 h-5" />
             </a>
@@ -361,7 +361,7 @@ export default function PptxViewer({ url, title, onClose }: PptxViewerProps) {
                 padding: 24,
               }}
             >
-              <p style={{ fontSize: 16, marginBottom: 8 }}>Error al cargar presentaci�n</p>
+              <p style={{ fontSize: 16, marginBottom: 8 }}>Error al cargar presentación</p>
               <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)' }}>{error}</p>
             </div>
           ) : isLoading ? (
@@ -387,7 +387,7 @@ export default function PptxViewer({ url, title, onClose }: PptxViewerProps) {
             />
           ) : (
             <div style={{ color: 'white', textAlign: 'center' }}>
-              <p>No se encontraron diapositivas en la presentaci�n</p>
+              <p>No se encontraron diapositivas en la presentación</p>
             </div>
           )}
         </div>
@@ -405,10 +405,10 @@ export default function PptxViewer({ url, title, onClose }: PptxViewerProps) {
           }}
         >
           <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>
-            ← → Navigate slides
+            â â Navigate slides
           </span>
           <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>
-            + − Zoom
+            + â Zoom
           </span>
           <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>
             Esc Close

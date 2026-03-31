@@ -37,11 +37,11 @@ export default function AgentStorageBrowser({ agentId, label, rootPath, emptyMes
       if (error) {
         console.error("Storage list error:", error);
         setError(error.message);
-        setStatusMsg(`Listed "${prefix}" → error: ${error.message}`);
+        setStatusMsg(`Listed "${prefix}" â error: ${error.message}`);
         return [];
       }
       if (!data) {
-        setStatusMsg(`Listed "${prefix}" → null response`);
+        setStatusMsg(`Listed "${prefix}" â null response`);
         return [];
       }
       const filtered = data.filter((f) => f.name !== ".emptyFolderPlaceholder");
@@ -155,7 +155,7 @@ export default function AgentStorageBrowser({ agentId, label, rootPath, emptyMes
             style={{ paddingLeft: `${depth * 12 + 4}px` }}
           >
             <span className="text-[10px] text-text-tertiary w-3 text-center shrink-0">
-              {item.isDir ? (item.expanded ? "▾" : "▸") : ""}
+              {item.isDir ? (item.expanded ? "â¾" : "â¸") : ""}
             </span>
             <span className="text-[11px] text-text-body truncate">
               {item.isDir ? `${item.name}/` : item.name}
@@ -199,7 +199,7 @@ export default function AgentStorageBrowser({ agentId, label, rootPath, emptyMes
       )}
       {loaded && entries.length === 0 && !error ? (
         <p className="text-[11px] text-text-tertiary italic">
-          {emptyMessage || "Sin archivos a�n."}
+          {emptyMessage || "Sin archivos aún."}
         </p>
       ) : (
         <div className="border border-border-light rounded-lg bg-white overflow-hidden">

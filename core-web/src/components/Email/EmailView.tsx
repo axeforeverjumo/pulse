@@ -51,6 +51,7 @@ import { AttachmentList } from "./AttachmentList";
 import { HeaderButtons } from "../MiniAppHeader";
 import EmailSettingsDropdown from "./EmailSettingsDropdown";
 import { sanitizeEmailHtml } from "../../utils/sanitizeHtml";
+import { useViewContextStore } from "../../stores/viewContextStore";
 
 // Get initials from name or email
 function getInitials(name?: string, email?: string): string {
@@ -598,6 +599,32 @@ export default function EmailView() {
     }
     return email;
   }, [selectedEmailId, emails, emailDetailData, emailDetailsCache]);
+
+  // Sync selected email to view context store for sidebar chat awareness
+  useEffect(() => {
+    if (selectedEmail) {
+      const bodyText = selectedEmail.body_text || selectedEmail.body_html?.replace(/<[^>]+>/g, '') || selectedEmail.snippet || '';
+      useViewContextStore.getState().setCurrentEmail({
+        id: selectedEmail.id,
+        subject: selectedEmail.subject,
+        from: selectedEmail.from_name || selectedEmail.from_email,
+        to: selectedEmail.to_emails || [],
+        date: selectedEmail.date,
+        body: bodyText.substring(0, 3000),
+      });
+    } else {
+      useViewContextStore.getState().setCurrentEmail(null);
+    }
+  }, [selectedEmail]);
+
+  // Set current view for sidebar chat context
+  useEffect(() => {
+    useViewContextStore.getState().setCurrentView("email");
+    return () => {
+      useViewContextStore.getState().setCurrentView(null);
+      useViewContextStore.getState().setCurrentEmail(null);
+    };
+  }, []);
 
   // Fetch thread emails from API when viewing a thread
   const selectedThreadId = selectedEmail?.thread_id ?? null;

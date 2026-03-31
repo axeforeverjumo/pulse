@@ -264,8 +264,9 @@ class AddEmailAccountRequest(BaseModel):
 
 
 class UpdateEmailAccountRequest(BaseModel):
-    """Request model for updating account order"""
-    account_order: int
+    """Request model for updating account properties"""
+    account_order: Optional[int] = None
+    email_signature: Optional[str] = None
 
 
 @router.post("/users", response_model=UserCreateResponse, status_code=status.HTTP_201_CREATED)
@@ -599,14 +600,20 @@ async def update_email_account(
     user_jwt: str = Depends(get_current_user_jwt)
 ):
     """
-    Update account display order.
+    Update account properties (order, signature, etc.).
     """
     try:
+        update_data = {}
+        if request.account_order is not None:
+            update_data['account_order'] = request.account_order
+        if request.email_signature is not None:
+            update_data['email_signature'] = request.email_signature
+
         result = AuthService.update_email_account(
             account_id=account_id,
             user_id=current_user_id,
             user_jwt=user_jwt,
-            update_data={'account_order': request.account_order}
+            update_data=update_data
         )
 
         if not result.get('success'):

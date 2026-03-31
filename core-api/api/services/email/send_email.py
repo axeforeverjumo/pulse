@@ -96,6 +96,23 @@ def send_email(
             except Exception as e:
                 logger.warning(f"⚠️ Could not fetch thread headers for threading: {e}")
         
+        # Fetch and append email signature if configured
+        try:
+            sig_result = auth_supabase.table('ext_connections')                .select('email_signature')                .eq('id', connection_id)                .single()                .execute()
+            email_signature = (sig_result.data or {}).get('email_signature', '')
+            if email_signature and email_signature.strip():
+                sig_html = '<div style="margin-top:16px;border-top:1px solid #e0e0e0;padding-top:12px">' + email_signature + '</div>'
+                if html_body:
+                    html_body = html_body + sig_html
+                else:
+                    html_body = '<div>' + (body or '') + '</div>' + sig_html
+                import re as _re
+                sig_text = _re.sub(r'<[^>]+>', '', email_signature).strip()
+                if sig_text:
+                    body = (body or '') + '\n\n--\n' + sig_text
+        except Exception as e:
+            logger.warning(f'Could not fetch email signature: {e}')
+
         # Create MIME message with threading headers
         message = create_message(
             to=to,

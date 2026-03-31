@@ -511,7 +511,7 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
               {card.assignees && card.assignees.length > 0 && (
                 <div className="flex items-center gap-2.5">
                   <StackedAvatars
-                    userIds={card.assignees.map((a) => a.user_id)}
+                    userIds={card.assignees.filter((a) => a.assignee_type !== 'agent' && a.user_id).map((a) => a.user_id!)}
                     maxVisible={6}
                     size="md"
                   />

@@ -4,6 +4,7 @@ import { avatarGradient } from '../../utils/avatarGradient';
 import { useAuthStore } from '../../stores/authStore';
 import { useEmailAccountsStore } from '../../stores/emailAccountsStore';
 import Modal from '../Modal/Modal';
+import EmailSignatureEditor from './EmailSignatureEditor';
 import { uploadAvatar, deleteAvatar } from '../../api/client';
 
 interface SettingsViewProps {
@@ -509,6 +510,11 @@ export default function SettingsView({ isOpen, onClose }: SettingsViewProps) {
               </div>
             </Modal>
           </div>
+        )}
+
+        {/* Email Signature Section */}
+        {isAuthenticated && emailAccounts.length > 0 && (
+          <EmailSignatureEditor accounts={emailAccounts} />
         )}
 
       </div>

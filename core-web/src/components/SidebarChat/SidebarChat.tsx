@@ -14,6 +14,7 @@ import { usePageContext } from "../../hooks/usePageContext";
 import type { MentionData } from "../../types/mention";
 import ChatMessage from "./SidebarChatMessage";
 import SidebarChatInput from "./SidebarChatInput";
+import { useViewContextStore } from "../../stores/viewContextStore";
 
 export default function SidebarChat() {
   const setSidebarChatOpen = useUIStore((s) => s.setSidebarChatOpen);
@@ -78,6 +79,12 @@ export default function SidebarChat() {
 
   // Scroll state
   const [showScrollButton, setShowScrollButton] = useState(false);
+
+  // Subscribe to view context for visual indicator
+  const currentView = useViewContextStore((s) => s.currentView);
+  const currentEmailContext = useViewContextStore((s) => s.currentEmail);
+  const currentProjectContext = useViewContextStore((s) => s.currentProject);
+  const currentTaskContext = useViewContextStore((s) => s.currentTask);
 
   const hasStreamingContent =
     streamingContent.length > 0 || isWaitingForResponse;
@@ -144,6 +151,35 @@ export default function SidebarChat() {
     // Separate display text from API text (hints are for AI only, not shown in UI)
     const displayText = input.trim();
     let apiMessage = displayText;
+    // Inject view context (email, project, task) for AI awareness
+    const viewCtx = useViewContextStore.getState();
+    if (viewCtx.currentEmail) {
+      const emailCtx = viewCtx.currentEmail;
+      const emailPrefix = "[Contexto: El usuario tiene abierto un email]\n" +
+        "De: " + emailCtx.from + "\n" +
+        "Para: " + emailCtx.to.join(", ") + "\n" +
+        "Asunto: " + emailCtx.subject + "\n" +
+        "Fecha: " + emailCtx.date + "\n" +
+        "Contenido del email:\n" + emailCtx.body.substring(0, 2000) + "\n" +
+        "---\nMensaje del usuario: ";
+      apiMessage = emailPrefix + apiMessage;
+    } else if (viewCtx.currentView === "projects" && viewCtx.currentTask) {
+      const proj = viewCtx.currentProject;
+      const task = viewCtx.currentTask;
+      const projPrefix = "[Contexto: El usuario est\u00e1 en Proyectos]\n" +
+        "Proyecto: " + (proj?.name || "Sin nombre") + "\n" +
+        "Tarea actual: " + task.title + "\n" +
+        "Estado: " + task.state + "\n" +
+        "Descripci\u00f3n: " + (task.description || "Sin descripci\u00f3n") + "\n" +
+        "Asignado a: " + (task.assignee || "Sin asignar") + "\n" +
+        "---\nMensaje del usuario: ";
+      apiMessage = projPrefix + apiMessage;
+    } else if (viewCtx.currentView === "projects" && viewCtx.currentProject) {
+      const proj = viewCtx.currentProject;
+      const projPrefix = "[Contexto: El usuario est\u00e1 en el proyecto \"" + proj.name + "\"]\n---\nMensaje del usuario: ";
+      apiMessage = projPrefix + apiMessage;
+    }
+
     if (mentions.length > 0) {
       const mentionHints = mentions
         .map((m) => `[User referenced: ${m.displayName} (${m.entityType}, id: ${m.entityId})]`)
@@ -400,6 +436,53 @@ export default function SidebarChat() {
           </div>
         </div>
       </div>
+
+      {/* Context indicator (email, project, task) */}
+      {(currentEmailContext || (currentView === "projects" && (currentTaskContext || currentProjectContext))) && (
+        <div className="flex items-center gap-1.5 px-4 pb-2">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-full text-xs text-blue-700 max-w-full">
+            {currentEmailContext ? (
+              <>
+                <span className="shrink-0">✉️</span>
+                <span className="truncate font-medium">
+                  Viendo: {currentEmailContext.subject.length > 35
+                    ? currentEmailContext.subject.substring(0, 35) + "..."
+                    : currentEmailContext.subject}
+                </span>
+              </>
+            ) : currentTaskContext ? (
+              <>
+                <span className="shrink-0">📋</span>
+                <span className="truncate font-medium">
+                  Tarea: {currentTaskContext.title.length > 35
+                    ? currentTaskContext.title.substring(0, 35) + "..."
+                    : currentTaskContext.title}
+                </span>
+              </>
+            ) : currentProjectContext ? (
+              <>
+                <span className="shrink-0">📋</span>
+                <span className="truncate font-medium">
+                  Proyecto: {currentProjectContext.name.length > 30
+                    ? currentProjectContext.name.substring(0, 30) + "..."
+                    : currentProjectContext.name}
+                </span>
+              </>
+            ) : null}
+            <button
+              onClick={() => {
+                useViewContextStore.getState().setCurrentEmail(null);
+                useViewContextStore.getState().setCurrentProject(null);
+                useViewContextStore.getState().setCurrentTask(null);
+              }}
+              className="shrink-0 text-blue-400 hover:text-blue-600 ml-0.5"
+              title="Quitar contexto"
+            >
+              <XMarkIcon className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">

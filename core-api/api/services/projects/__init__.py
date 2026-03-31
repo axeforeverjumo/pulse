@@ -37,6 +37,8 @@ from .assignees import (
     get_issue_assignees,
     add_assignee,
     remove_assignee,
+    add_agent_assignee,
+    remove_agent_assignee,
 )
 from .comments import (
     get_comments,
@@ -84,6 +86,8 @@ __all__ = [
     'get_issue_assignees',
     'add_assignee',
     'remove_assignee',
+    'add_agent_assignee',
+    'remove_agent_assignee',
 
     # Comments
     'get_comments',

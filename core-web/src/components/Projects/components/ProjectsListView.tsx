@@ -4,6 +4,7 @@ import { User, Tag, Calendar } from "lucide-react";
 import { Icon } from "../../ui/Icon";
 import { Flag } from "@phosphor-icons/react";
 import { useProjectsStore } from "../../../stores/projectsStore";
+import { useViewContextStore } from "../../../stores/viewContextStore";
 import {
   useProjectBoard,
   useCreateIssue,
@@ -104,7 +105,7 @@ export default function ProjectsListView() {
       }
       if (hasAssigneeFilter) {
         const assignees = issue.assignees || [];
-        const match = assignees.some((a) => filters.assigneeIds.includes(a.user_id));
+        const match = assignees.some((a) => a.user_id && filters.assigneeIds.includes(a.user_id));
         if (!match) return false;
       }
       if (hasLabelFilter) {
@@ -142,6 +143,23 @@ export default function ProjectsListView() {
     ? (issues.find((issue) => issue.id === selectedCardId) ?? null)
     : null;
 
+
+  // Update task context for sidebar chat
+  useEffect(() => {
+    if (selectedCard) {
+      const stateColumn = columns.find((c) => c.id === selectedCard.state_id);
+      const assigneeNames = selectedCard.assignees?.map((a) => a.user_id).join(", ") || "";
+      useViewContextStore.getState().setCurrentTask({
+        id: selectedCard.id,
+        title: selectedCard.title,
+        description: selectedCard.description || "",
+        state: stateColumn?.name || "",
+        assignee: assigneeNames,
+      });
+    } else {
+      useViewContextStore.getState().setCurrentTask(null);
+    }
+  }, [selectedCard, columns]);
   const handleStartEditing = () => {
     if (!isEditing) {
       setIsEditing(true);

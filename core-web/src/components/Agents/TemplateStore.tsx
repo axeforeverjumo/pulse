@@ -123,7 +123,7 @@ export default function TemplateStore({ workspaceId, onClose, onCreated }: Templ
               {selectedTemplate
                 ? supportsIdentity
                   ? "Dale una identidad a tu agente"
-                  : "Nombra tu agente y despliégalo"
+                  : "Nombra tu agente y despliÃ©galo"
                 : "Choose an archetype to deploy"}
             </p>
           </div>
@@ -218,7 +218,7 @@ export default function TemplateStore({ workspaceId, onClose, onCreated }: Templ
                     <textarea
                       value={objective}
                       onChange={(e) => setObjective(e.target.value)}
-                      placeholder="Construye conocimiento de marca y engagement a través de contenido auténtico y cercano..."
+                      placeholder="Construye conocimiento de marca y engagement a travÃ©s de contenido autÃ©ntico y cercano..."
                       className="w-full text-sm px-3 py-2 rounded-lg border border-border-gray bg-white focus:outline-none focus:ring-1 focus:ring-brand-primary resize-none h-16"
                     />
                   </div>

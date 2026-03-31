@@ -23,11 +23,15 @@ import {
   removeLabelFromIssue,
   addIssueAssignee,
   removeIssueAssignee,
+  addAgentAssignee,
+  removeAgentAssignee,
   createIssueComment,
   updateIssueComment,
   deleteIssueComment,
   addCommentReaction,
   removeCommentReaction,
+  getWorkspaceAgents,
+  type AgentInstance,
   type ProjectBoard,
   type ProjectState,
   type ProjectIssue,
@@ -44,6 +48,7 @@ import { toast } from 'sonner';
 
 // Re-export types for convenience
 export type {
+  AgentInstance,
   ProjectBoard,
   ProjectState,
   ProjectIssue,
@@ -1231,6 +1236,131 @@ export function useRemoveAssignee(boardId: string | null) {
               issues: old.issues.map((issue) =>
                 issue.id === issueId
                   ? { ...issue, assignees: (issue.assignees || []).filter((a) => a.user_id !== userId) }
+                  : issue
+              ),
+            }
+          : old
+      );
+
+      return { previousBoardData };
+    },
+
+    onError: (_err, _variables, context) => {
+      if (context?.previousBoardData) {
+        queryClient.setQueryData(boardDataKey, context.previousBoardData);
+      }
+    },
+  });
+}
+
+
+/**
+ * Fetch workspace agents for assignment
+ */
+export function useWorkspaceAgents(workspaceId: string | null) {
+  return useQuery({
+    queryKey: ["workspace-agents", workspaceId ?? ""],
+    queryFn: async () => {
+      if (!workspaceId) throw new Error("No workspace ID");
+      const result = await getWorkspaceAgents(workspaceId);
+      return result.agents || [];
+    },
+    enabled: !!workspaceId,
+    staleTime: STALE_TIMES.members,
+  });
+}
+
+/**
+ * Add an agent assignee to an issue with optimistic update
+ */
+export function useAddAgentAssignee(boardId: string | null) {
+  const queryClient = useQueryClient();
+  const boardDataKey = projectKeys.boardData(boardId ?? "");
+
+  return useMutation({
+    mutationFn: async ({ issueId, agentId }: { issueId: string; agentId: string }) => {
+      return addAgentAssignee(issueId, agentId);
+    },
+
+    onMutate: async ({ issueId, agentId }) => {
+      await queryClient.cancelQueries({ queryKey: boardDataKey });
+      const previousBoardData = queryClient.getQueryData<BoardData>(boardDataKey);
+
+      const tempAssignee: ProjectIssueAssignee = {
+        id: `temp-${Date.now()}`,
+        issue_id: issueId,
+        agent_id: agentId,
+        assignee_type: "agent",
+        created_at: new Date().toISOString(),
+      };
+
+      queryClient.setQueryData(boardDataKey, (old: typeof previousBoardData) =>
+        old
+          ? {
+              ...old,
+              issues: old.issues.map((issue) =>
+                issue.id === issueId
+                  ? { ...issue, assignees: [...(issue.assignees || []), tempAssignee] }
+                  : issue
+              ),
+            }
+          : old
+      );
+
+      return { previousBoardData, tempId: tempAssignee.id };
+    },
+
+    onSuccess: (realAssignee, { issueId }, context) => {
+      queryClient.setQueryData(boardDataKey, (old: BoardData | undefined) =>
+        old
+          ? {
+              ...old,
+              issues: old.issues.map((issue) =>
+                issue.id === issueId
+                  ? {
+                      ...issue,
+                      assignees: (issue.assignees || []).map((a) =>
+                        a.id === context?.tempId ? realAssignee : a
+                      ),
+                    }
+                  : issue
+              ),
+            }
+          : old
+      );
+    },
+
+    onError: (_err, _variables, context) => {
+      if (context?.previousBoardData) {
+        queryClient.setQueryData(boardDataKey, context.previousBoardData);
+      }
+    },
+  });
+}
+
+/**
+ * Remove an agent assignee from an issue with optimistic update
+ */
+export function useRemoveAgentAssignee(boardId: string | null) {
+  const queryClient = useQueryClient();
+  const boardDataKey = projectKeys.boardData(boardId ?? "");
+
+  return useMutation({
+    mutationFn: async ({ issueId, agentId }: { issueId: string; agentId: string }) => {
+      return removeAgentAssignee(issueId, agentId);
+    },
+
+    onMutate: async ({ issueId, agentId }) => {
+      await queryClient.cancelQueries({ queryKey: boardDataKey });
+      const previousBoardData = queryClient.getQueryData<BoardData>(boardDataKey);
+
+      queryClient.setQueryData(boardDataKey, (old: typeof previousBoardData) =>
+        old
+          ? {
+              ...old,
+              issues: old.issues.map((issue) =>
+                issue.id === issueId
+                  ? { ...issue, assignees: (issue.assignees || []).filter((a) => a.agent_id !== agentId) }
                   : issue
               ),
             }

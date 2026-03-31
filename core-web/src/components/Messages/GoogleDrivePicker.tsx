@@ -66,7 +66,7 @@ export function GoogleDrivePicker({ isOpen, onClose, onFileSelect }: GoogleDrive
       const params = new URLSearchParams();
       if (folderId) params.set("folder_id", folderId);
       if (query) params.set("q", query);
-      const res = await api<{ files: DriveFile[] }>(`/api/drive/files?${params.toString()}`);
+      const res = await api<{ files: DriveFile[] }>(`/drive/files?${params.toString()}`);
       setFiles(res.files || []);
     } catch (err) {
       setError("Error al cargar archivos");

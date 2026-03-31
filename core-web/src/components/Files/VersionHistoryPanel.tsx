@@ -79,7 +79,7 @@ export default function VersionHistoryPanel({
     if (!wasSaving || saveStatus !== 'saved') return;
     if (!isOpen || !documentId) return;
 
-    // Background refresh — no loading spinner, no clearing existing list
+    // Background refresh â no loading spinner, no clearing existing list
     getDocumentVersions(documentId)
       .then((res) => setVersions(res.versions))
       .catch(() => {});
@@ -119,7 +119,7 @@ export default function VersionHistoryPanel({
       onRestore?.(updated.content || '', updated.title || '');
       setOpen(false);
     } catch {
-      // Silently fail — the user will see the note didn't change
+      // Silently fail â the user will see the note didn't change
     } finally {
       setIsRestoring(false);
     }
@@ -170,7 +170,7 @@ export default function VersionHistoryPanel({
                     />
                   </svg>
                 </div>
-                <h3 className="text-sm font-medium text-text-body mb-1">Sin versiones a�n</h3>
+                <h3 className="text-sm font-medium text-text-body mb-1">Sin versiones aún</h3>
                 <p className="text-xs text-text-tertiary">
                   Versions are saved automatically every few minutes when you make significant edits
                 </p>
@@ -214,7 +214,7 @@ export default function VersionHistoryPanel({
             <div className="border-t border-border-gray flex flex-col shrink-0 max-h-[50%]">
               <div className="px-4 py-2 flex items-center justify-between shrink-0">
                 <span className="text-xs font-medium text-text-secondary">
-                  Preview — Version {selectedVersion.version_number}
+                  Preview â Version {selectedVersion.version_number}
                 </span>
                 <button
                   onClick={handleRestore}

@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useViewContextStore } from "../../../stores/viewContextStore";
+import { useState, useMemo, useEffect } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -171,7 +172,7 @@ export default function KanbanBoard() {
       }
       if (hasAssigneeFilter) {
         const assignees = issue.assignees || [];
-        const match = assignees.some((a) => filters.assigneeIds.includes(a.user_id));
+        const match = assignees.some((a) => a.user_id && filters.assigneeIds.includes(a.user_id));
         if (!match) return false;
       }
       if (hasLabelFilter) {
@@ -211,6 +212,23 @@ export default function KanbanBoard() {
     ? (issues.find((i) => i.id === selectedCardId) ?? null)
     : null;
 
+
+  // Update task context for sidebar chat
+  useEffect(() => {
+    if (selectedCard) {
+      const stateColumn = columns.find((c) => c.id === selectedCard.state_id);
+      const assigneeNames = selectedCard.assignees?.map((a) => a.user_id).join(", ") || "";
+      useViewContextStore.getState().setCurrentTask({
+        id: selectedCard.id,
+        title: selectedCard.title,
+        description: selectedCard.description || "",
+        state: stateColumn?.name || "",
+        assignee: assigneeNames,
+      });
+    } else {
+      useViewContextStore.getState().setCurrentTask(null);
+    }
+  }, [selectedCard, columns]);
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {

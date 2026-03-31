@@ -49,7 +49,7 @@ export default function ProjectsSettingsDropdown({
             className={itemClass}
           >
             <Icon icon={Settings} size={16} className="text-text-secondary" />
-            <span>Ajustes de la aplicación</span>
+            <span>Ajustes de la aplicaciÃ³n</span>
           </button>
         )}
 

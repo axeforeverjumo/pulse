@@ -110,10 +110,10 @@ export default function ChatView() {
   // Ref for the last user message to scroll it to top
   const lastUserMessageRef = useRef<HTMLDivElement>(null);
 
-  // When true, the user explicitly requested a nuevo chat — skip redirect to recent
+  // When true, the user explicitly requested a nuevo chat â skip redirect to recent
   const wantsNewChatRef = useRef(false);
 
-  // When true, we just created a conversation in sendMessage — skip loadMessages
+  // When true, we just created a conversation in sendMessage â skip loadMessages
   const justCreatedConversationRef = useRef(false);
 
   // Scroll container ref
@@ -221,7 +221,7 @@ export default function ChatView() {
         activeConversationRef.current = null;
         return;
       }
-      // If we just created a conversation in sendMessage, skip the redirect —
+      // If we just created a conversation in sendMessage, skip the redirect â
       // the URL was already updated via replaceState and messages are managed locally
       if (justCreatedConversationRef.current) {
         justCreatedConversationRef.current = false;
@@ -416,7 +416,7 @@ export default function ChatView() {
           </div>
           <div className="flex-1 overflow-y-auto px-2 pb-4">
             {conversations.length === 0 ? (
-              <p className="text-sm text-text-tertiary px-1 py-2">Sin chats a�n</p>
+              <p className="text-sm text-text-tertiary px-1 py-2">Sin chats aún</p>
             ) : (
               <>
               <p className={`text-xs ${SIDEBAR.item} px-1 pb-2`}>Tus chats</p>
@@ -459,7 +459,7 @@ export default function ChatView() {
                               setOpenConversationMenuId(openConversationMenuId === conversation.id ? null : conversation.id);
                             }}
                             className="p-1.5 text-text-tertiary hover:text-text-body hover:bg-bg-gray-light rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                            title="M�s opciones"
+                            title="Más opciones"
                           >
                             <EllipsisHorizontalIcon className="w-3.5 h-3.5" />
                           </button>
@@ -540,7 +540,7 @@ export default function ChatView() {
       {/* Drag-over overlay */}
       {isDragging && (
         <div className="absolute inset-0 z-50 bg-bg-white/80 border-2 border-dashed border-text-tertiary rounded-xl flex items-center justify-center pointer-events-none">
-          <p className="text-text-secondary text-sm font-medium">Suelta im�genes para adjuntar</p>
+          <p className="text-text-secondary text-sm font-medium">Suelta imágenes para adjuntar</p>
         </div>
       )}
       {/* Loading skeleton */}

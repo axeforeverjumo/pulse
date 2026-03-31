@@ -42,13 +42,13 @@ export default function SandboxFileBrowser({ agentId, sandboxStatus }: SandboxFi
     setStatusMsg(null);
     try {
       const root = await loadDir("/home/user");
-      setStatusMsg(`Listed /home/user → ${root.length} items`);
+      setStatusMsg(`Listed /home/user â ${root.length} items`);
       setEntries(root);
       setLoaded(true);
     } catch (e: any) {
       const msg = e?.message || String(e);
       setError("Failed to load files");
-      setStatusMsg(`Listed /home/user → error: ${msg}`);
+      setStatusMsg(`Listed /home/user â error: ${msg}`);
       console.error(e);
     } finally {
       setLoading(false);
@@ -143,7 +143,7 @@ export default function SandboxFileBrowser({ agentId, sandboxStatus }: SandboxFi
             style={{ paddingLeft: `${depth * 12 + 4}px` }}
           >
             <span className="text-[10px] text-text-tertiary w-3 text-center shrink-0">
-              {item.type === "dir" ? (item.expanded ? "▾" : "▸") : ""}
+              {item.type === "dir" ? (item.expanded ? "â¾" : "â¸") : ""}
             </span>
             <span className="text-[11px] text-text-body truncate">
               {item.type === "dir" ? `${item.name}/` : item.name}
@@ -212,7 +212,7 @@ export default function SandboxFileBrowser({ agentId, sandboxStatus }: SandboxFi
       <div className="border border-border-light rounded-lg bg-white overflow-hidden">
         <div className="max-h-[200px] overflow-y-auto py-1">
           {entries.length === 0 ? (
-            <p className="text-[11px] text-text-tertiary italic px-2 py-1">Directorio vac�o</p>
+            <p className="text-[11px] text-text-tertiary italic px-2 py-1">Directorio vacío</p>
           ) : (
             renderEntries(entries, "/home/user")
           )}

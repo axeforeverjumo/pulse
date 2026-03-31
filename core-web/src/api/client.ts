@@ -776,6 +776,7 @@ export interface EmailAccount {
   is_primary: boolean;
   account_order: number;
   is_active: boolean;
+  email_signature?: string;
 }
 
 export interface OAuthConfig {
@@ -813,6 +814,13 @@ export async function updateEmailAccountOrder(accountId: string, accountOrder: n
   await api(`/auth/email-accounts/${accountId}`, {
     method: 'PATCH',
     body: JSON.stringify({ account_order: accountOrder }),
+  });
+}
+
+export async function updateEmailSignature(accountId: string, signature: string): Promise<void> {
+  await api(`/auth/email-accounts/${accountId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ email_signature: signature }),
   });
 }
 
@@ -2458,7 +2466,9 @@ export interface ProjectIssueAssignee {
   workspace_app_id?: string;
   workspace_id?: string;
   issue_id: string;
-  user_id: string;
+  user_id?: string;
+  agent_id?: string;
+  assignee_type?: 'user' | 'agent';
   created_at?: string;
 }
 
@@ -2714,6 +2724,17 @@ export async function addIssueAssignee(issueId: string, userId: string): Promise
 
 export async function removeIssueAssignee(issueId: string, userId: string): Promise<{ status: string }> {
   return api(`/projects/issues/${issueId}/assignees/${userId}`, { method: 'DELETE' });
+}
+
+export async function addAgentAssignee(issueId: string, agentId: string): Promise<ProjectIssueAssignee> {
+  return api(`/projects/issues/${issueId}/agent-assignees`, {
+    method: 'POST',
+    body: JSON.stringify({ agent_id: agentId }),
+  });
+}
+
+export async function removeAgentAssignee(issueId: string, agentId: string): Promise<{ status: string }> {
+  return api(`/projects/issues/${issueId}/agent-assignees/${agentId}`, { method: 'DELETE' });
 }
 
 // --- Issue Comments ---

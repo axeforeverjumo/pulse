@@ -120,14 +120,14 @@ export default function BuilderChat() {
                 break;
 
               case "builder_file":
-                // Accumulate files in ref — no store update yet (avoids preview remount per file)
+                // Accumulate files in ref â no store update yet (avoids preview remount per file)
                 pendingFilesRef.current[event.path] = event.content;
                 setFilesCreated((prev) => [...prev, event.path]);
                 setGenerationStatus(`Writing ${event.path}`);
                 break;
 
               case "builder_complete": {
-                // Flush all files to store at once — single preview remount
+                // Flush all files to store at once â single preview remount
                 const current = useBuilderStore.getState().fileTree;
                 setFileTree({ ...current, ...pendingFilesRef.current });
                 pendingFilesRef.current = {};
@@ -172,7 +172,7 @@ export default function BuilderChat() {
         id: `error-${Date.now()}`,
         conversation_id: "",
         role: "assistant",
-        content: `Error: ${err instanceof Error ? err.message : "Error en la generaci�n"}`,
+        content: `Error: ${err instanceof Error ? err.message : "Error en la generación"}`,
         content_parts: [],
         version_id: null,
         created_at: new Date().toISOString(),
@@ -285,7 +285,7 @@ export default function BuilderChat() {
             placeholder={
               hasFiles
                 ? "Describe un cambio..."
-                : "Describe tu aplicaci�n..."
+                : "Describe tu aplicación..."
             }
             rows={1}
             disabled={isGenerating}
