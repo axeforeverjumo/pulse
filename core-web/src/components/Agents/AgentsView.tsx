@@ -606,7 +606,7 @@ function ThinkingBubble({
   thinkingState: ThinkingState;
   elapsedSeconds: number;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const expanded = true;  // Always show steps
 
   if (!thinkingState) return null;
 
@@ -628,12 +628,7 @@ function ThinkingBubble({
         </div>
 
         {/* Collapsible activity log */}
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className="text-[11px] text-gray-400 mt-1.5 flex items-center gap-1 hover:text-gray-500 transition-colors"
-        >
-          {expanded ? "▼" : "▶"} Ver actividad
-        </button>
+        
         {expanded && (
           <div className="mt-2 text-xs space-y-1">
             <div className={thinkingState === "connecting" ? "text-blue-500" : "text-green-500"}>
