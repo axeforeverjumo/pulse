@@ -15,12 +15,15 @@ logger = logging.getLogger(__name__)
 
 @tool(
     name="create_calendar_event",
-    description="Create a new calendar event. This actually creates the event immediately.",
+    description="Create a new calendar event with optional attendees, Google Meet link, and location. IMPORTANT: If the user mentions inviting someone, first search their email using smart_search or search_drive, then include their email in attendees. Always add a Meet link for virtual meetings.",
     params={
         "summary": "Event title/summary",
         "start_time": "Start time in ISO 8601 format with timezone",
         "end_time": "End time in ISO 8601 format with timezone",
-        "description": "Optional event description"
+        "description": "Optional event description",
+        "attendees": "Optional comma-separated list of email addresses to invite (e.g. 'ana@empresa.com, pedro@empresa.com')",
+        "add_meet_link": "Optional boolean - set true to add a Google Meet video call link",
+        "location": "Optional physical location for in-person meetings"
     },
     required=["summary", "start_time", "end_time"],
     category=ToolCategory.CALENDAR,
@@ -42,9 +45,18 @@ async def create_calendar_event(args: Dict, ctx: ToolContext) -> ToolResult:
     logger.info(f"[CHAT] User {ctx.user_id} creating calendar event: {summary}")
 
     try:
+        # Parse attendees
+        attendees_str = args.get("attendees", "")
+        attendees_list = []
+        if attendees_str:
+            attendees_list = [{"email": e.strip()} for e in attendees_str.split(",") if "@" in e.strip()]
+
         event_data = {
             "title": summary,
             "start_time": start_time,
+            "attendees": attendees_list,
+            "location": args.get("location", ""),
+            "notify_attendees": bool(attendees_list),
             "end_time": end_time,
             "description": description,
         }
