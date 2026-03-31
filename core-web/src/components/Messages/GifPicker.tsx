@@ -22,7 +22,7 @@ export default function GifPicker({ onSelect, onClose }: GifPickerProps) {
   const [gifs, setGifs] = useState<GifResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [trending, setTrending] = useState<GifResult[]>([]);
-  const searchTimeoutRef = useRef<NodeJS.Timeout>();
+  const searchTimeoutRef = useRef<NodeJS.Timeout>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Fetch trending on mount
