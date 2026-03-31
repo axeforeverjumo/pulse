@@ -848,7 +848,7 @@ async def _trigger_agent_work_background(issue_id: str, agent_id: str, user_jwt:
             from api.config import settings
 
             client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-            system_prompt = f"Eres {agent['name']}.\n\n{agent.get('soul_md', '')}\n\n{agent.get('identity_md', '')}\n\nTe han asignado una tarea. Analiza y proporciona tu plan de acción o entregables. Sé concreto y útil. Responde en español."
+            system_prompt = f"Eres {agent['name']}.\n\n{agent.get('soul_md', '')}\n\n{agent.get('identity_md', '')}\n\nTe han asignado una tarea. Analiza y trabaja en ella. Si puedes completarla, hazlo y escribe 'Tarea completada' al final. Si necesitas más información o no puedes terminarla ahora, explica qué has hecho y qué falta. Responde en español."
 
             response = await client.messages.create(
                 model=agent.get("model", "claude-haiku-4-5-20251001"),
@@ -878,15 +878,23 @@ async def _trigger_agent_work_background(issue_id: str, agent_id: str, user_jwt:
         await auth_supabase.table("project_issue_comments").insert({
             "issue_id": issue_id,
             "user_id": user_id,
-            "blocks": [{"type": "text", "data": {"content": f"🤖 **{agent['name']}** (actividad automática):\n\n{agent_response}"}}],
+            "blocks": [{"type": "text", "data": {"content": f"🤖 **{agent['name']}**:\n\n{agent_response}"}}],
         }).execute()
 
-        # Move task to "Done"
-        if done_id:
-            await supabase.table("project_issues").update({"state_id": done_id}).eq("id", issue_id).execute()
-            logger.info(f"Moved issue {issue_id} to Done")
+        # Check if agent considers the task complete
+        # Only move to Done if the agent explicitly says so
+        response_lower = agent_response.lower()
+        task_complete = any(phrase in response_lower for phrase in [
+            "tarea completada", "tarea finalizada", "he terminado", "trabajo completado",
+            "he completado", "tarea resuelta", "queda resuelto", "listo",
+            "task completed", "task done", "work complete",
+        ])
 
-        logger.info(f"Agent {agent['name']} completed work on issue {issue_id}")
+        if task_complete and done_id:
+            await supabase.table("project_issues").update({"state_id": done_id}).eq("id", issue_id).execute()
+            logger.info(f"Agent marked issue {issue_id} as Done")
+
+        logger.info(f"Agent {agent['name']} responded on issue {issue_id}")
     except Exception as e:
         logger.error(f"Agent work-on-task failed for issue {issue_id}: {e}")
 
