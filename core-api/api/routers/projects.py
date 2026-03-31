@@ -777,10 +777,16 @@ async def add_agent_assignee_endpoint(
     issue_id: str,
     request: AddAgentAssigneeRequest,
     user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
 ):
     """Add an agent assignee to an issue."""
     try:
         assignee = await add_agent_assignee(user_jwt, issue_id, request.agent_id)
+
+        # Auto-trigger agent to work on the task in background
+        import asyncio
+        asyncio.create_task(_trigger_agent_work_background(issue_id, request.agent_id, user_jwt, user_id))
+
         return assignee
     except Exception as e:
         message = str(e).lower()
@@ -795,6 +801,71 @@ async def add_agent_assignee_endpoint(
                 detail="Agent already assigned to this issue",
             )
         handle_api_exception(e, "Failed to add agent assignee", logger)
+
+
+async def _trigger_agent_work_background(issue_id: str, agent_id: str, user_jwt: str, user_id: str):
+    """Background task: make the agent work on the assigned issue."""
+    try:
+        from lib.supabase_client import get_async_service_role_client, get_authenticated_async_client
+
+        supabase = await get_async_service_role_client()
+
+        # Get task details
+        task_result = await supabase.table("project_issues").select("title, description, priority").eq("id", issue_id).maybe_single().execute()
+        if not task_result or not task_result.data:
+            return
+
+        task = task_result.data
+
+        # Get agent details
+        agent_result = await supabase.table("openclaw_agents").select("*").eq("id", agent_id).maybe_single().execute()
+        if not agent_result or not agent_result.data:
+            return
+
+        agent = agent_result.data
+        task_context = f"Título: {task['title']}\nDescripción: {task.get('description') or 'Sin descripción'}\nPrioridad: {task.get('priority', 0)}"
+
+        if agent.get("tier") == "core":
+            import anthropic
+            from api.config import settings
+
+            client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+            system_prompt = f"Eres {agent['name']}.\n\n{agent.get('soul_md', '')}\n\n{agent.get('identity_md', '')}\n\nTe han asignado una tarea. Analiza y proporciona tu plan de acción o entregables. Sé concreto y útil. Responde en español."
+
+            response = await client.messages.create(
+                model=agent.get("model", "claude-haiku-4-5-20251001"),
+                max_tokens=2048,
+                system=system_prompt,
+                messages=[{"role": "user", "content": f"Tarea asignada:\n\n{task_context}\n\nTrabaja en esta tarea."}],
+            )
+            agent_response = response.content[0].text
+        else:
+            import httpx
+            async with httpx.AsyncClient(timeout=180.0) as http_client:
+                resp = await http_client.post(
+                    "http://127.0.0.1:4200",
+                    json={
+                        "model": f"openclaw:{agent.get('openclaw_agent_id', '')}",
+                        "messages": [{"role": "user", "content": f"[Pulse Task] Tarea asignada:\n\n{task_context}\n\nTrabaja en esta tarea."}]
+                    }
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    agent_response = data.get("choices", [{}])[0].get("message", {}).get("content", "No pude procesar la tarea.")
+                else:
+                    agent_response = "Error al conectar con el agente."
+
+        # Save response as comment on the task
+        auth_supabase = await get_authenticated_async_client(user_jwt)
+        await auth_supabase.table("project_issue_comments").insert({
+            "issue_id": issue_id,
+            "user_id": user_id,
+            "blocks": [{"type": "text", "data": {"content": f"🤖 **{agent['name']}** (actividad automática):\n\n{agent_response}"}}],
+        }).execute()
+
+        logger.info(f"Agent {agent['name']} completed work on issue {issue_id}")
+    except Exception as e:
+        logger.error(f"Agent work-on-task failed for issue {issue_id}: {e}")
 
 
 @router.delete("/issues/{issue_id}/agent-assignees/{agent_id}", response_model=DeleteResponse)
