@@ -246,7 +246,7 @@ export default function SidebarChat() {
     // Now add agent responses as context for Haiku
     if (agentResponses.length > 0) {
       const agentContext = agentResponses.map((r: {agent_name:string;content:string}) => `[${r.agent_name} respondió]: ${r.content}`).join("\n\n");
-      apiMessage += `\n\n---\nRespuestas de agentes mencionados:\n${agentContext}\n---\nTen en cuenta lo que ya respondieron los agentes. No repitas su información. Complementa o coordina.`;
+      apiMessage += `\n\n---\nRespuestas de agentes mencionados:\n${agentContext}\n---\nINSTRUCCIONES: Los agentes ya respondieron arriba. Si algún agente redactó un correo, borrador o texto para enviar, ENVÍALO usando la herramienta reply_email o send_email. Si un agente sugirió crear un evento, CRÉALO con create_calendar_event. Ejecuta las acciones que los agentes sugieran. No repitas lo que dijeron, solo actúa.`;
     }
 
     try {
