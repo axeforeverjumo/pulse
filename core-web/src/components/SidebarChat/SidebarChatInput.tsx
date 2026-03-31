@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import { ArrowUpIcon, PlusIcon, StopIcon, XMarkIcon, AtSymbolIcon } from '@heroicons/react/24/solid';
 import type { PendingAttachment } from '../../hooks/useChatAttachments';
 import type { MentionData } from '../../types/mention';
@@ -45,6 +45,7 @@ export default function SidebarChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const highlightRef = useRef<HTMLDivElement>(null);
   const [showMentionAutocomplete, setShowMentionAutocomplete] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionCursorCoords, setMentionCursorCoords] = useState<{ top: number; bottom: number; left: number } | null>(null);
@@ -62,6 +63,33 @@ export default function SidebarChatInput({
   useEffect(() => {
     adjustHeight();
   }, [value, adjustHeight]);
+
+  // Sync highlight overlay scroll with textarea
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    const highlight = highlightRef.current;
+    if (!textarea || !highlight) return;
+    const syncScroll = () => {
+      highlight.scrollTop = textarea.scrollTop;
+      highlight.scrollLeft = textarea.scrollLeft;
+    };
+    textarea.addEventListener('scroll', syncScroll);
+    return () => textarea.removeEventListener('scroll', syncScroll);
+  }, []);
+
+  // Check if the text contains any @mention patterns
+  const hasMentionInText = useMemo(() => /@\w/.test(value), [value]);
+
+  // Parse text into segments with @mention highlighting
+  const highlightedSegments = useMemo(() => {
+    if (!value || !hasMentionInText) return [];
+    const parts = value.split(/(@\w[\w.-]*)/g);
+    return parts.map((part, i) => ({
+      text: part,
+      isMention: part.startsWith('@') && part.length > 1,
+      key: i,
+    }));
+  }, [value, hasMentionInText]);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
@@ -273,16 +301,45 @@ export default function SidebarChatInput({
             className="hidden"
             onChange={handleFileChange}
           />
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            placeholder={placeholder}
-            rows={1}
-            className="flex-1 min-w-0 bg-transparent resize-none outline-none text-text-body placeholder-text-tertiary text-sm leading-5 h-5 min-h-[20px] max-h-[120px]"
-          />
+          <div className="flex-1 min-w-0 relative">
+            {/* Highlight overlay - renders @mentions with colored background */}
+            {hasMentionInText && (
+              <div
+                ref={highlightRef}
+                className="absolute inset-0 pointer-events-none overflow-hidden whitespace-pre-wrap break-words"
+                style={{ fontSize: '14px', lineHeight: '20px' }}
+                aria-hidden="true"
+              >
+                {highlightedSegments.map((seg) =>
+                  seg.isMention ? (
+                    <span
+                      key={seg.key}
+                      className="bg-blue-100 text-blue-700 rounded-sm px-px font-medium"
+                    >
+                      {seg.text}
+                    </span>
+                  ) : (
+                    <span key={seg.key} style={{ color: 'var(--color-text-body, #1f2937)' }}>{seg.text}</span>
+                  )
+                )}
+              </div>
+            )}
+            <textarea
+              ref={textareaRef}
+              value={value}
+              onChange={handleChange}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              placeholder={placeholder}
+              rows={1}
+              className="relative z-10 w-full bg-transparent resize-none outline-none placeholder-text-tertiary text-sm leading-5 h-5 min-h-[20px] max-h-[120px]"
+              style={{
+                color: hasMentionInText ? 'transparent' : undefined,
+                caretColor: 'var(--color-text-body, #1f2937)',
+                WebkitTextFillColor: hasMentionInText ? 'transparent' : undefined,
+              }}
+            />
+          </div>
           {isStreaming ? (
             <button
               onClick={onStop}

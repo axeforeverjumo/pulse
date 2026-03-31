@@ -28,6 +28,10 @@ class AssignAgentRequest(BaseModel):
     workspace_id: str
     agent_id: str
 
+class MultiAgentRequest(BaseModel):
+    message: str
+    workspace_id: str
+
 
 # ── Helper: get user profile ──
 
@@ -460,10 +464,6 @@ Responde SOLO con JSON válido:
 
 
 # ── Multi-agent dispatch (sidebar chat @mentions) ──
-
-class MultiAgentRequest(BaseModel):
-    message: str
-    workspace_id: str
 
 
 
