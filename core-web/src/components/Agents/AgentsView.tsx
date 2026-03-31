@@ -422,6 +422,74 @@ function CreateAgentModal({
   );
 }
 
+
+/* ------------------------------------------------------------------ */
+/*  Thinking states & bubble                                           */
+/* ------------------------------------------------------------------ */
+
+type ThinkingState = "connecting" | "processing" | "waiting" | null;
+
+const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
+
+function ThinkingBubble({
+  agent,
+  thinkingState,
+  elapsedSeconds,
+}: {
+  agent: OpenClawAgent;
+  thinkingState: ThinkingState;
+  elapsedSeconds: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!thinkingState) return null;
+
+  return (
+    <div className="flex gap-3 items-start">
+      <div className="shrink-0 animate-pulse">
+        <AgentAvatar agent={agent} size="sm" />
+      </div>
+      <div className="bg-gray-50 rounded-2xl rounded-bl-md px-4 py-3 max-w-md">
+        {/* Animated dots + timer */}
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <span className="font-medium">Pensando</span>
+          <span className="flex gap-0.5 text-lg leading-none">
+            <span className="animate-bounce inline-block" style={{ animationDelay: "0ms" }}>&middot;</span>
+            <span className="animate-bounce inline-block" style={{ animationDelay: "150ms" }}>&middot;</span>
+            <span className="animate-bounce inline-block" style={{ animationDelay: "300ms" }}>&middot;</span>
+          </span>
+          <span className="text-xs tabular-nums text-gray-400">{formatTime(elapsedSeconds)}</span>
+        </div>
+
+        {/* Collapsible activity log */}
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="text-[11px] text-gray-400 mt-1.5 flex items-center gap-1 hover:text-gray-500 transition-colors"
+        >
+          {expanded ? "▼" : "▶"} Ver actividad
+        </button>
+        {expanded && (
+          <div className="mt-2 text-xs space-y-1">
+            <div className={thinkingState === "connecting" ? "text-blue-500" : "text-green-500"}>
+              {thinkingState === "connecting" ? "🔄" : "✓"} Conectando con {agent.name}...
+            </div>
+            {(thinkingState === "processing" || thinkingState === "waiting") && (
+              <div className={thinkingState === "processing" ? "text-blue-500" : "text-green-500"}>
+                {thinkingState === "processing" ? "🧠" : "✓"} Procesando tu mensaje...
+              </div>
+            )}
+            {thinkingState === "waiting" && (
+              <div className="text-blue-500">
+                ⏳ Esperando respuesta del agente...
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /*  Chat View                                                          */
 /* ------------------------------------------------------------------ */
@@ -433,14 +501,48 @@ function AgentChatView({
   agent: OpenClawAgent;
   onBack: () => void;
 }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const storageKey = `pulse-agent-chat-${agent.id}`;
+
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    const saved = localStorage.getItem(storageKey);
+    return saved ? JSON.parse(saved) : [];
+  });
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [thinkingState, setThinkingState] = useState<ThinkingState>(null);
+  const [thinkingStartTime, setThinkingStartTime] = useState<number>(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const thinkingTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Persist messages to localStorage
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem(storageKey, JSON.stringify(messages));
+    }
+  }, [messages, storageKey]);
+
+  // Load messages when switching agents
+  useEffect(() => {
+    const saved = localStorage.getItem(`pulse-agent-chat-${agent.id}`);
+    setMessages(saved ? JSON.parse(saved) : []);
+  }, [agent.id]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+  }, [messages, thinkingState]);
+
+  // Elapsed timer for thinking state
+  useEffect(() => {
+    if (!thinkingState) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - thinkingStartTime) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [thinkingState, thinkingStartTime]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -452,6 +554,20 @@ function AgentChatView({
     setMessages(updatedMessages);
     setInput("");
     setLoading(true);
+    setThinkingState("connecting");
+    setThinkingStartTime(Date.now());
+
+    // Clear any previous timers
+    thinkingTimersRef.current.forEach(clearTimeout);
+    thinkingTimersRef.current = [];
+
+    // Progressive state transitions
+    thinkingTimersRef.current.push(
+      setTimeout(() => setThinkingState("processing"), 2000)
+    );
+    thinkingTimersRef.current.push(
+      setTimeout(() => setThinkingState("waiting"), 5000)
+    );
 
     try {
       const reply = await sendChatMessage(agent.id, updatedMessages);
@@ -463,6 +579,9 @@ function AgentChatView({
         { role: "assistant", content: "Error al obtener respuesta. Intenta de nuevo." },
       ]);
     } finally {
+      thinkingTimersRef.current.forEach(clearTimeout);
+      thinkingTimersRef.current = [];
+      setThinkingState(null);
       setLoading(false);
     }
   };
@@ -511,13 +630,12 @@ function AgentChatView({
             </div>
           </div>
         ))}
-        {loading && (
-          <div className="flex justify-start">
-            <div className="bg-gray-100 text-gray-500 rounded-2xl rounded-bl-md px-4 py-2.5 text-sm flex items-center gap-2">
-              <Loader2 size={14} className="animate-spin" />
-              Pensando...
-            </div>
-          </div>
+        {thinkingState && (
+          <ThinkingBubble
+            agent={agent}
+            thinkingState={thinkingState}
+            elapsedSeconds={elapsedSeconds}
+          />
         )}
       </div>
 

@@ -5,6 +5,7 @@ Analyzes emails to generate summaries and determine importance.
 
 import json
 import logging
+import time
 import traceback
 from typing import Dict, Optional
 import anthropic
@@ -210,7 +211,7 @@ def analyze_and_update_email(email_id: str, email_data: Dict) -> bool:
         return False
 
 
-def analyze_unanalyzed_emails(user_id: str = None, limit: int = 50) -> int:
+def analyze_unanalyzed_emails(user_id: str = None, limit: int = 10) -> int:
     """
     Find and analyze emails that haven't been processed yet.
     
@@ -245,6 +246,9 @@ def analyze_unanalyzed_emails(user_id: str = None, limit: int = 50) -> int:
             success = analyze_and_update_email(email["id"], email)
             if success:
                 analyzed_count += 1
+            # Rate limit: wait 2s between analyses to stay under Haiku token limits
+            if i < len(emails):
+                time.sleep(2)
 
         logger.info(f"✅ Analyzed {analyzed_count}/{len(emails)} emails successfully")
         return analyzed_count

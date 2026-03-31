@@ -415,15 +415,15 @@ Responde SOLO con JSON válido con esta estructura exacta:
         subprocess.run(["mkdir", "-p", workspace_path], check=True)
 
         with open(f"{workspace_path}/SOUL.md", "w") as f:
-            f.write(f"# {request.name}\n\n{config[soul]}\n")
+            f.write(f"# {request.name}\n\n{config['soul']}\n")
 
         with open(f"{workspace_path}/IDENTITY.md", "w") as f:
             f.write(
                 f"# IDENTITY.md - {request.name}\n\n"
                 f"- **Name:** {request.name}\n"
-                f"- **Creature:** {config[description]}\n"
-                f"- **Vibe:** {config[soul]}\n\n"
-                f"## Mi rol\n{config[identity]}\n"
+                f"- **Creature:** {config['description']}\n"
+                f"- **Vibe:** {config['soul']}\n\n"
+                f"## Mi rol\n{config['identity']}\n"
             )
 
         if request.tier == "advance" and request.tools:

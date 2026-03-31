@@ -526,7 +526,14 @@ export default function SidebarChat() {
                   <div>
                     {isWaitingForResponse ? (
                       <div className="py-2 px-4">
-                        <span className="inline-block w-2.5 h-2.5 bg-text-body rounded-full animate-pulse" />
+                        <div className="flex items-center gap-2 text-sm text-text-tertiary">
+                          <span className="flex gap-0.5 text-lg leading-none">
+                            <span className="animate-bounce inline-block" style={{ animationDelay: "0ms" }}>&middot;</span>
+                            <span className="animate-bounce inline-block" style={{ animationDelay: "150ms" }}>&middot;</span>
+                            <span className="animate-bounce inline-block" style={{ animationDelay: "300ms" }}>&middot;</span>
+                          </span>
+                          <span className="text-xs">Pensando...</span>
+                        </div>
                       </div>
                     ) : (
                       <ChatMessage
