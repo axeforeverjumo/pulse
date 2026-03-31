@@ -810,8 +810,8 @@ async def _trigger_agent_work_background(issue_id: str, agent_id: str, user_jwt:
 
         supabase = await get_async_service_role_client()
 
-        # Get task details
-        task_result = await supabase.table("project_issues").select("title, description, priority").eq("id", issue_id).maybe_single().execute()
+        # Get task details (include board_id to find states)
+        task_result = await supabase.table("project_issues").select("title, description, priority, board_id, state_id").eq("id", issue_id).maybe_single().execute()
         if not task_result or not task_result.data:
             return
 
@@ -823,6 +823,24 @@ async def _trigger_agent_work_background(issue_id: str, agent_id: str, user_jwt:
             return
 
         agent = agent_result.data
+
+        # Find "In Progress" and "Done" state IDs for this board
+        states_result = await supabase.table("project_states").select("id, name").eq("board_id", task["board_id"]).order("position").execute()
+        states = states_result.data or []
+        in_progress_id = None
+        done_id = None
+        for s in states:
+            name_lower = s["name"].strip().lower()
+            if name_lower in ("in progress", "en progreso", "en curso"):
+                in_progress_id = s["id"]
+            elif name_lower in ("done", "hecho", "completado", "terminado"):
+                done_id = s["id"]
+
+        # Move task to "In Progress"
+        if in_progress_id and task["state_id"] != in_progress_id:
+            await supabase.table("project_issues").update({"state_id": in_progress_id}).eq("id", issue_id).execute()
+            logger.info(f"Moved issue {issue_id} to In Progress")
+
         task_context = f"Título: {task['title']}\nDescripción: {task.get('description') or 'Sin descripción'}\nPrioridad: {task.get('priority', 0)}"
 
         if agent.get("tier") == "core":
@@ -862,6 +880,11 @@ async def _trigger_agent_work_background(issue_id: str, agent_id: str, user_jwt:
             "user_id": user_id,
             "blocks": [{"type": "text", "data": {"content": f"🤖 **{agent['name']}** (actividad automática):\n\n{agent_response}"}}],
         }).execute()
+
+        # Move task to "Done"
+        if done_id:
+            await supabase.table("project_issues").update({"state_id": done_id}).eq("id", issue_id).execute()
+            logger.info(f"Moved issue {issue_id} to Done")
 
         logger.info(f"Agent {agent['name']} completed work on issue {issue_id}")
     except Exception as e:
