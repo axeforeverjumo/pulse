@@ -3,7 +3,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { useState, useRef, useEffect, memo } from "react";
+import { useState, useRef, useEffect, useMemo, memo } from "react";
 import {
   PlusIcon,
   TrashIcon,
@@ -11,10 +11,14 @@ import {
   PencilIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  UserPlusIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { SwatchIcon } from "@heroicons/react/24/solid";
 import ConfirmModal from "./ConfirmModal";
 import Dropdown from "../../Dropdown/Dropdown";
+import { useProjectsStore } from "../../../stores/projectsStore";
+import { triggerAgentWork } from "../../../api/client";
 
 const COLUMN_COLORS = [
   { value: "#94A3B8", name: "Slate" },
@@ -32,8 +36,14 @@ import {
   useCreateIssue,
   useDeleteState,
   useUpdateState,
+  useProjectMembers,
+  useWorkspaceAgents,
+  useAddAssignee,
+  useAddAgentAssignee,
   type ProjectIssue,
   type ProjectState,
+  type WorkspaceMember,
+  type AgentInstance,
 } from "../../../hooks/queries/useProjects";
 
 interface KanbanColumnProps {
@@ -69,6 +79,13 @@ const KanbanColumn = memo(function KanbanColumn({
   const createIssue = useCreateIssue(boardId);
   const deleteState = useDeleteState(boardId);
   const updateState = useUpdateState(boardId);
+  const addAssignee = useAddAssignee(boardId);
+  const addAgentAssignee = useAddAgentAssignee(boardId);
+
+  // Workspace data for assignee picker
+  const workspaceId = useProjectsStore((state) => state.workspaceId);
+  const { data: wsMembers = [] } = useProjectMembers(workspaceId);
+  const { data: wsAgents = [] } = useWorkspaceAgents(workspaceId);
 
   const cards = cardsOverride;
   const [isExpanded, setIsExpanded] = useState(false);
@@ -81,6 +98,41 @@ const KanbanColumn = memo(function KanbanColumn({
   const [newCardTitle, setNewCardTitle] = useState("");
   const [newCardDescription, setNewCardDescription] = useState("");
   const [newCardPriority, setNewCardPriority] = useState(0);
+  const [newCardAssignees, setNewCardAssignees] = useState<Array<{ type: 'user' | 'agent'; id: string; name: string; avatarUrl?: string }>>([]);
+  const [showAssigneePicker, setShowAssigneePicker] = useState(false);
+  const [assigneeSearch, setAssigneeSearch] = useState("");
+  const assigneePickerRef = useRef<HTMLDivElement>(null);
+
+  // Combined list of members + agents for picker
+  const assigneeOptions = useMemo(() => {
+    const search = assigneeSearch.toLowerCase();
+    const selectedIds = new Set(newCardAssignees.map(a => a.id));
+
+    const members: Array<{ type: 'user' | 'agent'; id: string; name: string; avatarUrl?: string }> =
+      wsMembers
+        .filter((m: WorkspaceMember) => !selectedIds.has(m.user_id) && (m.name || m.email || '').toLowerCase().includes(search))
+        .map((m: WorkspaceMember) => ({ type: 'user' as const, id: m.user_id, name: m.name || m.email || 'Usuario', avatarUrl: m.avatar_url }));
+
+    const agents: Array<{ type: 'user' | 'agent'; id: string; name: string; avatarUrl?: string }> =
+      wsAgents
+        .filter((a: AgentInstance) => !selectedIds.has(a.id) && (a.name || '').toLowerCase().includes(search))
+        .map((a: AgentInstance) => ({ type: 'agent' as const, id: a.id, name: a.name, avatarUrl: a.avatar_url }));
+
+    return [...members, ...agents];
+  }, [wsMembers, wsAgents, newCardAssignees, assigneeSearch]);
+
+  // Close assignee picker on outside click
+  useEffect(() => {
+    if (!showAssigneePicker) return;
+    const handleClick = (e: MouseEvent) => {
+      if (assigneePickerRef.current && !assigneePickerRef.current.contains(e.target as Node)) {
+        setShowAssigneePicker(false);
+        setAssigneeSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showAssigneePicker]);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -133,20 +185,47 @@ const KanbanColumn = memo(function KanbanColumn({
 
     const description = newCardDescription.trim();
     const priority = newCardPriority;
+    const assignees = [...newCardAssignees];
 
     // Close form and clear input immediately
     setNewCardTitle("");
     setNewCardDescription("");
     setNewCardPriority(0);
+    setNewCardAssignees([]);
+    setShowAssigneePicker(false);
+    setAssigneeSearch("");
     setIsAddingCard(false);
 
+    // Get user assignee IDs for the create call
+    const userAssigneeIds = assignees.filter(a => a.type === 'user').map(a => a.id);
+    const agentAssignees = assignees.filter(a => a.type === 'agent');
+
     // React Query handles optimistic update
-    createIssue.mutate({
-      state_id: column.id,
-      title,
-      ...(description && { description }),
-      ...(priority > 0 && { priority }),
-    });
+    createIssue.mutate(
+      {
+        state_id: column.id,
+        title,
+        ...(description && { description }),
+        ...(priority > 0 && { priority }),
+        ...(userAssigneeIds.length > 0 && { assignee_ids: userAssigneeIds }),
+      },
+      {
+        onSuccess: (newIssue) => {
+          // Assign agents after creation (API doesn't support agent_ids in create)
+          for (const agent of agentAssignees) {
+            addAgentAssignee.mutate(
+              { issueId: newIssue.id, agentId: agent.id },
+              {
+                onSuccess: () => {
+                  // Trigger agent work on the task
+                  triggerAgentWork(newIssue.id, agent.id).catch(console.error);
+                },
+              }
+            );
+          }
+        },
+      }
+    );
   };
 
   const handleDeleteColumn = () => {
@@ -197,6 +276,9 @@ const KanbanColumn = memo(function KanbanColumn({
       setNewCardTitle("");
       setNewCardDescription("");
       setNewCardPriority(0);
+      setNewCardAssignees([]);
+      setShowAssigneePicker(false);
+      setAssigneeSearch("");
     }
   };
 
@@ -385,6 +467,39 @@ const KanbanColumn = memo(function KanbanColumn({
                 rows={2}
                 className="w-full mt-2 px-0 py-1 text-[12px] text-gray-700 placeholder:text-gray-400 bg-transparent border-0 focus:outline-none focus:ring-0 resize-none"
               />
+
+              {/* Assigned people/agents chips */}
+              {newCardAssignees.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                  {newCardAssignees.map((a) => (
+                    <span
+                      key={a.id}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                        a.type === 'agent'
+                          ? 'bg-purple-50 text-purple-700'
+                          : 'bg-blue-50 text-blue-700'
+                      }`}
+                    >
+                      {a.avatarUrl ? (
+                        <img src={a.avatarUrl} className="w-3.5 h-3.5 rounded-full" alt="" />
+                      ) : (
+                        <span className="w-3.5 h-3.5 rounded-full bg-gray-300 flex items-center justify-center text-[8px] text-white font-bold">
+                          {a.name[0]?.toUpperCase()}
+                        </span>
+                      )}
+                      {a.name}
+                      {a.type === 'agent' && <span className="text-[9px] opacity-60">🤖</span>}
+                      <button
+                        onClick={() => setNewCardAssignees(prev => prev.filter(x => x.id !== a.id))}
+                        className="ml-0.5 hover:text-red-500"
+                      >
+                        <XMarkIcon className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
               <div className="flex items-center justify-between gap-2 mt-3">
                 <div className="flex items-center gap-2">
                   <select
@@ -398,7 +513,75 @@ const KanbanColumn = memo(function KanbanColumn({
                     <option value={3}>🟡 Media</option>
                     <option value={4}>🔵 Baja</option>
                   </select>
+
+                  {/* Assignee picker toggle */}
+                  <div className="relative" ref={assigneePickerRef}>
+                    <button
+                      onClick={() => setShowAssigneePicker(!showAssigneePicker)}
+                      className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border transition-colors ${
+                        showAssigneePicker
+                          ? 'bg-violet-50 border-violet-200 text-violet-600'
+                          : 'bg-gray-50 border-gray-200 text-gray-500 hover:text-gray-700'
+                      }`}
+                      title="Asignar persona o agente"
+                    >
+                      <UserPlusIcon className="w-3.5 h-3.5" />
+                      Asignar
+                    </button>
+
+                    {showAssigneePicker && (
+                      <div className="absolute bottom-full left-0 mb-1 w-56 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50">
+                        <div className="p-2 border-b border-gray-100">
+                          <input
+                            type="text"
+                            value={assigneeSearch}
+                            onChange={(e) => setAssigneeSearch(e.target.value)}
+                            placeholder="Buscar persona o agente..."
+                            autoFocus
+                            className="w-full px-2 py-1.5 text-[12px] bg-gray-50 rounded-lg border-0 focus:outline-none focus:ring-1 focus:ring-violet-200"
+                          />
+                        </div>
+                        <div className="max-h-48 overflow-y-auto p-1">
+                          {assigneeOptions.length === 0 ? (
+                            <div className="px-3 py-4 text-center text-[11px] text-gray-400">
+                              No hay más personas disponibles
+                            </div>
+                          ) : (
+                            assigneeOptions.map((opt) => (
+                              <button
+                                key={opt.id}
+                                onClick={() => {
+                                  setNewCardAssignees(prev => [...prev, opt]);
+                                  setAssigneeSearch("");
+                                }}
+                                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+                              >
+                                {opt.avatarUrl ? (
+                                  <img src={opt.avatarUrl} className="w-6 h-6 rounded-full" alt="" />
+                                ) : (
+                                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white ${
+                                    opt.type === 'agent' ? 'bg-gradient-to-br from-purple-400 to-violet-600' : 'bg-gradient-to-br from-blue-400 to-blue-600'
+                                  }`}>
+                                    {opt.name[0]?.toUpperCase()}
+                                  </span>
+                                )}
+                                <div className="flex-1 min-w-0 text-left">
+                                  <div className="text-[12px] text-gray-900 truncate">{opt.name}</div>
+                                </div>
+                                {opt.type === 'agent' && (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-600 font-medium shrink-0">
+                                    Agente
+                                  </span>
+                                )}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
+
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
@@ -406,6 +589,9 @@ const KanbanColumn = memo(function KanbanColumn({
                       setNewCardTitle("");
                       setNewCardDescription("");
                       setNewCardPriority(0);
+                      setNewCardAssignees([]);
+                      setShowAssigneePicker(false);
+                      setAssigneeSearch("");
                     }}
                     className="px-3 py-1.5 text-[12px] text-gray-500 hover:text-gray-700 font-medium transition-colors"
                   >
