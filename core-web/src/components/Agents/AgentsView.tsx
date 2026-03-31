@@ -630,25 +630,44 @@ function ThinkingBubble({ agent, state, elapsed, message }: { agent: OpenClawAge
   const steps = getThinkingSteps(message || "", agent.name);
   const stateIndex = state === "connecting" ? 0 : state === "processing" ? 1 : 2;
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
+  const currentStep = steps[stateIndex] || "Procesando...";
 
   return (
-    <div className="flex gap-3 items-start mb-4">
-      <AgentAvatar agent={agent} size="sm" />
-      <div className="bg-gray-50 rounded-2xl px-4 py-3 max-w-sm">
-        <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
-          <span className="font-medium">{steps[stateIndex] || "Procesando..."}</span>
-          <span className="text-xs text-gray-400">{formatTime(elapsed)}</span>
+    <div className="mb-4 ml-2">
+      {/* Main thinking card */}
+      <div className="bg-gradient-to-r from-gray-50 to-white border border-gray-100 rounded-xl px-5 py-4 max-w-md shadow-sm">
+        {/* Current action with animated sparkle */}
+        <div className="flex items-center gap-2.5 mb-3">
+          <div className="relative">
+            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 animate-pulse" />
+            <div className="absolute inset-0 w-5 h-5 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 animate-ping opacity-20" />
+          </div>
+          <span className="text-sm font-medium text-gray-800">{currentStep}</span>
+          <span className="text-xs text-gray-400 ml-auto tabular-nums">{formatTime(elapsed)}</span>
         </div>
-        <div className="space-y-1.5">
-          {steps.map((step, i) => (
-            <div key={i} className={`flex items-center gap-1.5 text-xs ${
-              i < stateIndex ? "text-green-600" : i === stateIndex ? "text-blue-500" : "text-gray-300"
-            }`}>
-              <span>{i < stateIndex ? "✓" : i === stateIndex ? "→" : "○"}</span>
-              <span className={i === stateIndex ? "animate-pulse" : ""}>{step}</span>
-            </div>
-          ))}
+
+        {/* Animated gradient progress bar */}
+        <div className="h-1 w-full bg-gray-100 rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-blue-400 via-purple-400 to-blue-400 animate-pulse"
+            style={{
+              width: `${Math.min(30 + stateIndex * 30 + (elapsed % 10) * 3, 95)}%`,
+              transition: "width 1s ease-in-out"
+            }}
+          />
         </div>
+
+        {/* Completed steps - small, subtle */}
+        {stateIndex > 0 && (
+          <div className="mt-2.5 space-y-0.5">
+            {steps.slice(0, stateIndex).map((step, i) => (
+              <div key={i} className="flex items-center gap-1.5 text-[11px] text-gray-400">
+                <span className="text-green-500">{"\u2713"}</span>
+                <span>{step}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -800,6 +819,7 @@ function AgentChatView({
             agent={agent}
             state={thinkingState}
             elapsed={elapsedSeconds}
+            message={messages.length > 0 ? messages[messages.length - 1].content : ""}
           />
         )}
       </div>
