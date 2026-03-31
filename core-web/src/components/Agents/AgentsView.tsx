@@ -626,49 +626,29 @@ function getThinkingSteps(message: string, agentName: string): string[] {
   return steps;
 }
 
-function ThinkingBubble({ agent, state, elapsed, message }: { agent: OpenClawAgent; state: string; elapsed: number; message?: string }) {
+function ThinkingBubble({ agent, state, elapsed: _elapsed, message }: { agent: OpenClawAgent; state: string; elapsed: number; message?: string }) {
   const steps = getThinkingSteps(message || "", agent.name);
   const stateIndex = state === "connecting" ? 0 : state === "processing" ? 1 : 2;
-  const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
   const currentStep = steps[stateIndex] || "Procesando...";
 
   return (
-    <div className="mb-4 ml-2">
-      {/* Main thinking card */}
-      <div className="bg-gradient-to-r from-gray-50 to-white border border-gray-100 rounded-xl px-5 py-4 max-w-md shadow-sm">
-        {/* Current action with animated sparkle */}
-        <div className="flex items-center gap-2.5 mb-3">
-          <div className="relative">
-            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 animate-pulse" />
-            <div className="absolute inset-0 w-5 h-5 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 animate-ping opacity-20" />
-          </div>
-          <span className="text-sm font-medium text-gray-800">{currentStep}</span>
-          <span className="text-xs text-gray-400 ml-auto tabular-nums">{formatTime(elapsed)}</span>
-        </div>
-
-        {/* Animated gradient progress bar */}
-        <div className="h-1 w-full bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-blue-400 via-purple-400 to-blue-400 animate-pulse"
-            style={{
-              width: `${Math.min(30 + stateIndex * 30 + (elapsed % 10) * 3, 95)}%`,
-              transition: "width 1s ease-in-out"
-            }}
+    <div className="flex items-center gap-3 py-4 px-2">
+      {/* Claude-style spinning sparkle */}
+      <svg className="w-5 h-5 animate-spin" style={{animationDuration: "3s"}} viewBox="0 0 24 24" fill="none">
+        {[0, 45, 90, 135, 180, 225, 270, 315].map((angle, i) => (
+          <line
+            key={i}
+            x1="12" y1="2" x2="12" y2="6"
+            stroke="#D97706"
+            strokeWidth="2"
+            strokeLinecap="round"
+            opacity={0.3 + (i * 0.08)}
+            transform={`rotate(${angle} 12 12)`}
           />
-        </div>
-
-        {/* Completed steps - small, subtle */}
-        {stateIndex > 0 && (
-          <div className="mt-2.5 space-y-0.5">
-            {steps.slice(0, stateIndex).map((step, i) => (
-              <div key={i} className="flex items-center gap-1.5 text-[11px] text-gray-400">
-                <span className="text-green-500">{"\u2713"}</span>
-                <span>{step}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+        ))}
+      </svg>
+      {/* Step text */}
+      <span className="text-sm text-gray-500 italic">{currentStep}</span>
     </div>
   );
 }
