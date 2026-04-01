@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useParams } from "react-router-dom";
 import { api } from "../../api/client";
 import {
   PaperAirplaneIcon,
@@ -6,6 +7,7 @@ import {
   SparklesIcon,
   QrCodeIcon,
   ArrowPathIcon,
+  ClockIcon,
 } from "@heroicons/react/24/outline";
 
 interface ExternalAccount {
@@ -47,6 +49,7 @@ interface ExternalMessage {
 }
 
 export default function MessagingView() {
+  const { workspaceId } = useParams<{ workspaceId: string }>();
   const [accounts, setAccounts] = useState<ExternalAccount[]>([]);
   const [chats, setChats] = useState<ExternalChat[]>([]);
   const [activeChat, setActiveChat] = useState<ExternalChat | null>(null);
@@ -59,9 +62,12 @@ export default function MessagingView() {
   );
   const [showSetup, setShowSetup] = useState(false);
   const [qrCode, setQrCode] = useState("");
+  const [qrLoading, setQrLoading] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
+  const [linkError, setLinkError] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
+  const qrPollRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load accounts on mount
   useEffect(() => {
@@ -178,9 +184,14 @@ export default function MessagingView() {
   };
 
   const linkWhatsApp = async () => {
+    if (!workspaceId) {
+      setLinkError("No se pudo determinar el workspace. Recarga la pagina.");
+      return;
+    }
+    setQrLoading(true);
+    setLinkError("");
     try {
-      const workspaceId = localStorage.getItem("lastWorkspaceId") || "";
-      const data = await api<{ qr_code: string }>(
+      const data = await api<{ qr_code: string; instance_name: string }>(
         "/messaging/whatsapp/link",
         {
           method: "POST",
@@ -189,10 +200,48 @@ export default function MessagingView() {
       );
       setQrCode(data.qr_code);
       setShowSetup(true);
+      // Start polling for QR refresh and connection status
+      startQrPolling();
     } catch (err) {
       console.error("Failed to link:", err);
+      setLinkError("Error al vincular WhatsApp. Intenta de nuevo.");
+    } finally {
+      setQrLoading(false);
     }
   };
+
+  const startQrPolling = () => {
+    // Clear any existing QR poll
+    if (qrPollRef.current) clearInterval(qrPollRef.current);
+
+    qrPollRef.current = setInterval(async () => {
+      try {
+        const data = await api<{ qr_code: string; status: string }>(
+          "/messaging/whatsapp/qr",
+        );
+        if (data.status === "connected") {
+          // Connected! Stop polling, refresh accounts
+          if (qrPollRef.current) clearInterval(qrPollRef.current);
+          setShowSetup(false);
+          setQrCode("");
+          loadAccounts();
+          return;
+        }
+        if (data.qr_code) {
+          setQrCode(data.qr_code);
+        }
+      } catch (err) {
+        console.error("QR poll error:", err);
+      }
+    }, 5000);
+  };
+
+  // Clean up QR polling on unmount
+  useEffect(() => {
+    return () => {
+      if (qrPollRef.current) clearInterval(qrPollRef.current);
+    };
+  }, []);
 
   const currentAccount = accounts.find((a) => a.provider === activeTab);
 
@@ -259,23 +308,52 @@ export default function MessagingView() {
         {/* Connect prompt or chat list */}
         {!currentAccount || currentAccount.status !== "connected" ? (
           <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-            {showSetup && qrCode ? (
+            {activeTab === "telegram" ? (
+              /* Telegram coming soon placeholder */
+              <>
+                <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center mb-3">
+                  <ClockIcon className="w-6 h-6 text-blue-500" />
+                </div>
+                <p className="text-sm font-medium text-gray-900 mb-1">
+                  Telegram - Proximamente
+                </p>
+                <p className="text-xs text-gray-500 mb-4 max-w-[220px]">
+                  La integracion con Telegram estara disponible pronto.
+                  Por ahora puedes vincular tu WhatsApp.
+                </p>
+                <button
+                  onClick={() => setActiveTab("whatsapp")}
+                  className="px-4 py-2 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors"
+                >
+                  Vincular WhatsApp
+                </button>
+              </>
+            ) : showSetup && qrCode ? (
               <>
                 <QrCodeIcon className="w-8 h-8 text-green-500 mb-3" />
                 <p className="text-sm font-medium text-gray-900 mb-2">
                   Escanea el QR con WhatsApp
                 </p>
+                <p className="text-[11px] text-gray-400 mb-3">
+                  Abre WhatsApp &gt; Dispositivos vinculados &gt; Vincular dispositivo
+                </p>
                 <img
-                  src={`data:image/png;base64,${qrCode}`}
+                  src={qrCode}
                   alt="QR"
                   className="w-48 h-48 rounded-lg mb-3"
                 />
+                <p className="text-[10px] text-gray-400 mb-2">
+                  El QR se actualiza automaticamente
+                </p>
                 <button
-                  onClick={loadAccounts}
+                  onClick={() => {
+                    if (qrPollRef.current) clearInterval(qrPollRef.current);
+                    setShowSetup(false);
+                    setQrCode("");
+                  }}
                   className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
                 >
-                  <ArrowPathIcon className="w-3.5 h-3.5" /> Verificar
-                  conexion
+                  Cancelar
                 </button>
               </>
             ) : (
@@ -284,23 +362,20 @@ export default function MessagingView() {
                   <PhoneIcon className="w-6 h-6 text-green-600" />
                 </div>
                 <p className="text-sm font-medium text-gray-900 mb-1">
-                  {activeTab === "whatsapp"
-                    ? "Conecta tu WhatsApp"
-                    : "Conecta tu Telegram"}
+                  Conecta tu WhatsApp
                 </p>
                 <p className="text-xs text-gray-500 mb-4">
-                  {activeTab === "whatsapp"
-                    ? "Escanea un codigo QR para vincular tu WhatsApp"
-                    : "Vincula tu cuenta de Telegram con nuestro bot"}
+                  Escanea un codigo QR para vincular tu WhatsApp
                 </p>
+                {linkError && (
+                  <p className="text-xs text-red-500 mb-3">{linkError}</p>
+                )}
                 <button
-                  onClick={
-                    activeTab === "whatsapp" ? linkWhatsApp : undefined
-                  }
-                  className="px-4 py-2 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors"
+                  onClick={linkWhatsApp}
+                  disabled={qrLoading}
+                  className="px-4 py-2 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 disabled:opacity-50 transition-colors"
                 >
-                  Vincular{" "}
-                  {activeTab === "whatsapp" ? "WhatsApp" : "Telegram"}
+                  {qrLoading ? "Generando QR..." : "Vincular WhatsApp"}
                 </button>
               </>
             )}

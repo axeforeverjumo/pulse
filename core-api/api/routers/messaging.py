@@ -1,5 +1,15 @@
-"""External messaging router — WhatsApp & Telegram integration via Evolution API."""
+"""External messaging router — WhatsApp & Telegram integration via Evolution API.
 
+Evolution API v2.3.7 endpoints used:
+  POST /instance/create          - create instance (returns QR when qrcode=true)
+  GET  /instance/connect/{name}  - get fresh QR code
+  GET  /instance/connectionState/{name} - check connection state
+  GET  /instance/fetchInstances  - list all instances
+  DELETE /instance/delete/{name} - delete instance
+  POST /message/sendText/{name}  - send text message
+"""
+
+import asyncio
 import logging
 import httpx
 from typing import Optional, List
@@ -14,6 +24,7 @@ router = APIRouter(prefix="/api/messaging", tags=["messaging"])
 
 EVOLUTION_API_URL = "http://127.0.0.1:8080"
 EVOLUTION_API_KEY = "pulse-evolution-key-2026"
+WEBHOOK_BASE_URL = "https://pulse.factoriaia.com/api/messaging/webhook/whatsapp"
 
 # ── Models ──
 
@@ -47,21 +58,38 @@ async def link_whatsapp(
     user_jwt: str = Depends(get_current_user_jwt),
     user_id: str = Depends(get_current_user_id),
 ):
-    """Start WhatsApp linking process. Returns QR code."""
+    """Start WhatsApp linking process. Returns QR code.
+
+    Flow:
+    1. Delete any existing instance for this user (clean slate)
+    2. Create a new instance with qrcode=true
+    3. The create response includes the QR in qrcode.base64
+       (already a full data URI: "data:image/png;base64,...")
+    4. Save account in DB and return QR to frontend
+    """
     supabase = await get_async_service_role_client()
 
     instance_name = f"pulse-wa-{user_id[:8]}"
 
-    # Create instance in Evolution API
     async with httpx.AsyncClient(timeout=30.0) as client:
-        # Create instance
+        # Clean up any previous instance for this user
+        try:
+            await client.delete(
+                f"{EVOLUTION_API_URL}/instance/delete/{instance_name}",
+                headers={"apikey": EVOLUTION_API_KEY},
+            )
+            logger.info(f"Deleted previous instance: {instance_name}")
+        except Exception:
+            pass  # Instance may not exist, that's fine
+
+        # Create instance with QR code generation
         resp = await client.post(
             f"{EVOLUTION_API_URL}/instance/create",
             json={
                 "instanceName": instance_name,
                 "integration": "WHATSAPP-BAILEYS",
                 "qrcode": True,
-                "webhookUrl": "https://pulse.factoriaia.com/api/messaging/webhook/whatsapp",
+                "webhookUrl": WEBHOOK_BASE_URL,
                 "webhookByEvents": True,
                 "webhookEvents": [
                     "messages.upsert",
@@ -77,7 +105,27 @@ async def link_whatsapp(
             raise HTTPException(502, "No se pudo crear la instancia de WhatsApp")
 
         data = resp.json()
-        qr_code = data.get("qrcode", {}).get("base64", "")
+        logger.info(f"Instance created: {instance_name}, status: {data.get('instance', {}).get('status')}")
+
+        # QR comes as data:image/png;base64,... (full data URI)
+        qr_data = data.get("qrcode", {})
+        qr_base64 = qr_data.get("base64", "")
+
+        # If QR wasn't ready in create response, try connect endpoint
+        if not qr_base64:
+            logger.info(f"QR not in create response, trying connect endpoint for {instance_name}")
+            for attempt in range(3):
+                await asyncio.sleep(2)
+                connect_resp = await client.get(
+                    f"{EVOLUTION_API_URL}/instance/connect/{instance_name}",
+                    headers={"apikey": EVOLUTION_API_KEY},
+                )
+                if connect_resp.status_code == 200:
+                    connect_data = connect_resp.json()
+                    qr_base64 = connect_data.get("base64", "")
+                    if qr_base64:
+                        logger.info(f"Got QR from connect endpoint on attempt {attempt + 1}")
+                        break
 
     # Save account in DB
     await supabase.table("external_accounts").upsert({
@@ -89,7 +137,7 @@ async def link_whatsapp(
         "status": "qr_pending",
     }, on_conflict="user_id,provider").execute()
 
-    return {"qr_code": qr_code, "instance_name": instance_name}
+    return {"qr_code": qr_base64, "instance_name": instance_name}
 
 
 @router.get("/whatsapp/qr")
@@ -97,11 +145,16 @@ async def get_whatsapp_qr(
     user_jwt: str = Depends(get_current_user_jwt),
     user_id: str = Depends(get_current_user_id),
 ):
-    """Get current QR code for WhatsApp linking."""
+    """Get current QR code and connection status for WhatsApp linking.
+
+    Returns:
+      qr_code: data URI string (data:image/png;base64,...) or empty
+      status: "connecting" | "open" | "close" | "unknown"
+    """
     supabase = await get_async_service_role_client()
 
     account = await supabase.table("external_accounts")\
-        .select("instance_name")\
+        .select("instance_name, status")\
         .eq("user_id", user_id)\
         .eq("provider", "whatsapp")\
         .maybe_single()\
@@ -113,15 +166,37 @@ async def get_whatsapp_qr(
     instance_name = account.data["instance_name"]
 
     async with httpx.AsyncClient(timeout=15.0) as client:
+        # First check connection state
+        state_resp = await client.get(
+            f"{EVOLUTION_API_URL}/instance/connectionState/{instance_name}",
+            headers={"apikey": EVOLUTION_API_KEY},
+        )
+        connection_state = "unknown"
+        if state_resp.status_code == 200:
+            state_data = state_resp.json()
+            connection_state = state_data.get("instance", {}).get("state", "unknown")
+            logger.info(f"Connection state for {instance_name}: {connection_state}")
+
+        # If already connected, update DB and return
+        if connection_state == "open":
+            await supabase.table("external_accounts")\
+                .update({"status": "connected"})\
+                .eq("instance_name", instance_name)\
+                .execute()
+            return {"qr_code": "", "status": "connected"}
+
+        # Get fresh QR code via connect endpoint
         resp = await client.get(
             f"{EVOLUTION_API_URL}/instance/connect/{instance_name}",
             headers={"apikey": EVOLUTION_API_KEY},
         )
         if resp.status_code != 200:
+            logger.error(f"Connect endpoint error: {resp.status_code} {resp.text}")
             raise HTTPException(502, "No se pudo obtener el QR")
 
         data = resp.json()
-        return {"qr_code": data.get("base64", ""), "status": data.get("state", "unknown")}
+        # base64 is already a full data URI: data:image/png;base64,...
+        return {"qr_code": data.get("base64", ""), "status": connection_state}
 
 
 @router.delete("/whatsapp/unlink")
