@@ -19,7 +19,7 @@ import {
 // Frontend types that map to API types
 export interface MiniApp {
   id: string;
-  type: 'chat' | 'team' | 'files' | 'messages' | 'dashboard' | 'projects' | 'email' | 'calendar' | 'agents';
+  type: 'chat' | 'team' | 'files' | 'messages' | 'dashboard' | 'projects' | 'email' | 'calendar' | 'agents' | 'messaging';
   name: string;
   icon: string;
   workspaceId: string;
@@ -52,6 +52,7 @@ const APP_DISPLAY_INFO: Record<string, { name: string; icon: string; emoji: stri
   email: { name: 'Email', icon: 'Mail', emoji: '📧' },
   calendar: { name: 'Calendar', icon: 'Calendar', emoji: '📅' },
   agents: { name: 'Agents', icon: 'AI', emoji: '🤖' },
+  messaging: { name: 'Messaging', icon: 'Smartphone', emoji: '📱' },
 };
 
 const APP_ORDER = [
@@ -63,6 +64,7 @@ const APP_ORDER = [
   'projects',
   'email',
   'calendar',
+  'messaging',
 ];
 
 const APP_POSITION = APP_ORDER.reduce<Record<string, number>>((acc, appType, index) => {

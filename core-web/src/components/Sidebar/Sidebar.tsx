@@ -36,6 +36,7 @@ import { copyTextToClipboard } from "../../lib/clipboard";
 import Modal from "../Modal/Modal";
 import Dropdown from "../Dropdown/Dropdown";
 import {
+  api,
   getWorkspaceMembers,
   getWorkspaceInvitations,
   createWorkspaceInvitation,
@@ -170,6 +171,7 @@ export default function Sidebar() {
   const unreadCounts = useMessagesStore((s) => s.unreadCounts);
   const workspaceCache = useMessagesStore((s) => s.workspaceCache);
   const setWorkspaceAppId = useMessagesStore((s) => s.setWorkspaceAppId);
+  const [messagingUnreadByWorkspace, setMessagingUnreadByWorkspace] = useState<Record<string, number>>({});
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   // 'dashboard' shows core apps + mini apps, workspace ID shows only that workspace's mini apps
   const [selectedView, setSelectedView] = useState<"dashboard" | string>(
@@ -254,6 +256,35 @@ export default function Sidebar() {
       }
     });
   }, [workspaces]);
+
+  // Poll unread totals for external messaging so the sidebar bubble updates live.
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id) return;
+
+    let cancelled = false;
+    const loadMessagingUnread = async () => {
+      try {
+        const data = await api<{ unread_by_workspace?: Record<string, number> }>(
+          "/messaging/unread-summary",
+        );
+        if (!cancelled) {
+          setMessagingUnreadByWorkspace(data.unread_by_workspace || {});
+        }
+      } catch {
+        if (!cancelled) {
+          setMessagingUnreadByWorkspace({});
+        }
+      }
+    };
+
+    loadMessagingUnread();
+    const unreadPoll = setInterval(loadMessagingUnread, 5000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(unreadPoll);
+    };
+  }, [isAuthenticated, user?.id]);
 
   const loadPendingInvites = useCallback(async (workspaceId: string) => {
     setPendingInvitesLoading(true);
@@ -734,7 +765,7 @@ export default function Sidebar() {
     } else {
       // Handle top-level app URLs (e.g., /chat, /email, /calendar)
       // Record them for the currently active workspace
-      const appMatch = location.pathname.match(/^\/(chat|email|calendar|messages|files|projects|agents)(?:\/|$)/);
+      const appMatch = location.pathname.match(/^\/(chat|email|calendar|messages|files|projects|agents|messaging)(?:\/|$)/);
       if (appMatch && activeWorkspaceId) {
         recordSessionApp(activeWorkspaceId, appMatch[1]);
       }
@@ -873,13 +904,14 @@ export default function Sidebar() {
               const wsCache = messagesApp
                 ? workspaceCache[messagesApp.id]
                 : null;
-              if (!wsCache) return false;
+              const messagingUnread = messagingUnreadByWorkspace[ws.id] || 0;
+              if (!wsCache) return messagingUnread > 0;
 
               const channelIds = [
                 ...(wsCache.channels || []),
                 ...(wsCache.dms || []),
               ].map((c) => c.id);
-              return channelIds.some((id) => unreadCounts[id] > 0);
+              return channelIds.some((id) => unreadCounts[id] > 0) || messagingUnread > 0;
             });
 
             return hasUnreadsInOtherWorkspaces ? (
@@ -941,9 +973,9 @@ export default function Sidebar() {
                         (c) => c.id,
                       )
                     : [];
-                  const hasUnreads = wsChannelIds.some(
-                    (id) => unreadCounts[id] > 0,
-                  );
+                  const hasUnreads =
+                    wsChannelIds.some((id) => unreadCounts[id] > 0) ||
+                    (messagingUnreadByWorkspace[ws.id] || 0) > 0;
 
                   return (
                     <button
@@ -1060,17 +1092,19 @@ export default function Sidebar() {
             const isItemActive = isActivePath(app.path) || !!(
               targetWorkspace && location.pathname.match(new RegExp(`/workspace/[^/]+/${app.type}(/|$)`))
             );
-            const hasUnread =
-              app.type === "messages" &&
-              (() => {
-                const cache = workspaceCache[app.id];
-                if (!cache) return false;
-                const channelIds = [
-                  ...(cache.channels || []),
-                  ...(cache.dms || []),
-                ].map((c) => c.id);
-                return channelIds.some((id) => unreadCounts[id] > 0);
-              })();
+            const hasUnread = app.type === "messages"
+              ? (() => {
+                  const cache = workspaceCache[app.id];
+                  if (!cache) return false;
+                  const channelIds = [
+                    ...(cache.channels || []),
+                    ...(cache.dms || []),
+                  ].map((c) => c.id);
+                  return channelIds.some((id) => unreadCounts[id] > 0);
+                })()
+              : app.type === "messaging"
+                ? ((targetWorkspace && (messagingUnreadByWorkspace[targetWorkspace.id] || 0) > 0) || false)
+                : false;
 
             return (
               <div key={app.id} className="relative">

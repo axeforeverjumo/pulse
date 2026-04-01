@@ -116,6 +116,12 @@ class Settings(BaseSettings):
 
     # Webhook URLs (set in production)
     webhook_base_url: str = ""  # Set to your deployed API URL (e.g., https://your-api.vercel.app)
+
+    # External messaging connectors
+    messaging_public_base_url: str = "https://pulse.factoriaia.com"
+    telegram_bot_token: str = ""
+    telegram_bot_username: str = ""
+    telegram_webhook_secret: str = ""
     
     # Cron job authentication
     cron_secret: str = ""  # Secret for authenticating cron job requests
