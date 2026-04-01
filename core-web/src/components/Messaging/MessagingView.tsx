@@ -137,6 +137,11 @@ function mediaLabel(mediaType?: string): string {
   return MEDIA_LABELS[mediaType] || "Adjunto";
 }
 
+function extractApiErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message.trim()) return err.message.trim();
+  return fallback;
+}
+
 export default function MessagingView() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const [accounts, setAccounts] = useState<ExternalAccount[]>([]);
@@ -176,6 +181,8 @@ export default function MessagingView() {
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
   const resolvedMediaUrlsRef = useRef<Record<string, string>>({});
   const sendQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const postSendRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeChatIdRef = useRef<string | null>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const qrPollRef = useRef<NodeJS.Timeout | null>(null);
   const telegramPollRef = useRef<NodeJS.Timeout | null>(null);
@@ -196,10 +203,15 @@ export default function MessagingView() {
   }, [resolvedMediaUrls]);
 
   useEffect(() => {
+    activeChatIdRef.current = activeChat?.id ?? null;
+  }, [activeChat?.id]);
+
+  useEffect(() => {
     return () => {
       Object.values(resolvedMediaUrlsRef.current).forEach((url) => {
         URL.revokeObjectURL(url);
       });
+      if (postSendRefreshRef.current) clearTimeout(postSendRefreshRef.current);
     };
   }, []);
 
@@ -535,8 +547,9 @@ export default function MessagingView() {
     setNewMessage("");
 
     // Optimistic add so users can fire multiple messages in a row instantly.
+    const tempId = `temp-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
     const tempMsg: ExternalMessage = {
-      id: `temp-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      id: tempId,
       chat_id: chatId,
       direction: "out",
       content: text,
@@ -546,6 +559,18 @@ export default function MessagingView() {
     };
     setMessages((prev) => [...prev, tempMsg]);
 
+    const schedulePostSendRefresh = (targetChatId: string) => {
+      if (postSendRefreshRef.current) clearTimeout(postSendRefreshRef.current);
+      postSendRefreshRef.current = setTimeout(() => {
+        void (async () => {
+          if (activeChatIdRef.current === targetChatId) {
+            await loadMessages(targetChatId);
+          }
+          await loadChats();
+        })();
+      }, 250);
+    };
+
     sendQueueRef.current = sendQueueRef.current
       .then(async () => {
         setPendingSends((prev) => prev + 1);
@@ -554,13 +579,14 @@ export default function MessagingView() {
             method: "POST",
             body: JSON.stringify({ chat_id: chatId, content: text }),
           });
-
-          if (activeChat?.id === chatId) {
-            await loadMessages(chatId);
-          }
-          await loadChats();
+          schedulePostSendRefresh(chatId);
         } catch (err) {
           console.error("Failed to send:", err);
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === tempId ? { ...msg, status: "failed" } : msg,
+            ),
+          );
         } finally {
           setPendingSends((prev) => Math.max(0, prev - 1));
         }
@@ -674,7 +700,17 @@ export default function MessagingView() {
       startTelegramLinkPolling();
     } catch (err) {
       console.error("Failed to link Telegram:", err);
-      setLinkError("Error al vincular Telegram. Revisa el bot y vuelve a intentarlo.");
+      const message = extractApiErrorMessage(
+        err,
+        "Error al vincular Telegram. Revisa el bot y vuelve a intentarlo.",
+      );
+      if (message.toLowerCase().includes("telegram no esta configurado")) {
+        setLinkError(
+          "Telegram no esta configurado en este servidor (falta TELEGRAM_BOT_TOKEN).",
+        );
+      } else {
+        setLinkError(message);
+      }
     } finally {
       setTelegramLinking(false);
     }
