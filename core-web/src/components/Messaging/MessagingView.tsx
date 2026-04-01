@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams } from "react-router-dom";
-import { api } from "../../api/client";
+import { api, getWorkspaceAgents, type AgentInstance } from "../../api/client";
 import { avatarGradient } from "../../utils/avatarGradient";
 import {
   PaperAirplaneIcon,
@@ -16,6 +16,7 @@ interface ExternalAccount {
   phone_number?: string;
   away_mode: boolean;
   away_message?: string;
+  away_directives?: string;
 }
 
 interface ExternalChat {
@@ -48,6 +49,92 @@ interface ExternalMessage {
   created_at: string;
 }
 
+interface AutoReplySummaryItem {
+  message_id: string;
+  chat_id: string;
+  contact_name: string;
+  remote_jid?: string;
+  content: string;
+  created_at: string;
+  status?: string;
+}
+
+interface ParsedDirectives {
+  agentId: string;
+  agentName: string;
+  notes: string;
+}
+
+const MEDIA_LABELS: Record<string, string> = {
+  image: "Imagen",
+  video: "Video",
+  audio: "Audio",
+  document: "Documento",
+  sticker: "Sticker",
+};
+
+const AUTO_MODE_DEFAULT_DIRECTIVES =
+  "Responde de forma natural en mi nombre, manteniendo mi tono y el contexto de la conversación. Si falta información, di que lo revisas y contestas después.";
+
+function parseAutoReplyDirectives(raw?: string): ParsedDirectives {
+  if (!raw) return { agentId: "", agentName: "", notes: "" };
+
+  const lines = raw.split("\n");
+  let agentId = "";
+  let agentName = "";
+  const notes: string[] = [];
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    if (trimmed.startsWith("AGENT_ID:")) {
+      agentId = trimmed.slice("AGENT_ID:".length).trim();
+      return;
+    }
+    if (trimmed.startsWith("AGENT_NAME:")) {
+      agentName = trimmed.slice("AGENT_NAME:".length).trim();
+      return;
+    }
+    if (trimmed.startsWith("AGENT::")) {
+      agentName = trimmed.slice("AGENT::".length).trim();
+      return;
+    }
+    if (trimmed.startsWith("INSTRUCCIONES:")) {
+      const value = trimmed.slice("INSTRUCCIONES:".length).trim();
+      if (value) notes.push(value);
+      return;
+    }
+    notes.push(trimmed);
+  });
+
+  return {
+    agentId,
+    agentName,
+    notes: notes.join("\n").trim(),
+  };
+}
+
+function buildAgentDirectives(
+  selectedAgent: AgentInstance | undefined,
+  notes: string,
+): string {
+  const lines: string[] = [];
+  if (selectedAgent) {
+    lines.push(`AGENT_ID:${selectedAgent.id}`);
+    lines.push(`AGENT_NAME:${selectedAgent.name}`);
+  }
+  const cleanedNotes = notes.trim();
+  if (cleanedNotes) {
+    lines.push(`INSTRUCCIONES:${cleanedNotes}`);
+  }
+  return lines.join("\n");
+}
+
+function mediaLabel(mediaType?: string): string {
+  if (!mediaType) return "Adjunto";
+  return MEDIA_LABELS[mediaType] || "Adjunto";
+}
+
 export default function MessagingView() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const [accounts, setAccounts] = useState<ExternalAccount[]>([]);
@@ -59,9 +146,17 @@ export default function MessagingView() {
   const [pendingSends, setPendingSends] = useState(0);
   const [awayModeSaving, setAwayModeSaving] = useState(false);
   const [awayModeDraft, setAwayModeDraft] = useState(false);
-  const [awayMessageDraft, setAwayMessageDraft] = useState("");
-  const [agentAlias, setAgentAlias] = useState("");
+  const [awayDirectivesDraft, setAwayDirectivesDraft] = useState(
+    AUTO_MODE_DEFAULT_DIRECTIVES,
+  );
+  const [autoReplySummary, setAutoReplySummary] = useState<AutoReplySummaryItem[]>([]);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [agents, setAgents] = useState<AgentInstance[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(false);
+  const [selectedAgentId, setSelectedAgentId] = useState("");
+  const [agentNotes, setAgentNotes] = useState("");
   const [agentRulesSaving, setAgentRulesSaving] = useState(false);
+  const [agentRulesError, setAgentRulesError] = useState("");
   const [activeTab, setActiveTab] = useState<"whatsapp" | "telegram">(
     "whatsapp",
   );
@@ -73,6 +168,7 @@ export default function MessagingView() {
   const [suggesting, setSuggesting] = useState(false);
   const [linkError, setLinkError] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageInputRef = useRef<HTMLTextAreaElement>(null);
   const sendQueueRef = useRef<Promise<void>>(Promise.resolve());
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const qrPollRef = useRef<NodeJS.Timeout | null>(null);
@@ -80,10 +176,23 @@ export default function MessagingView() {
   const warmupPollRef = useRef<NodeJS.Timeout | null>(null);
   const hydratedChatsRef = useRef<Set<string>>(new Set());
 
+  const currentAccount = useMemo(
+    () => accounts.find((account) => account.provider === activeTab),
+    [accounts, activeTab],
+  );
+  const selectedAgent = useMemo(
+    () => agents.find((agent) => agent.id === selectedAgentId),
+    [agents, selectedAgentId],
+  );
+
   // Load accounts on mount
   useEffect(() => {
     loadAccounts();
   }, []);
+
+  useEffect(() => {
+    loadAgents();
+  }, [workspaceId]);
 
   // Keep account status updated (connected/disconnected) without manual refresh.
   useEffect(() => {
@@ -162,7 +271,10 @@ export default function MessagingView() {
         left[i].id !== right[i].id ||
         left[i].status !== right[i].status ||
         left[i].content !== right[i].content ||
-        left[i].created_at !== right[i].created_at
+        left[i].created_at !== right[i].created_at ||
+        left[i].media_type !== right[i].media_type ||
+        left[i].media_url !== right[i].media_url ||
+        left[i].is_auto_reply !== right[i].is_auto_reply
       ) {
         return false;
       }
@@ -184,6 +296,38 @@ export default function MessagingView() {
       return [];
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAgents = async () => {
+    if (!workspaceId) {
+      setAgents([]);
+      return;
+    }
+    setAgentsLoading(true);
+    try {
+      const result = await getWorkspaceAgents(workspaceId);
+      setAgents(result.agents || []);
+    } catch (err) {
+      console.error("Failed to load workspace agents:", err);
+      setAgents([]);
+    } finally {
+      setAgentsLoading(false);
+    }
+  };
+
+  const loadAutoReplySummary = async (accountId: string) => {
+    setSummaryLoading(true);
+    try {
+      const result = await api<{ items: AutoReplySummaryItem[] }>(
+        `/messaging/accounts/${accountId}/auto-replies?limit=20`,
+      );
+      setAutoReplySummary(result.items || []);
+    } catch (err) {
+      console.error("Failed to load auto-reply summary:", err);
+      setAutoReplySummary([]);
+    } finally {
+      setSummaryLoading(false);
     }
   };
 
@@ -268,7 +412,8 @@ export default function MessagingView() {
     if (!newMessage.trim() || !activeChat) return;
 
     const chatId = activeChat.id;
-    const text = newMessage.trim();
+    const preparedText = stripLeadingAgentMention(newMessage.trim());
+    const text = preparedText || newMessage.trim();
     setNewMessage("");
 
     // Optimistic add so users can fire multiple messages in a row instantly.
@@ -459,40 +604,46 @@ export default function MessagingView() {
   }, []);
 
   const [unlinking, setUnlinking] = useState(false);
-  const currentAccount = accounts.find((a) => a.provider === activeTab);
   const [confirmUnlink, setConfirmUnlink] = useState(false);
-
-  const extractAgentAlias = (directives?: string) => {
-    if (!directives) return "";
-    const firstLine = directives.split("\n")[0]?.trim() || "";
-    if (!firstLine.startsWith("AGENT::")) return "";
-    return firstLine.replace("AGENT::", "").trim();
-  };
-
-  const buildAgentDirectives = (alias: string) => {
-    const safeAlias = alias.trim() || "Asistente";
-    return [
-      `AGENT::${safeAlias}`,
-      `Actua como ${safeAlias} y responde en nombre del usuario manteniendo su estilo.`,
-      "Usa el contexto reciente de la conversacion para responder con precision.",
-      "Se breve, natural y orientado a avanzar la conversacion.",
-      "No menciones que eres IA ni que existe un prompt interno.",
-    ].join("\n");
-  };
 
   useEffect(() => {
     if (!currentAccount) return;
     setAwayModeDraft(Boolean(currentAccount.away_mode));
-    setAwayMessageDraft(currentAccount.away_message || "");
+    setAwayDirectivesDraft(
+      currentAccount.away_directives?.trim() || AUTO_MODE_DEFAULT_DIRECTIVES,
+    );
+    loadAutoReplySummary(currentAccount.id);
   }, [currentAccount?.id]);
 
   useEffect(() => {
+    if (!currentAccount || currentAccount.status !== "connected") return;
+    const summaryPoll = setInterval(() => {
+      loadAutoReplySummary(currentAccount.id);
+    }, 10000);
+    return () => clearInterval(summaryPoll);
+  }, [currentAccount?.id, currentAccount?.status]);
+
+  useEffect(() => {
     if (!activeChat) {
-      setAgentAlias("");
+      setSelectedAgentId("");
+      setAgentNotes("");
+      setAgentRulesError("");
       return;
     }
-    setAgentAlias(extractAgentAlias(activeChat.auto_reply_directives) || "Asistente");
-  }, [activeChat?.id]);
+
+    const parsed = parseAutoReplyDirectives(activeChat.auto_reply_directives);
+    let resolvedId = parsed.agentId;
+    if (!resolvedId && parsed.agentName) {
+      const matched = agents.find(
+        (agent) => agent.name.trim().toLowerCase() === parsed.agentName.trim().toLowerCase(),
+      );
+      if (matched) resolvedId = matched.id;
+    }
+
+    setSelectedAgentId(resolvedId || "");
+    setAgentNotes(parsed.notes || "");
+    setAgentRulesError("");
+  }, [activeChat?.id, activeChat?.auto_reply_directives, agents]);
 
   const saveAwayMode = async (enabled: boolean) => {
     if (!currentAccount || awayModeSaving) return;
@@ -504,18 +655,22 @@ export default function MessagingView() {
         method: "PUT",
         body: JSON.stringify({
           enabled,
-          message: awayMessageDraft || "Estoy fuera de la oficina, te respondo en cuanto pueda.",
+          message: "AutoMode IA activo",
+          directives:
+            awayDirectivesDraft.trim() || AUTO_MODE_DEFAULT_DIRECTIVES,
         }),
       });
 
       setAwayModeDraft(enabled);
+      await loadAutoReplySummary(currentAccount.id);
       setAccounts((prev) =>
         prev.map((account) =>
           account.id === currentAccount.id
             ? {
                 ...account,
                 away_mode: enabled,
-                away_message: awayMessageDraft,
+                away_message: "AutoMode IA activo",
+                away_directives: awayDirectivesDraft,
               }
             : account,
         ),
@@ -531,10 +686,18 @@ export default function MessagingView() {
   const saveChatAgentRules = async (enabled: boolean) => {
     if (!activeChat || agentRulesSaving) return;
 
-    const directives = enabled ? buildAgentDirectives(agentAlias) : "";
+    if (enabled && !selectedAgentId) {
+      setAgentRulesError("Selecciona un agente para activar AutoMode en este chat.");
+      return;
+    }
+
+    const directives = enabled
+      ? buildAgentDirectives(selectedAgent, agentNotes)
+      : "";
     const chatId = activeChat.id;
 
     setAgentRulesSaving(true);
+    setAgentRulesError("");
     try {
       await api(`/messaging/chats/${chatId}/rules`, {
         method: "PUT",
@@ -567,9 +730,36 @@ export default function MessagingView() {
       );
     } catch (err) {
       console.error("Failed to update chat auto-reply rules:", err);
+      setAgentRulesError("No se pudo guardar la regla del agente.");
     } finally {
       setAgentRulesSaving(false);
     }
+  };
+
+  const mentionMatch = newMessage.match(/@([^\s@]*)$/);
+  const mentionQuery = mentionMatch ? mentionMatch[1].toLowerCase() : "";
+  const mentionCandidates = mentionMatch
+    ? agents.filter((agent) =>
+        agent.name.toLowerCase().includes(mentionQuery),
+      )
+    : [];
+
+  const handleMentionSelect = (agent: AgentInstance) => {
+    setSelectedAgentId(agent.id);
+    setAgentRulesError("");
+    setNewMessage((prev) => prev.replace(/@([^\s@]*)$/, `@${agent.name} `));
+    setTimeout(() => messageInputRef.current?.focus(), 0);
+  };
+
+  const stripLeadingAgentMention = (value: string): string => {
+    const match = value.match(/^@([^\s]+)\s+/);
+    if (!match) return value;
+    const mentioned = (match[1] || "").trim().toLowerCase();
+    const known = agents.some(
+      (agent) => agent.name.trim().toLowerCase() === mentioned,
+    );
+    if (!known) return value;
+    return value.slice(match[0].length).trim();
   };
 
   const unlinkCurrentAccount = async () => {
@@ -614,6 +804,11 @@ export default function MessagingView() {
   const formatPreview = (preview?: string) => {
     if (!preview) return "";
     if (preview === "[media]") return "Adjunto multimedia";
+    if (preview === "[imagen]") return "Imagen";
+    if (preview === "[video]") return "Video";
+    if (preview === "[audio]") return "Audio";
+    if (preview === "[documento]") return "Documento";
+    if (preview === "[sticker]") return "Sticker";
     return preview;
   };
 
@@ -709,7 +904,7 @@ export default function MessagingView() {
           <div className="px-3 py-2 border-b border-gray-100 bg-gray-50/70">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[11px] font-medium text-gray-600">
-                AutoMode fuera de oficina
+                AutoMode IA
               </span>
               <button
                 onClick={() => saveAwayMode(!awayModeDraft)}
@@ -728,17 +923,45 @@ export default function MessagingView() {
               </button>
             </div>
             <textarea
-              value={awayMessageDraft}
-              onChange={(e) => setAwayMessageDraft(e.target.value)}
+              value={awayDirectivesDraft}
+              onChange={(e) => setAwayDirectivesDraft(e.target.value)}
               onBlur={() => {
                 if (awayModeDraft) {
                   saveAwayMode(true);
                 }
               }}
-              placeholder="Mensaje automático cuando estás fuera..."
-              rows={2}
+              placeholder="Directrices IA: rol, tono y cómo responder cuando no estás."
+              rows={3}
               className="mt-2 w-full px-2 py-1.5 text-[11px] bg-white rounded-md border border-gray-200 focus:outline-none focus:ring-1 focus:ring-violet-300 resize-none"
             />
+            <div className="mt-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">
+                  Últimas respuestas IA
+                </span>
+                {summaryLoading && (
+                  <span className="text-[10px] text-gray-400">Actualizando...</span>
+                )}
+              </div>
+              <div className="mt-1 max-h-28 overflow-y-auto space-y-1">
+                {autoReplySummary.length === 0 ? (
+                  <p className="text-[10px] text-gray-400">
+                    Sin respuestas automáticas recientes.
+                  </p>
+                ) : (
+                  autoReplySummary.slice(0, 6).map((item) => (
+                    <div key={item.message_id} className="rounded-md bg-white border border-gray-200 px-2 py-1">
+                      <p className="text-[10px] font-medium text-gray-700 truncate">
+                        {item.contact_name}
+                      </p>
+                      <p className="text-[10px] text-gray-500 truncate">
+                        {item.content || "[sin contenido]"}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -984,12 +1207,27 @@ export default function MessagingView() {
                 )}
               </div>
               <div className="mt-2 flex items-center gap-2">
-                <input
-                  value={agentAlias}
-                  onChange={(e) => setAgentAlias(e.target.value)}
-                  placeholder="Nombre del agente (ej. Ventas)"
+                <select
+                  value={selectedAgentId}
+                  onChange={(e) => {
+                    setSelectedAgentId(e.target.value);
+                    setAgentRulesError("");
+                  }}
                   className="flex-1 px-2 py-1 text-[11px] bg-gray-50 rounded-md border border-gray-200 focus:outline-none focus:ring-1 focus:ring-violet-300"
-                />
+                >
+                  <option value="">
+                    {agentsLoading
+                      ? "Cargando agentes..."
+                      : agents.length > 0
+                        ? "Selecciona agente para este chat"
+                        : "No hay agentes en este workspace"}
+                  </option>
+                  {agents.map((agent) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.name}
+                    </option>
+                  ))}
+                </select>
                 <button
                   onClick={() => saveChatAgentRules(activeChat.auto_reply_enabled !== true)}
                   disabled={agentRulesSaving}
@@ -1006,6 +1244,21 @@ export default function MessagingView() {
                       : "Auto OFF"}
                 </button>
               </div>
+              <input
+                value={agentNotes}
+                onChange={(e) => {
+                  setAgentNotes(e.target.value);
+                  setAgentRulesError("");
+                }}
+                placeholder="Instrucciones extra para este agente en este chat"
+                className="mt-2 w-full px-2 py-1 text-[11px] bg-gray-50 rounded-md border border-gray-200 focus:outline-none focus:ring-1 focus:ring-violet-300"
+              />
+              {agentRulesError && (
+                <p className="mt-1 text-[10px] text-red-500">{agentRulesError}</p>
+              )}
+              <p className="mt-1 text-[10px] text-gray-400">
+                Tip: escribe <span className="font-medium">@</span> en el mensaje para seleccionar agente rápido.
+              </p>
             </div>
 
             {/* Messages */}
@@ -1029,7 +1282,31 @@ export default function MessagingView() {
                         Auto-respuesta
                       </div>
                     )}
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    {msg.media_type === "image" && msg.media_url ? (
+                      <a href={msg.media_url} target="_blank" rel="noreferrer" className="block">
+                        <img
+                          src={msg.media_url}
+                          alt="Imagen"
+                          className="max-w-[220px] max-h-[220px] rounded-lg object-cover mb-1"
+                        />
+                      </a>
+                    ) : msg.media_url ? (
+                      <a
+                        href={msg.media_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-700 underline mb-1"
+                      >
+                        Abrir {mediaLabel(msg.media_type)}
+                      </a>
+                    ) : msg.media_type ? (
+                      <p className="text-[11px] font-medium text-gray-500 mb-1">
+                        {mediaLabel(msg.media_type)}
+                      </p>
+                    ) : null}
+                    {msg.content && (
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    )}
                     <div
                       className={`text-[10px] mt-1 text-right ${
                         msg.direction === "out"
@@ -1058,27 +1335,49 @@ export default function MessagingView() {
                     className={`w-5 h-5 ${suggesting ? "animate-pulse" : ""}`}
                   />
                 </button>
-                <textarea
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      sendMessage();
-                    }
-                  }}
-                  placeholder="Escribe un mensaje..."
-                  rows={1}
-                  className="flex-1 px-3 py-2 text-[13px] bg-gray-50 rounded-xl border-0 focus:outline-none focus:ring-1 focus:ring-green-300 resize-none"
-                />
+                <div className="flex-1 relative">
+                  {mentionCandidates.length > 0 && (
+                    <div className="absolute bottom-[calc(100%+6px)] left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-sm z-20 max-h-36 overflow-y-auto">
+                      {mentionCandidates.slice(0, 6).map((agent) => (
+                        <button
+                          key={agent.id}
+                          onClick={() => handleMentionSelect(agent)}
+                          className="w-full text-left px-3 py-2 hover:bg-gray-50 text-[12px] text-gray-700"
+                        >
+                          @{agent.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <textarea
+                    ref={messageInputRef}
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        sendMessage();
+                      }
+                    }}
+                    placeholder="Escribe un mensaje..."
+                    rows={1}
+                    className="w-full px-3 py-2 text-[13px] bg-gray-50 rounded-xl border-0 focus:outline-none focus:ring-1 focus:ring-green-300 resize-none"
+                  />
+                </div>
                 <button
                   onClick={sendMessage}
                   disabled={!newMessage.trim()}
                   className="p-2 rounded-lg bg-green-500 text-white hover:bg-green-600 disabled:opacity-40 transition-colors shrink-0"
+                  title={pendingSends > 0 ? `Mensajes en cola: ${pendingSends}` : "Enviar"}
                 >
                   <PaperAirplaneIcon className={`w-5 h-5 ${pendingSends > 0 ? "opacity-70" : ""}`} />
                 </button>
               </div>
+              {pendingSends > 0 && (
+                <p className="text-[10px] text-gray-400 mt-1">
+                  Cola de envio activa: {pendingSends}
+                </p>
+              )}
             </div>
           </>
         ) : (

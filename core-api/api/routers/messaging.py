@@ -36,6 +36,15 @@ TELEGRAM_API_BASE = "https://api.telegram.org"
 
 # ── Models ──
 
+WHATSAPP_MEDIA_PLACEHOLDERS: Dict[str, str] = {
+    "image": "[imagen]",
+    "video": "[video]",
+    "audio": "[audio]",
+    "document": "[documento]",
+    "sticker": "[sticker]",
+    "media": "[adjunto]",
+}
+
 def _coerce_epoch_seconds(raw: Any) -> Optional[int]:
     """Convert Evolution timestamp payloads to unix seconds."""
     if isinstance(raw, bool):
@@ -61,42 +70,138 @@ def _iso_from_epoch_seconds(raw: Any) -> Optional[str]:
         return None
 
 
-def _extract_message_text(message: Any) -> str:
+def _unwrap_whatsapp_message(message: Any) -> Dict[str, Any]:
+    current = message if isinstance(message, dict) else {}
+    for _ in range(8):
+        nested = None
+        for wrapper in (
+            "ephemeralMessage",
+            "viewOnceMessage",
+            "viewOnceMessageV2",
+            "viewOnceMessageV2Extension",
+            "documentWithCaptionMessage",
+        ):
+            payload = current.get(wrapper)
+            if isinstance(payload, dict) and isinstance(payload.get("message"), dict):
+                nested = payload.get("message")
+                break
+        if nested is None:
+            break
+        current = nested
+    return current
+
+
+def _normalize_media_type(raw: Optional[str]) -> Optional[str]:
+    value = (raw or "").strip().lower()
+    if not value:
+        return None
+    if "image" in value:
+        return "image"
+    if "video" in value:
+        return "video"
+    if "audio" in value or "voice" in value:
+        return "audio"
+    if "document" in value or "file" in value:
+        return "document"
+    if "sticker" in value:
+        return "sticker"
+    return "media"
+
+
+def _extract_media_info(message: Any, msg_data: Optional[Dict[str, Any]] = None) -> tuple[Optional[str], Optional[str]]:
+    payload = _unwrap_whatsapp_message(message)
+
+    media_map = {
+        "imageMessage": "image",
+        "videoMessage": "video",
+        "audioMessage": "audio",
+        "documentMessage": "document",
+        "stickerMessage": "sticker",
+    }
+    media_url_keys = (
+        "url",
+        "mediaUrl",
+        "media_url",
+        "directPath",
+        "downloadUrl",
+        "download_url",
+    )
+
+    for key, media_type in media_map.items():
+        blob = payload.get(key)
+        if not isinstance(blob, dict):
+            continue
+
+        media_url = None
+        for url_key in media_url_keys:
+            raw_url = blob.get(url_key)
+            if isinstance(raw_url, str) and raw_url.strip():
+                media_url = raw_url.strip()
+                break
+
+        if not media_url and isinstance(msg_data, dict):
+            for url_key in media_url_keys:
+                raw_url = msg_data.get(url_key)
+                if isinstance(raw_url, str) and raw_url.strip():
+                    media_url = raw_url.strip()
+                    break
+
+        return media_type, media_url
+
+    if isinstance(msg_data, dict):
+        hint = msg_data.get("messageType")
+        if not isinstance(hint, str):
+            hint = msg_data.get("type")
+        media_type = _normalize_media_type(hint if isinstance(hint, str) else None)
+        if media_type:
+            media_url = None
+            for url_key in media_url_keys:
+                raw_url = msg_data.get(url_key)
+                if isinstance(raw_url, str) and raw_url.strip():
+                    media_url = raw_url.strip()
+                    break
+            return media_type, media_url
+
+    return None, None
+
+
+def _media_placeholder(media_type: Optional[str]) -> str:
+    if not media_type:
+        return ""
+    return WHATSAPP_MEDIA_PLACEHOLDERS.get(media_type, "[adjunto]")
+
+
+def _extract_message_text(message: Any, fallback_media_type: Optional[str] = None) -> str:
     """Extract plain text from WhatsApp message payload variants."""
-    if not isinstance(message, dict):
+    payload = _unwrap_whatsapp_message(message)
+    if not isinstance(payload, dict):
         return ""
 
     candidates = [
-        message.get("conversation"),
-        message.get("extendedTextMessage", {}).get("text"),
-        message.get("imageMessage", {}).get("caption"),
-        message.get("videoMessage", {}).get("caption"),
-        message.get("documentMessage", {}).get("caption"),
-        message.get("buttonsResponseMessage", {}).get("selectedDisplayText"),
-        message.get("templateButtonReplyMessage", {}).get("selectedDisplayText"),
-        message.get("listResponseMessage", {}).get("title"),
-        message.get("pollCreationMessage", {}).get("name"),
+        payload.get("conversation"),
+        payload.get("extendedTextMessage", {}).get("text"),
+        payload.get("imageMessage", {}).get("caption"),
+        payload.get("videoMessage", {}).get("caption"),
+        payload.get("documentMessage", {}).get("caption"),
+        payload.get("buttonsResponseMessage", {}).get("selectedDisplayText"),
+        payload.get("templateButtonReplyMessage", {}).get("selectedDisplayText"),
+        payload.get("listResponseMessage", {}).get("title"),
+        payload.get("pollCreationMessage", {}).get("name"),
     ]
-
-    nested_document = (
-        message.get("documentWithCaptionMessage", {})
-        .get("message", {})
-        .get("documentMessage", {})
-        .get("caption")
-    )
-    candidates.append(nested_document)
 
     for value in candidates:
         if isinstance(value, str) and value.strip():
             return value.strip()
-    return ""
+
+    media_type, _ = _extract_media_info(payload)
+    return _media_placeholder(media_type or fallback_media_type)
 
 
 def _message_preview(message: Any, fallback_type: Optional[str] = None) -> str:
-    text = _extract_message_text(message)
+    text = _extract_message_text(message, _normalize_media_type(fallback_type))
     if text:
         return text[:100]
-    return "[media]" if fallback_type else ""
+    return _media_placeholder(_normalize_media_type(fallback_type) or "media")
 
 
 def _get_telegram_bot_token() -> str:
@@ -166,6 +271,20 @@ def _extract_telegram_message_text(message: Dict[str, Any]) -> str:
         return "[sticker]"
 
     return ""
+
+
+def _extract_telegram_media_info(message: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
+    if message.get("photo"):
+        return "image", None
+    if message.get("video"):
+        return "video", None
+    if message.get("audio") or message.get("voice"):
+        return "audio", None
+    if message.get("document"):
+        return "document", None
+    if message.get("sticker"):
+        return "sticker", None
+    return None, None
 
 
 def _telegram_contact_name(chat: Dict[str, Any], sender: Dict[str, Any]) -> str:
@@ -365,18 +484,24 @@ async def _sync_whatsapp_messages_for_chat(
 
             key = record.get("key") if isinstance(record.get("key"), dict) else {}
             message = record.get("message") if isinstance(record.get("message"), dict) else {}
+            media_type, media_url = _extract_media_info(message, record)
             remote_message_id = key.get("id") or ""
             if not remote_message_id:
                 continue
 
+            content = _extract_message_text(message, media_type)
             row = {
                 "chat_id": chat_id,
                 "remote_message_id": remote_message_id,
                 "direction": "out" if key.get("fromMe") else "in",
-                "content": _extract_message_text(message),
+                "content": content,
                 "sender_name": record.get("pushName") or remote_jid.split("@")[0],
                 "sender_jid": key.get("participant") or key.get("remoteJid") or remote_jid,
             }
+            if media_type:
+                row["media_type"] = media_type
+            if media_url:
+                row["media_url"] = media_url
             created_at = _iso_from_epoch_seconds(record.get("messageTimestamp"))
             if created_at:
                 row["created_at"] = created_at
@@ -414,7 +539,10 @@ async def _sync_whatsapp_messages_for_chat(
         await supabase.table("external_chats").update(
             {
                 "last_message_at": newest.get("created_at") or datetime.now(timezone.utc).isoformat(),
-                "last_message_preview": (newest.get("content") or "[media]")[:100],
+                "last_message_preview": _message_preview(
+                    {"conversation": newest.get("content")},
+                    newest.get("media_type"),
+                ),
             }
         ).eq("id", chat_id).execute()
 
@@ -458,6 +586,11 @@ def _parse_directives_metadata(directives: Optional[str]) -> tuple[Optional[str]
     for raw_line in directives.splitlines():
         line = raw_line.strip()
         if not line:
+            continue
+        if line.startswith("AGENT::"):
+            value = line[len("AGENT::"):].strip()
+            if value:
+                agent_name = value
             continue
         if line.startswith("AGENT_ID:"):
             value = line[len("AGENT_ID:"):].strip()
@@ -771,7 +904,7 @@ async def list_accounts(
     supabase = await get_async_service_role_client()
 
     result = await supabase.table("external_accounts")\
-        .select("id, provider, status, phone_number, away_mode, away_message, instance_name, created_at")\
+        .select("id, provider, status, phone_number, away_mode, away_message, away_directives, instance_name, created_at")\
         .eq("user_id", user_id)\
         .execute()
 
@@ -958,6 +1091,78 @@ async def get_messaging_unread_summary(
         "chats_with_unread": len(unread_chats),
         "unread_by_workspace": unread_by_workspace,
     }
+
+
+@router.get("/accounts/{account_id}/auto-replies")
+async def get_auto_reply_summary(
+    account_id: str,
+    limit: int = 30,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Recent auto-replies sent by AI for a specific external account."""
+    supabase = await get_async_service_role_client()
+
+    account = await (
+        supabase.table("external_accounts")
+        .select("id, user_id")
+        .eq("id", account_id)
+        .maybe_single()
+        .execute()
+    )
+    if not account or not account.data or account.data.get("user_id") != user_id:
+        raise HTTPException(404, "Cuenta no encontrada")
+
+    chats_result = await (
+        supabase.table("external_chats")
+        .select("id, contact_name, remote_jid")
+        .eq("account_id", account_id)
+        .execute()
+    )
+    chats = chats_result.data or []
+    if not chats:
+        return {"items": [], "count": 0}
+
+    chat_map = {
+        chat["id"]: {
+            "contact_name": chat.get("contact_name") or chat.get("remote_jid") or "Contacto",
+            "remote_jid": chat.get("remote_jid"),
+        }
+        for chat in chats
+        if chat.get("id")
+    }
+    chat_ids = list(chat_map.keys())
+    if not chat_ids:
+        return {"items": [], "count": 0}
+
+    safe_limit = max(1, min(limit, 100))
+    messages_result = await (
+        supabase.table("external_messages")
+        .select("id, chat_id, content, created_at, status")
+        .in_("chat_id", chat_ids)
+        .eq("direction", "out")
+        .eq("is_auto_reply", True)
+        .order("created_at", desc=True)
+        .limit(safe_limit)
+        .execute()
+    )
+
+    items = []
+    for msg in messages_result.data or []:
+        chat_meta = chat_map.get(msg.get("chat_id"), {})
+        items.append(
+            {
+                "message_id": msg.get("id"),
+                "chat_id": msg.get("chat_id"),
+                "contact_name": chat_meta.get("contact_name", "Contacto"),
+                "remote_jid": chat_meta.get("remote_jid"),
+                "content": msg.get("content") or "",
+                "created_at": msg.get("created_at"),
+                "status": msg.get("status"),
+            }
+        )
+
+    return {"items": items, "count": len(items)}
 
 
 # ── Messages ──
@@ -1232,6 +1437,7 @@ async def whatsapp_webhook(request: Request):
         for msg_data in messages:
             key = msg_data.get("key", {})
             message = msg_data.get("message", {}) if isinstance(msg_data.get("message"), dict) else {}
+            media_type, media_url = _extract_media_info(message, msg_data if isinstance(msg_data, dict) else None)
 
             # Skip outgoing messages
             if key.get("fromMe", False):
@@ -1242,7 +1448,7 @@ async def whatsapp_webhook(request: Request):
                 continue
 
             # Extract text content
-            text = _extract_message_text(message)
+            text = _extract_message_text(message, media_type)
 
             # Get or create chat
             contact_name = msg_data.get("pushName", "") or remote_jid.split("@")[0]
@@ -1281,19 +1487,24 @@ async def whatsapp_webhook(request: Request):
                     continue
 
             # Save incoming message
-            await supabase.table("external_messages").insert({
+            incoming_payload = {
                 "chat_id": chat_id,
                 "remote_message_id": remote_message_id,
                 "direction": "in",
                 "content": text,
                 "sender_name": contact_name,
                 "sender_jid": remote_jid,
-            }).execute()
+            }
+            if media_type:
+                incoming_payload["media_type"] = media_type
+            if media_url:
+                incoming_payload["media_url"] = media_url
+            await supabase.table("external_messages").insert(incoming_payload).execute()
 
             # Update chat metadata
             await supabase.table("external_chats").update({
                 "last_message_at": "now()",
-                "last_message_preview": text[:100] if text else "[media]",
+                "last_message_preview": _message_preview(message, media_type),
                 "contact_name": contact_name,
             }).eq("id", chat_id).execute()
 
@@ -1319,10 +1530,11 @@ async def whatsapp_webhook(request: Request):
                 # Explicitly disabled for this contact
                 should_reply = False
 
-            if should_reply and text:
+            should_reply_text = text or _media_placeholder(media_type)
+            if should_reply and should_reply_text:
                 import asyncio
                 asyncio.create_task(
-                    _auto_reply(account, chat_id, remote_jid, instance, text, contact_name, reply_directives)
+                    _auto_reply(account, chat_id, remote_jid, instance, should_reply_text, contact_name, reply_directives)
                 )
 
         return {"status": "ok"}
@@ -1360,6 +1572,7 @@ async def telegram_webhook(request: Request):
 
     chat_id = str(chat_id_raw)
     text = _extract_telegram_message_text(message)
+    media_type, media_url = _extract_telegram_media_info(message)
     message_id = message.get("message_id")
     remote_message_id = str(message_id) if message_id is not None else ""
     message_created_at = _iso_from_epoch_seconds(message.get("date")) or datetime.now(timezone.utc).isoformat()
@@ -1515,6 +1728,10 @@ async def telegram_webhook(request: Request):
         "sender_jid": f"telegram:{sender.get('id')}" if sender.get("id") is not None else remote_jid,
         "created_at": message_created_at,
     }
+    if media_type:
+        incoming_payload["media_type"] = media_type
+    if media_url:
+        incoming_payload["media_url"] = media_url
     await supabase.table("external_messages").insert(incoming_payload).execute()
 
     await (
@@ -1522,7 +1739,7 @@ async def telegram_webhook(request: Request):
         .update(
             {
                 "last_message_at": message_created_at,
-                "last_message_preview": text[:100] if text else "[media]",
+                "last_message_preview": (text or _media_placeholder(media_type or "media"))[:100],
                 "contact_name": contact_name,
                 "unread_count": int(chat_config.get("unread_count") or 0) + 1,
             }
@@ -1591,6 +1808,13 @@ async def _auto_reply(account, chat_id, remote_jid, instance, incoming_text, con
 
         style_profile = account.get("style_profile", {})
         style_desc = style_profile.get("description", "Responde de forma natural y directa.")
+        role_hint = (
+            style_profile.get("role")
+            or style_profile.get("job_title")
+            or style_profile.get("occupation")
+            or style_profile.get("persona")
+            or ""
+        )
         agent_context = ""
 
         selected_agent = None
@@ -1631,27 +1855,29 @@ async def _auto_reply(account, chat_id, remote_jid, instance, incoming_text, con
         elif agent_name:
             agent_context = f"Agente asignado (referencia): {agent_name}."
 
+        account_directives = (account.get("away_directives") or "").strip()
+        default_message = account.get("away_message") or "Estoy ocupado ahora mismo, te respondo en cuanto pueda."
+
         if directive_notes:
             effective_directives = directive_notes
         elif agent_id or agent_name:
-            effective_directives = account.get(
-                "away_message",
-                "Estoy ocupado ahora mismo, te respondo en cuanto pueda.",
-            )
+            effective_directives = account_directives or default_message
         else:
-            effective_directives = directives or account.get(
-                "away_message",
-                "Estoy ocupado ahora mismo, te respondo en cuanto pueda.",
-            )
+            effective_directives = (directives or "").strip() or account_directives or default_message
 
         agent_block = ""
         if agent_context:
             agent_block = f"Contexto del agente seleccionado:\n{agent_context}\n\n"
+        role_block = ""
+        if isinstance(role_hint, str) and role_hint.strip():
+            role_block = f"Rol/contexto profesional del usuario:\n{role_hint.strip()}\n\n"
 
         system_prompt = f"""Eres el asistente personal de un usuario. Estás respondiendo mensajes de WhatsApp en su nombre porque está ausente.
 
 Estilo de comunicación del usuario:
 {style_desc}
+
+{role_block}
 
 {agent_block}
 
