@@ -765,7 +765,7 @@ export default function Sidebar() {
     } else {
       // Handle top-level app URLs (e.g., /chat, /email, /calendar)
       // Record them for the currently active workspace
-      const appMatch = location.pathname.match(/^\/(chat|email|calendar|messages|files|projects|agents)(?:\/|$)/);
+      const appMatch = location.pathname.match(/^\/(chat|email|calendar|messages|files|projects|agents|messaging)(?:\/|$)/);
       if (appMatch && activeWorkspaceId) {
         recordSessionApp(activeWorkspaceId, appMatch[1]);
       }

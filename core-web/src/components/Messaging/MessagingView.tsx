@@ -67,6 +67,7 @@ export default function MessagingView() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const qrPollRef = useRef<NodeJS.Timeout | null>(null);
+  const warmupPollRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load accounts on mount
   useEffect(() => {
@@ -89,17 +90,14 @@ export default function MessagingView() {
   // Keep chat list fresh even when no conversation is selected.
   // Without this polling, incoming webhooks can write to DB but UI stays stale.
   useEffect(() => {
-    const isConnectedForTab = accounts.some(
-      (account) => account.provider === activeTab && account.status === "connected",
-    );
-    if (isConnectedForTab === false) return;
+    if (activeTab !== "whatsapp") return;
 
     const chatsPoll = setInterval(() => {
       loadChats();
-    }, 3000);
+    }, 2500);
 
     return () => clearInterval(chatsPoll);
-  }, [accounts, activeTab]);
+  }, [activeTab]);
 
   // Poll for new messages in active chat
   useEffect(() => {
@@ -108,8 +106,7 @@ export default function MessagingView() {
 
     pollRef.current = setInterval(() => {
       loadMessages(activeChat.id);
-      loadChats(); // refresh unread counts
-    }, 3000);
+    }, 2500);
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -120,6 +117,44 @@ export default function MessagingView() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  const areChatsEqual = (left: ExternalChat[], right: ExternalChat[]) => {
+    if (left.length !== right.length) return false;
+
+    for (let i = 0; i < left.length; i += 1) {
+      if (
+        left[i].id !== right[i].id ||
+        left[i].contact_name !== right[i].contact_name ||
+        left[i].unread_count !== right[i].unread_count ||
+        left[i].last_message_at !== right[i].last_message_at ||
+        left[i].last_message_preview !== right[i].last_message_preview
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  const areMessagesEqual = (
+    left: ExternalMessage[],
+    right: ExternalMessage[],
+  ) => {
+    if (left.length !== right.length) return false;
+
+    for (let i = 0; i < left.length; i += 1) {
+      if (
+        left[i].id !== right[i].id ||
+        left[i].status !== right[i].status ||
+        left[i].content !== right[i].content ||
+        left[i].created_at !== right[i].created_at
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  };
 
   const loadAccounts = async () => {
     try {
@@ -139,10 +174,46 @@ export default function MessagingView() {
       const data = await api<{ chats: ExternalChat[] }>(
         `/messaging/chats?provider=${activeTab}`,
       );
-      setChats(data.chats);
+      const incomingChats = data.chats || [];
+      setChats((prev) =>
+        areChatsEqual(prev, incomingChats) ? prev : incomingChats,
+      );
+
+      setActiveChat((prev) => {
+        if (!prev) return null;
+        const refreshed = incomingChats.find((chat) => chat.id === prev.id);
+        if (!refreshed) return null;
+        if (
+          refreshed.id === prev.id &&
+          refreshed.contact_name === prev.contact_name &&
+          refreshed.unread_count === prev.unread_count &&
+          refreshed.last_message_at === prev.last_message_at &&
+          refreshed.last_message_preview === prev.last_message_preview
+        ) {
+          return prev;
+        }
+        return refreshed;
+      });
     } catch (err) {
       console.error("Failed to load chats:", err);
     }
+  };
+
+  const startChatsWarmup = () => {
+    if (warmupPollRef.current) clearInterval(warmupPollRef.current);
+
+    let attempts = 0;
+    const tick = () => {
+      attempts += 1;
+      loadChats();
+      if (attempts >= 12 && warmupPollRef.current) {
+        clearInterval(warmupPollRef.current);
+        warmupPollRef.current = null;
+      }
+    };
+
+    tick();
+    warmupPollRef.current = setInterval(tick, 1200);
   };
 
   const loadMessages = async (chatId: string) => {
@@ -150,7 +221,10 @@ export default function MessagingView() {
       const data = await api<{ messages: ExternalMessage[] }>(
         `/messaging/chats/${chatId}/messages`,
       );
-      setMessages(data.messages);
+      const incomingMessages = data.messages || [];
+      setMessages((prev) =>
+        areMessagesEqual(prev, incomingMessages) ? prev : incomingMessages,
+      );
     } catch (err) {
       console.error("Failed to load messages:", err);
     }
@@ -235,6 +309,7 @@ export default function MessagingView() {
   const startQrPolling = () => {
     // Clear any existing QR poll
     if (qrPollRef.current) clearInterval(qrPollRef.current);
+    if (warmupPollRef.current) clearInterval(warmupPollRef.current);
 
     qrPollRef.current = setInterval(async () => {
       try {
@@ -247,7 +322,8 @@ export default function MessagingView() {
           setShowSetup(false);
           setQrCode("");
           setForceSetup(false);
-          loadAccounts();
+          await loadAccounts();
+          startChatsWarmup();
           return;
         }
         if (data.qr_code) {
@@ -263,6 +339,7 @@ export default function MessagingView() {
   useEffect(() => {
     return () => {
       if (qrPollRef.current) clearInterval(qrPollRef.current);
+      if (warmupPollRef.current) clearInterval(warmupPollRef.current);
     };
   }, []);
 
@@ -291,6 +368,7 @@ export default function MessagingView() {
       setShowSetup(false);
       setQrCode("");
       if (qrPollRef.current) clearInterval(qrPollRef.current);
+      if (warmupPollRef.current) clearInterval(warmupPollRef.current);
       setForceSetup(true);
       loadAccounts();
     }
