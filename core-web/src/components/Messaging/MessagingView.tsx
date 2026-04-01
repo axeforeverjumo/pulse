@@ -7,7 +7,6 @@ import {
   PhoneIcon,
   SparklesIcon,
   QrCodeIcon,
-  ClockIcon,
 } from "@heroicons/react/24/outline";
 
 interface ExternalAccount {
@@ -63,11 +62,14 @@ export default function MessagingView() {
   const [showSetup, setShowSetup] = useState(false);
   const [qrCode, setQrCode] = useState("");
   const [qrLoading, setQrLoading] = useState(false);
+  const [telegramLinking, setTelegramLinking] = useState(false);
+  const [telegramDeepLink, setTelegramDeepLink] = useState("");
   const [suggesting, setSuggesting] = useState(false);
   const [linkError, setLinkError] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const qrPollRef = useRef<NodeJS.Timeout | null>(null);
+  const telegramPollRef = useRef<NodeJS.Timeout | null>(null);
   const warmupPollRef = useRef<NodeJS.Timeout | null>(null);
   const hydratedChatsRef = useRef<Set<string>>(new Set());
 
@@ -92,14 +94,15 @@ export default function MessagingView() {
   // Keep chat list fresh even when no conversation is selected.
   // Without this polling, incoming webhooks can write to DB but UI stays stale.
   useEffect(() => {
-    if (activeTab !== "whatsapp") return;
+    const tabAccount = accounts.find((account) => account.provider === activeTab);
+    if (!tabAccount || tabAccount.status !== "connected") return;
 
     const chatsPoll = setInterval(() => {
       loadChats();
     }, 2500);
 
     return () => clearInterval(chatsPoll);
-  }, [activeTab]);
+  }, [activeTab, accounts]);
 
   // Poll for new messages in active chat
   useEffect(() => {
@@ -161,14 +164,17 @@ export default function MessagingView() {
     return true;
   };
 
-  const loadAccounts = async () => {
+  const loadAccounts = async (): Promise<ExternalAccount[]> => {
     try {
       const data = await api<{ accounts: ExternalAccount[] }>(
         "/messaging/accounts",
       );
-      setAccounts(data.accounts);
+      const incomingAccounts = data.accounts || [];
+      setAccounts(incomingAccounts);
+      return incomingAccounts;
     } catch (err) {
       console.error("Failed to load accounts:", err);
+      return [];
     } finally {
       setLoading(false);
     }
@@ -317,6 +323,7 @@ export default function MessagingView() {
       );
       setQrCode(data.qr_code);
       setShowSetup(true);
+      setTelegramDeepLink("");
       // Start polling for QR refresh and connection status
       startQrPolling();
     } catch (err) {
@@ -342,7 +349,6 @@ export default function MessagingView() {
           if (qrPollRef.current) clearInterval(qrPollRef.current);
           setShowSetup(false);
           setQrCode("");
-          setForceSetup(false);
           hydratedChatsRef.current.clear();
           await loadAccounts();
           startChatsWarmup();
@@ -357,29 +363,97 @@ export default function MessagingView() {
     }, 5000);
   };
 
-  // Clean up QR polling on unmount
+  const linkTelegram = async () => {
+    if (!workspaceId) {
+      setLinkError("No se pudo determinar el workspace. Recarga la pagina.");
+      return;
+    }
+
+    setTelegramLinking(true);
+    setLinkError("");
+    try {
+      const data = await api<{ deep_link_url: string; bot_username: string }>(
+        "/messaging/telegram/link",
+        {
+          method: "POST",
+          body: JSON.stringify({ workspace_id: workspaceId }),
+        },
+      );
+
+      setQrCode("");
+      setShowSetup(true);
+      setTelegramDeepLink(data.deep_link_url || "");
+
+      if (data.deep_link_url) {
+        window.open(data.deep_link_url, "_blank", "noopener,noreferrer");
+      }
+
+      startTelegramLinkPolling();
+    } catch (err) {
+      console.error("Failed to link Telegram:", err);
+      setLinkError("Error al vincular Telegram. Revisa el bot y vuelve a intentarlo.");
+    } finally {
+      setTelegramLinking(false);
+    }
+  };
+
+  const startTelegramLinkPolling = () => {
+    if (telegramPollRef.current) clearInterval(telegramPollRef.current);
+    if (warmupPollRef.current) clearInterval(warmupPollRef.current);
+
+    let attempts = 0;
+    const tick = async () => {
+      attempts += 1;
+      const freshAccounts = await loadAccounts();
+      const telegramAccount = freshAccounts.find(
+        (account) => account.provider === "telegram",
+      );
+
+      if (telegramAccount?.status === "connected") {
+        if (telegramPollRef.current) clearInterval(telegramPollRef.current);
+        setShowSetup(false);
+        setTelegramDeepLink("");
+        hydratedChatsRef.current.clear();
+        await loadChats();
+        startChatsWarmup();
+        return;
+      }
+
+      if (attempts >= 60 && telegramPollRef.current) {
+        clearInterval(telegramPollRef.current);
+        telegramPollRef.current = null;
+      }
+    };
+
+    tick();
+    telegramPollRef.current = setInterval(tick, 2000);
+  };
+
+  // Clean up polling timers on unmount
   useEffect(() => {
     return () => {
       if (qrPollRef.current) clearInterval(qrPollRef.current);
+      if (telegramPollRef.current) clearInterval(telegramPollRef.current);
       if (warmupPollRef.current) clearInterval(warmupPollRef.current);
     };
   }, []);
 
   const [unlinking, setUnlinking] = useState(false);
-  // forceSetup=true means we explicitly want to show the link/QR flow
-  // regardless of what the API returns for account status
-  const [forceSetup, setForceSetup] = useState(false);
-
   const currentAccount = accounts.find((a) => a.provider === activeTab);
-
   const [confirmUnlink, setConfirmUnlink] = useState(false);
 
-  const unlinkWhatsApp = async () => {
+  const unlinkCurrentAccount = async () => {
     if (!currentAccount || unlinking) return;
+
+    const endpoint =
+      activeTab === "telegram"
+        ? "/messaging/telegram/unlink"
+        : "/messaging/whatsapp/unlink";
+
     setUnlinking(true);
     setConfirmUnlink(false);
     try {
-      await api("/messaging/whatsapp/unlink", { method: "DELETE" });
+      await api(endpoint, { method: "DELETE" });
     } catch (err) {
       console.error("Failed to unlink:", err);
     } finally {
@@ -387,20 +461,24 @@ export default function MessagingView() {
       setAccounts([]);
       setChats([]);
       setActiveChat(null);
+      setMessages([]);
       setShowSetup(false);
       setQrCode("");
+      setTelegramDeepLink("");
       if (qrPollRef.current) clearInterval(qrPollRef.current);
+      if (telegramPollRef.current) clearInterval(telegramPollRef.current);
       if (warmupPollRef.current) clearInterval(warmupPollRef.current);
       hydratedChatsRef.current.clear();
-      setForceSetup(true);
-      loadAccounts();
+      await loadAccounts();
     }
   };
 
-  // When user explicitly starts linking, clear forceSetup (it's already in setup mode)
   const handleLinkWhatsApp = async () => {
-    setForceSetup(false);
     await linkWhatsApp();
+  };
+
+  const handleLinkTelegram = async () => {
+    await linkTelegram();
   };
 
   const formatPreview = (preview?: string) => {
@@ -467,62 +545,88 @@ export default function MessagingView() {
                 }`}
                 title={currentAccount.status}
               />
-              {activeTab === "whatsapp" && (
-                confirmUnlink ? (
-                  <div className="flex items-center gap-1 ml-1">
-                    <span className="text-[10px] text-gray-500">¿Seguro?</span>
-                    <button
-                      onClick={unlinkWhatsApp}
-                      disabled={unlinking}
-                      className="text-[11px] text-red-500 hover:text-red-700 font-medium disabled:opacity-50"
-                    >
-                      {unlinking ? "..." : "Sí"}
-                    </button>
-                    <button
-                      onClick={() => setConfirmUnlink(false)}
-                      className="text-[11px] text-gray-400 hover:text-gray-600"
-                    >
-                      No
-                    </button>
-                  </div>
-                ) : (
+              {confirmUnlink ? (
+                <div className="flex items-center gap-1 ml-1">
+                  <span className="text-[10px] text-gray-500">¿Seguro?</span>
                   <button
-                    onClick={() => setConfirmUnlink(true)}
-                    className="text-[11px] text-red-400 hover:text-red-600 transition-colors ml-1"
-                    title="Cerrar sesión de WhatsApp"
+                    onClick={unlinkCurrentAccount}
+                    disabled={unlinking}
+                    className="text-[11px] text-red-500 hover:text-red-700 font-medium disabled:opacity-50"
                   >
-                    Cerrar sesión
+                    {unlinking ? "..." : "Sí"}
                   </button>
-                )
+                  <button
+                    onClick={() => setConfirmUnlink(false)}
+                    className="text-[11px] text-gray-400 hover:text-gray-600"
+                  >
+                    No
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmUnlink(true)}
+                  className="text-[11px] text-red-400 hover:text-red-600 transition-colors ml-1"
+                  title={`Cerrar sesión de ${activeTab === "telegram" ? "Telegram" : "WhatsApp"}`}
+                >
+                  Cerrar sesión
+                </button>
               )}
             </>
           )}
         </div>
 
         {/* Connect prompt or chat list */}
-        {/* Show setup flow when: no account, disconnected, forceSetup (just unlinked), or account not connected */}
-        {forceSetup || !currentAccount || currentAccount.status !== "connected" ? (
+        {!currentAccount || currentAccount.status !== "connected" ? (
           <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
             {activeTab === "telegram" ? (
-              /* Telegram coming soon placeholder */
-              <>
-                <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center mb-3">
-                  <ClockIcon className="w-6 h-6 text-blue-500" />
-                </div>
-                <p className="text-sm font-medium text-gray-900 mb-1">
-                  Telegram - Proximamente
-                </p>
-                <p className="text-xs text-gray-500 mb-4 max-w-[220px]">
-                  La integracion con Telegram estara disponible pronto.
-                  Por ahora puedes vincular tu WhatsApp.
-                </p>
-                <button
-                  onClick={() => setActiveTab("whatsapp")}
-                  className="px-4 py-2 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors"
-                >
-                  Vincular WhatsApp
-                </button>
-              </>
+              showSetup && telegramDeepLink ? (
+                <>
+                  <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center mb-3">
+                    <PaperAirplaneIcon className="w-6 h-6 text-blue-500" />
+                  </div>
+                  <p className="text-sm font-medium text-gray-900 mb-1">
+                    Vincula tu Telegram
+                  </p>
+                  <p className="text-xs text-gray-500 mb-4 max-w-[220px]">
+                    Se ha abierto el bot en otra pestaña. Pulsa en Start para confirmar el enlace.
+                  </p>
+                  <button
+                    onClick={() => window.open(telegramDeepLink, "_blank", "noopener,noreferrer")}
+                    className="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
+                  >
+                    Abrir Telegram
+                  </button>
+                  <p className="text-[10px] text-gray-400 mt-3">Esperando confirmación automática...</p>
+                </>
+              ) : (
+                <>
+                  <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center mb-3">
+                    <PaperAirplaneIcon className="w-6 h-6 text-blue-500" />
+                  </div>
+                  <p className="text-sm font-medium text-gray-900 mb-1">
+                    {currentAccount?.status === "disconnected"
+                      ? "Telegram desconectado"
+                      : "Conecta tu Telegram"}
+                  </p>
+                  <p className="text-xs text-gray-500 mb-4 max-w-[220px]">
+                    Vincula tu bot de Telegram para recibir y responder mensajes desde Pulse.
+                  </p>
+                  {linkError && (
+                    <p className="text-xs text-red-500 mb-3">{linkError}</p>
+                  )}
+                  <button
+                    onClick={handleLinkTelegram}
+                    disabled={telegramLinking}
+                    className="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                  >
+                    {telegramLinking
+                      ? "Preparando enlace..."
+                      : currentAccount?.status === "disconnected"
+                        ? "Reconectar Telegram"
+                        : "Vincular Telegram"}
+                  </button>
+                </>
+              )
             ) : showSetup && qrCode ? (
               <>
                 <QrCodeIcon className="w-8 h-8 text-green-500 mb-3" />
@@ -538,7 +642,7 @@ export default function MessagingView() {
                   className="w-48 h-48 rounded-lg mb-3"
                 />
                 <p className="text-[10px] text-gray-400 mb-2">
-                  El QR se actualiza automaticamente
+                  El QR se actualiza automáticamente
                 </p>
                 <button
                   onClick={() => {
@@ -551,8 +655,7 @@ export default function MessagingView() {
                   Cancelar
                 </button>
               </>
-            ) : currentAccount && currentAccount.status === "disconnected" && !forceSetup ? (
-              /* Disconnected state — phone removed the session */
+            ) : currentAccount && currentAccount.status === "disconnected" ? (
               <>
                 <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center mb-3">
                   <PhoneIcon className="w-6 h-6 text-orange-500" />
@@ -561,7 +664,7 @@ export default function MessagingView() {
                   WhatsApp desconectado
                 </p>
                 <p className="text-xs text-gray-500 mb-4 max-w-[220px]">
-                  Tu sesion de WhatsApp fue cerrada desde el telefono. Vuelve a vincular para reconectar.
+                  Tu sesión de WhatsApp fue cerrada desde el teléfono. Vuelve a vincular para reconectar.
                 </p>
                 {linkError && (
                   <p className="text-xs text-red-500 mb-3">{linkError}</p>
@@ -583,7 +686,7 @@ export default function MessagingView() {
                   Conecta tu WhatsApp
                 </p>
                 <p className="text-xs text-gray-500 mb-4">
-                  Escanea un codigo QR para vincular tu WhatsApp
+                  Escanea un código QR para vincular tu WhatsApp.
                 </p>
                 {linkError && (
                   <p className="text-xs text-red-500 mb-3">{linkError}</p>
@@ -602,10 +705,20 @@ export default function MessagingView() {
           <div className="flex-1 overflow-y-auto">
             {chats.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-                <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center mb-3">
-                  <PhoneIcon className="w-5 h-5 text-green-500" />
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center mb-3 ${
+                    activeTab === "telegram" ? "bg-blue-50" : "bg-green-50"
+                  }`}
+                >
+                  {activeTab === "telegram" ? (
+                    <PaperAirplaneIcon className="w-5 h-5 text-blue-500" />
+                  ) : (
+                    <PhoneIcon className="w-5 h-5 text-green-500" />
+                  )}
                 </div>
-                <p className="text-sm font-medium text-gray-700 mb-1">WhatsApp conectado</p>
+                <p className="text-sm font-medium text-gray-700 mb-1">
+                  {activeTab === "telegram" ? "Telegram conectado" : "WhatsApp conectado"}
+                </p>
                 <p className="text-xs text-gray-400 max-w-[200px]">
                   Las conversaciones aparecerán aquí cuando recibas o envíes mensajes.
                 </p>
@@ -619,7 +732,6 @@ export default function MessagingView() {
                     activeChat?.id === chat.id ? "bg-gray-50" : ""
                   }`}
                 >
-                  {/* Avatar */}
                   {chat.contact_avatar_url ? (
                     <img
                       src={chat.contact_avatar_url}
@@ -634,7 +746,6 @@ export default function MessagingView() {
                       {chat.contact_name?.[0]?.toUpperCase() || "?"}
                     </div>
                   )}
-                  {/* Info */}
                   <div className="flex-1 min-w-0 text-left">
                     <div className="flex items-center justify-between">
                       <span className="text-[13px] font-medium text-gray-900 truncate">
@@ -651,7 +762,11 @@ export default function MessagingView() {
                         {formatPreview(chat.last_message_preview)}
                       </span>
                       {chat.unread_count > 0 && (
-                        <span className="ml-2 w-5 h-5 rounded-full bg-green-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                        <span
+                          className={`ml-2 w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0 ${
+                            activeTab === "telegram" ? "bg-blue-500" : "bg-green-500"
+                          }`}
+                        >
                           {chat.unread_count > 99
                             ? "99+"
                             : chat.unread_count}

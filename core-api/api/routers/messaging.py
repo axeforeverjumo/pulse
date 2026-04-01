@@ -12,12 +12,15 @@ Evolution API v2.3.7 endpoints used:
 import asyncio
 import logging
 import httpx
+import os
+import secrets
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, Set
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from api.dependencies import get_current_user_jwt, get_current_user_id
+from api.config import settings
 from lib.supabase_client import get_async_service_role_client, get_authenticated_async_client
 
 logger = logging.getLogger(__name__)
@@ -25,7 +28,10 @@ router = APIRouter(prefix="/api/messaging", tags=["messaging"])
 
 EVOLUTION_API_URL = "http://127.0.0.1:8080"
 EVOLUTION_API_KEY = "pulse-evolution-key-2026"
-WEBHOOK_BASE_URL = "https://pulse.factoriaia.com/api/messaging/webhook/whatsapp"
+PUBLIC_MESSAGING_BASE_URL = (settings.messaging_public_base_url or "https://pulse.factoriaia.com").rstrip("/")
+WEBHOOK_BASE_URL = f"{PUBLIC_MESSAGING_BASE_URL}/api/messaging/webhook/whatsapp"
+TELEGRAM_WEBHOOK_URL = f"{PUBLIC_MESSAGING_BASE_URL}/api/messaging/webhook/telegram"
+TELEGRAM_API_BASE = "https://api.telegram.org"
 
 # ── Models ──
 
@@ -90,6 +96,127 @@ def _message_preview(message: Any, fallback_type: Optional[str] = None) -> str:
     if text:
         return text[:100]
     return "[media]" if fallback_type else ""
+
+
+def _get_telegram_bot_token() -> str:
+    token = settings.telegram_bot_token or os.getenv("TELEGRAM_BOT_TOKEN") or ""
+    return token.strip()
+
+
+def _get_telegram_bot_username_hint() -> str:
+    username = settings.telegram_bot_username or os.getenv("TELEGRAM_BOT_USERNAME") or ""
+    return username.strip().lstrip("@")
+
+
+def _get_telegram_webhook_secret() -> str:
+    secret = settings.telegram_webhook_secret or os.getenv("TELEGRAM_WEBHOOK_SECRET") or ""
+    return secret.strip()
+
+
+def _telegram_api_url(token: str, method: str) -> str:
+    return f"{TELEGRAM_API_BASE}/bot{token}/{method}"
+
+
+async def _telegram_call(method: str, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    token = _get_telegram_bot_token()
+    if not token:
+        raise HTTPException(503, "Telegram no configurado en el servidor")
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.post(_telegram_api_url(token, method), json=payload or {})
+
+    if response.status_code != 200:
+        logger.error("Telegram API error (%s): %s", method, response.text[:300])
+        raise HTTPException(502, "No se pudo contactar con Telegram")
+
+    data = response.json() if response.content else {}
+    if not isinstance(data, dict) or not data.get("ok"):
+        logger.error("Telegram API invalid response (%s): %s", method, str(data)[:300])
+        raise HTTPException(502, "Telegram devolvio un error al procesar la solicitud")
+    return data
+
+
+async def _telegram_send_text(chat_id: str, text: str) -> Optional[str]:
+    payload = {"chat_id": chat_id, "text": text}
+    data = await _telegram_call("sendMessage", payload)
+    result = data.get("result") if isinstance(data.get("result"), dict) else {}
+    message_id = result.get("message_id")
+    return str(message_id) if message_id is not None else None
+
+
+def _extract_telegram_message_text(message: Dict[str, Any]) -> str:
+    text = message.get("text")
+    if isinstance(text, str) and text.strip():
+        return text.strip()
+
+    caption = message.get("caption")
+    if isinstance(caption, str) and caption.strip():
+        return caption.strip()
+
+    if message.get("photo"):
+        return "[foto]"
+    if message.get("video"):
+        return "[video]"
+    if message.get("audio"):
+        return "[audio]"
+    if message.get("document"):
+        return "[documento]"
+    if message.get("sticker"):
+        return "[sticker]"
+
+    return ""
+
+
+def _telegram_contact_name(chat: Dict[str, Any], sender: Dict[str, Any]) -> str:
+    title = chat.get("title")
+    if isinstance(title, str) and title.strip():
+        return title.strip()
+
+    first_name = sender.get("first_name") if isinstance(sender.get("first_name"), str) else ""
+    last_name = sender.get("last_name") if isinstance(sender.get("last_name"), str) else ""
+    full_name = f"{first_name} {last_name}".strip()
+    if full_name:
+        return full_name
+
+    username = sender.get("username") if isinstance(sender.get("username"), str) else ""
+    if username:
+        return f"@{username}"
+
+    chat_username = chat.get("username") if isinstance(chat.get("username"), str) else ""
+    if chat_username:
+        return f"@{chat_username}"
+
+    chat_id = chat.get("id")
+    return str(chat_id) if chat_id is not None else "Telegram"
+
+
+def _extract_telegram_update_message(body: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    for key in ("message", "edited_message", "channel_post", "edited_channel_post"):
+        candidate = body.get(key)
+        if isinstance(candidate, dict):
+            return candidate
+    return None
+
+
+async def _ensure_telegram_webhook() -> str:
+    bot_data = await _telegram_call("getMe")
+    bot_info = bot_data.get("result") if isinstance(bot_data.get("result"), dict) else {}
+
+    username = (
+        bot_info.get("username")
+        if isinstance(bot_info.get("username"), str) and bot_info.get("username")
+        else _get_telegram_bot_username_hint()
+    )
+    if not username:
+        raise HTTPException(502, "No se pudo leer el username del bot de Telegram")
+
+    webhook_payload: Dict[str, Any] = {"url": TELEGRAM_WEBHOOK_URL}
+    secret_token = _get_telegram_webhook_secret()
+    if secret_token:
+        webhook_payload["secret_token"] = secret_token
+
+    await _telegram_call("setWebhook", webhook_payload)
+    return username
 
 
 def _should_refresh_chat_snapshot(config: Dict[str, Any], now_utc: datetime) -> bool:
@@ -505,6 +632,77 @@ async def unlink_whatsapp(
     return {"status": "unlinked"}
 
 
+@router.post("/telegram/link")
+async def link_telegram(
+    request: LinkWhatsAppRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Start Telegram linking flow via bot deep-link token."""
+    if not _get_telegram_bot_token():
+        raise HTTPException(503, "Telegram no esta configurado en este servidor")
+
+    supabase = await get_async_service_role_client()
+    bot_username = await _ensure_telegram_webhook()
+    link_token = secrets.token_urlsafe(24)
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    existing = await (
+        supabase.table("external_accounts")
+        .select("id, config")
+        .eq("user_id", user_id)
+        .eq("provider", "telegram")
+        .maybe_single()
+        .execute()
+    )
+    existing_config = existing.data.get("config") if existing and existing.data else {}
+    if not isinstance(existing_config, dict):
+        existing_config = {}
+
+    config = {
+        **existing_config,
+        "telegram_link_token": link_token,
+        "telegram_link_token_created_at": now_iso,
+        "telegram_bot_username": bot_username,
+    }
+
+    await supabase.table("external_accounts").upsert(
+        {
+            "user_id": user_id,
+            "workspace_id": request.workspace_id,
+            "provider": "telegram",
+            "instance_name": bot_username,
+            "telegram_chat_id": None,
+            "status": "link_pending",
+            "config": config,
+        },
+        on_conflict="user_id,provider",
+    ).execute()
+
+    return {
+        "deep_link_url": f"https://t.me/{bot_username}?start={link_token}",
+        "bot_username": bot_username,
+        "status": "link_pending",
+    }
+
+
+@router.delete("/telegram/unlink")
+async def unlink_telegram(
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Disconnect Telegram account and cascade-remove chats/messages."""
+    supabase = await get_async_service_role_client()
+    await (
+        supabase.table("external_accounts")
+        .delete()
+        .eq("user_id", user_id)
+        .eq("provider", "telegram")
+        .execute()
+    )
+    return {"status": "unlinked"}
+
+
 # ── Account Status ──
 
 @router.get("/accounts")
@@ -824,11 +1022,13 @@ async def send_message(
     supabase = await get_async_service_role_client()
 
     # Get chat and account info
-    chat = await supabase.table("external_chats")\
-        .select("*, account:external_accounts(instance_name, provider, user_id)")\
-        .eq("id", chat_id)\
-        .maybe_single()\
+    chat = await (
+        supabase.table("external_chats")
+        .select("*, account:external_accounts(instance_name, provider, user_id, telegram_chat_id)")
+        .eq("id", chat_id)
+        .maybe_single()
         .execute()
+    )
 
     if not chat or not chat.data:
         raise HTTPException(404, "Chat no encontrado")
@@ -837,6 +1037,8 @@ async def send_message(
     account = chat_data["account"]
     if account.get("user_id") != user_id:
         raise HTTPException(404, "Chat no encontrado")
+
+    remote_message_id = ""
 
     if account["provider"] == "whatsapp":
         # Send via Evolution API
@@ -853,13 +1055,33 @@ async def send_message(
                 logger.error(f"Send message error: {resp.status_code} {resp.text}")
                 raise HTTPException(502, "Error al enviar mensaje")
 
+    elif account["provider"] == "telegram":
+        remote_jid = chat_data.get("remote_jid")
+        telegram_chat_id = ""
+        if isinstance(remote_jid, str) and remote_jid.startswith("telegram:"):
+            telegram_chat_id = remote_jid.split(":", 1)[1]
+        if not telegram_chat_id:
+            telegram_chat_id = str(account.get("telegram_chat_id") or "")
+
+        if not telegram_chat_id:
+            raise HTTPException(400, "Este chat de Telegram no esta vinculado correctamente")
+
+        remote_message_id = await _telegram_send_text(telegram_chat_id, request.content) or ""
+
+    else:
+        raise HTTPException(400, "Proveedor de mensajeria no soportado")
+
     # Save outgoing message
-    msg = await supabase.table("external_messages").insert({
+    payload = {
         "chat_id": chat_id,
         "direction": "out",
         "content": request.content,
         "status": "sent",
-    }).execute()
+    }
+    if remote_message_id:
+        payload["remote_message_id"] = remote_message_id
+
+    msg = await supabase.table("external_messages").insert(payload).execute()
 
     # Update chat last message
     await supabase.table("external_chats").update({
@@ -1056,6 +1278,243 @@ async def whatsapp_webhook(request: Request):
         return {"status": "ok"}
 
     return {"status": "ignored"}
+
+
+@router.post("/webhook/telegram")
+async def telegram_webhook(request: Request):
+    """Receive incoming updates from Telegram Bot API."""
+    secret_token = _get_telegram_webhook_secret()
+    if secret_token:
+        incoming_secret = request.headers.get("x-telegram-bot-api-secret-token", "")
+        if incoming_secret != secret_token:
+            logger.warning("Telegram webhook ignored: invalid secret token")
+            return {"status": "ignored"}
+
+    try:
+        body = await request.json()
+    except Exception:
+        return {"status": "ignored"}
+
+    if not isinstance(body, dict):
+        return {"status": "ignored"}
+
+    message = _extract_telegram_update_message(body)
+    if not message:
+        return {"status": "ignored"}
+
+    chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
+    sender = message.get("from") if isinstance(message.get("from"), dict) else {}
+    chat_id_raw = chat.get("id")
+    if chat_id_raw is None:
+        return {"status": "ignored"}
+
+    chat_id = str(chat_id_raw)
+    text = _extract_telegram_message_text(message)
+    message_id = message.get("message_id")
+    remote_message_id = str(message_id) if message_id is not None else ""
+    message_created_at = _iso_from_epoch_seconds(message.get("date")) or datetime.now(timezone.utc).isoformat()
+    contact_name = _telegram_contact_name(chat, sender)
+    chat_type = chat.get("type") if isinstance(chat.get("type"), str) else ""
+
+    supabase = await get_async_service_role_client()
+
+    # /start <token> links this Telegram chat to the pending Pulse account.
+    if isinstance(text, str) and text.startswith("/start"):
+        parts = text.split(maxsplit=1)
+        link_token = parts[1].strip() if len(parts) > 1 else ""
+
+        if not link_token:
+            await _telegram_send_text(
+                chat_id,
+                "Entra desde Pulse y pulsa en Vincular Telegram para generar un enlace valido.",
+            )
+            return {"status": "start_without_token"}
+
+        pending_accounts = await (
+            supabase.table("external_accounts")
+            .select("id, config")
+            .eq("provider", "telegram")
+            .eq("status", "link_pending")
+            .execute()
+        )
+
+        target_account = None
+        target_config: Dict[str, Any] = {}
+        for account_candidate in pending_accounts.data or []:
+            cfg = account_candidate.get("config") if isinstance(account_candidate.get("config"), dict) else {}
+            if cfg.get("telegram_link_token") == link_token:
+                target_account = account_candidate
+                target_config = cfg
+                break
+
+        if not target_account:
+            await _telegram_send_text(chat_id, "Este enlace ya no es valido. Vuelve a vincular Telegram desde Pulse.")
+            return {"status": "invalid_link_token"}
+
+        already_bound = await (
+            supabase.table("external_accounts")
+            .select("id")
+            .eq("provider", "telegram")
+            .eq("telegram_chat_id", chat_id)
+            .neq("id", target_account["id"])
+            .limit(1)
+            .execute()
+        )
+        if already_bound.data:
+            await _telegram_send_text(
+                chat_id,
+                "Este chat de Telegram ya esta vinculado a otra cuenta de Pulse.",
+            )
+            return {"status": "chat_already_linked"}
+
+        username = sender.get("username") if isinstance(sender.get("username"), str) else ""
+        linked_config = {
+            **target_config,
+            "telegram_linked_at": datetime.now(timezone.utc).isoformat(),
+            "telegram_username": username,
+            "telegram_user_id": str(sender.get("id")) if sender.get("id") is not None else None,
+        }
+        linked_config.pop("telegram_link_token", None)
+        linked_config.pop("telegram_link_token_created_at", None)
+
+        await (
+            supabase.table("external_accounts")
+            .update(
+                {
+                    "status": "connected",
+                    "telegram_chat_id": chat_id,
+                    "phone_number": f"@{username}" if username else chat_id,
+                    "config": linked_config,
+                }
+            )
+            .eq("id", target_account["id"])
+            .execute()
+        )
+
+        await _telegram_send_text(
+            chat_id,
+            "Listo, Telegram ya esta vinculado con Pulse. Puedes volver a la web y empezar a responder.",
+        )
+        return {"status": "linked"}
+
+    account_result = await (
+        supabase.table("external_accounts")
+        .select("id, away_mode, away_message")
+        .eq("provider", "telegram")
+        .eq("telegram_chat_id", chat_id)
+        .maybe_single()
+        .execute()
+    )
+
+    if not account_result or not account_result.data:
+        logger.info("Telegram webhook without linked account for chat_id=%s", chat_id)
+        return {"status": "no_account"}
+
+    account = account_result.data
+    remote_jid = f"telegram:{chat_id}"
+
+    chat_result = await (
+        supabase.table("external_chats")
+        .select("id, auto_reply_enabled, unread_count")
+        .eq("account_id", account["id"])
+        .eq("remote_jid", remote_jid)
+        .maybe_single()
+        .execute()
+    )
+
+    if chat_result and chat_result.data:
+        chat_id_db = chat_result.data["id"]
+        chat_config = chat_result.data
+    else:
+        username = sender.get("username") if isinstance(sender.get("username"), str) else ""
+        contact_phone = f"@{username}" if username else chat_id
+        created_chat = await (
+            supabase.table("external_chats")
+            .insert(
+                {
+                    "account_id": account["id"],
+                    "remote_jid": remote_jid,
+                    "contact_name": contact_name,
+                    "contact_phone": contact_phone,
+                    "is_group": chat_type in ("group", "supergroup", "channel"),
+                }
+            )
+            .execute()
+        )
+        chat_id_db = created_chat.data[0]["id"]
+        chat_config = {"auto_reply_enabled": None, "unread_count": 0}
+
+    if remote_message_id:
+        existing_message = await (
+            supabase.table("external_messages")
+            .select("id")
+            .eq("chat_id", chat_id_db)
+            .eq("remote_message_id", remote_message_id)
+            .limit(1)
+            .execute()
+        )
+        if existing_message.data:
+            return {"status": "duplicate"}
+
+    incoming_payload = {
+        "chat_id": chat_id_db,
+        "remote_message_id": remote_message_id or None,
+        "direction": "in",
+        "content": text,
+        "sender_name": contact_name,
+        "sender_jid": f"telegram:{sender.get('id')}" if sender.get("id") is not None else remote_jid,
+        "created_at": message_created_at,
+    }
+    await supabase.table("external_messages").insert(incoming_payload).execute()
+
+    await (
+        supabase.table("external_chats")
+        .update(
+            {
+                "last_message_at": message_created_at,
+                "last_message_preview": text[:100] if text else "[media]",
+                "contact_name": contact_name,
+                "unread_count": int(chat_config.get("unread_count") or 0) + 1,
+            }
+        )
+        .eq("id", chat_id_db)
+        .execute()
+    )
+
+    should_reply = False
+    if chat_config.get("auto_reply_enabled") is True:
+        should_reply = True
+    elif chat_config.get("auto_reply_enabled") is None and account.get("away_mode"):
+        should_reply = True
+
+    if should_reply and text and not text.startswith("/"):
+        reply_text = account.get("away_message") or "Ahora mismo no puedo responder, te contesto en cuanto pueda."
+        reply_remote_id = await _telegram_send_text(chat_id, reply_text)
+
+        auto_reply_payload = {
+            "chat_id": chat_id_db,
+            "direction": "out",
+            "content": reply_text,
+            "is_auto_reply": True,
+            "status": "sent",
+        }
+        if reply_remote_id:
+            auto_reply_payload["remote_message_id"] = reply_remote_id
+        await supabase.table("external_messages").insert(auto_reply_payload).execute()
+
+        await (
+            supabase.table("external_chats")
+            .update(
+                {
+                    "last_message_at": datetime.now(timezone.utc).isoformat(),
+                    "last_message_preview": reply_text[:100],
+                }
+            )
+            .eq("id", chat_id_db)
+            .execute()
+        )
+
+    return {"status": "ok"}
 
 
 async def _auto_reply(account, chat_id, remote_jid, instance, incoming_text, contact_name, directives):
