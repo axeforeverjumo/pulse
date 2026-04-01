@@ -10,6 +10,7 @@ Evolution API v2.3.7 endpoints used:
 """
 
 import asyncio
+import json
 import logging
 import httpx
 import os
@@ -443,6 +444,56 @@ class ContactRuleRequest(BaseModel):
 class SuggestReplyRequest(BaseModel):
     chat_id: str
     message_id: Optional[str] = None
+
+
+def _parse_directives_metadata(directives: Optional[str]) -> tuple[Optional[str], Optional[str], str]:
+    """Parse optional agent metadata embedded in directives text."""
+    if not directives:
+        return None, None, ""
+
+    agent_id: Optional[str] = None
+    agent_name: Optional[str] = None
+    notes: list[str] = []
+
+    for raw_line in directives.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("AGENT_ID:"):
+            value = line[len("AGENT_ID:"):].strip()
+            if value:
+                agent_id = value
+            continue
+        if line.startswith("AGENT_NAME:"):
+            value = line[len("AGENT_NAME:"):].strip()
+            if value:
+                agent_name = value
+            continue
+        if line.startswith("INSTRUCCIONES:"):
+            value = line[len("INSTRUCCIONES:"):].strip()
+            if value:
+                notes.append(value)
+            continue
+        notes.append(line)
+
+    return agent_id, agent_name, "\n".join(notes).strip()
+
+
+def _format_agent_config(config: object) -> str:
+    if not isinstance(config, dict):
+        return "- sin configuracion adicional"
+
+    lines = []
+    for key, value in config.items():
+        if value in (None, "", [], {}):
+            continue
+        if isinstance(value, (dict, list)):
+            rendered = json.dumps(value, ensure_ascii=False)
+        else:
+            rendered = str(value)
+        lines.append(f"- {key}: {rendered}")
+
+    return "\n".join(lines) if lines else "- sin configuracion adicional"
 
 
 # ── WhatsApp Account Management ──
@@ -1154,8 +1205,7 @@ async def whatsapp_webhook(request: Request):
                         headers={"apikey": EVOLUTION_API_KEY},
                     )
                     if resp.status_code == 200:
-                        info = resp.json()
-                        # Try to extract phone from instance info
+                        # Reserved for future phone extraction from connection metadata.
                         pass
             except Exception:
                 pass
@@ -1167,7 +1217,7 @@ async def whatsapp_webhook(request: Request):
 
         # Get account
         account_result = await supabase.table("external_accounts")\
-            .select("id, user_id, away_mode, away_message, away_directives, style_profile")\
+            .select("id, user_id, workspace_id, away_mode, away_message, away_directives, style_profile")\
             .eq("instance_name", instance)\
             .maybe_single()\
             .execute()
@@ -1524,6 +1574,7 @@ async def _auto_reply(account, chat_id, remote_jid, instance, incoming_text, con
         from api.config import settings
 
         supabase = await get_async_service_role_client()
+        agent_id, agent_name, directive_notes = _parse_directives_metadata(directives)
 
         # Get recent conversation for context (last 10 messages)
         recent = await supabase.table("external_messages")\
@@ -1540,18 +1591,67 @@ async def _auto_reply(account, chat_id, remote_jid, instance, incoming_text, con
 
         style_profile = account.get("style_profile", {})
         style_desc = style_profile.get("description", "Responde de forma natural y directa.")
+        agent_context = ""
+
+        if agent_id and account.get("workspace_id"):
+            try:
+                agent_result = await supabase.table("agent_instances")\
+                    .select("id, name, system_prompt, config")\
+                    .eq("id", agent_id)\
+                    .eq("workspace_id", account["workspace_id"])\
+                    .maybe_single()\
+                    .execute()
+                selected_agent = agent_result.data if agent_result else None
+            except Exception as e:
+                logger.warning(f"Could not load assigned agent {agent_id}: {e}")
+                selected_agent = None
+
+            if selected_agent:
+                agent_context = (
+                    f"Agente asignado: {selected_agent.get('name', 'Sin nombre')}\n"
+                    f"System prompt del agente:\n{selected_agent.get('system_prompt', '').strip() or '(vacio)'}\n\n"
+                    "Configuracion del agente:\n"
+                    f"{_format_agent_config(selected_agent.get('config'))}"
+                )
+            elif agent_name:
+                agent_context = (
+                    f"Agente asignado (referencia): {agent_name}. "
+                    "No se pudo cargar su configuracion completa; usa el contexto conversacional."
+                )
+        elif agent_name:
+            agent_context = f"Agente asignado (referencia): {agent_name}."
+
+        if directive_notes:
+            effective_directives = directive_notes
+        elif agent_id or agent_name:
+            effective_directives = account.get(
+                "away_message",
+                "Estoy ocupado ahora mismo, te respondo en cuanto pueda.",
+            )
+        else:
+            effective_directives = directives or account.get(
+                "away_message",
+                "Estoy ocupado ahora mismo, te respondo en cuanto pueda.",
+            )
+
+        agent_block = ""
+        if agent_context:
+            agent_block = f"Contexto del agente seleccionado:\n{agent_context}\n\n"
 
         system_prompt = f"""Eres el asistente personal de un usuario. Estás respondiendo mensajes de WhatsApp en su nombre porque está ausente.
 
 Estilo de comunicación del usuario:
 {style_desc}
 
+{agent_block}
+
 Directrices del usuario:
-{directives or account.get('away_message', 'Estoy ocupado ahora mismo, te respondo en cuanto pueda.')}
+{effective_directives}
 
 REGLAS:
 - Responde como si fueras el usuario, NO como un bot
 - Usa su estilo de comunicación (tono, formalidad, emojis si los usa)
+- Si hay contexto de agente asignado, úsalo como marco para decidir qué responder
 - Si no sabes algo, di que lo consultas y responde después
 - Sé breve como en WhatsApp (no escribas párrafos largos)
 - NO digas que eres un bot o IA"""
@@ -1669,7 +1769,7 @@ async def set_away_mode(
     if request.directives is not None:
         update_data["away_directives"] = request.directives
 
-    result = await supabase.table("external_accounts")\
+    await supabase.table("external_accounts")\
         .update(update_data)\
         .eq("id", account_id)\
         .eq("user_id", user_id)\
