@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
-from api.dependencies import get_current_user_jwt, get_current_user_id
+from api.dependencies import get_current_user_jwt
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/drive", tags=["google-drive"])

@@ -419,18 +419,7 @@ async def create_or_refresh_workspace_invitation(
     expires_at = (now + timedelta(days=INVITE_EXPIRY_DAYS)).isoformat()
     token = secrets.token_urlsafe(32)
 
-    previous_state: Optional[Dict[str, Any]] = None
-    created_new = False
-
     if existing_pending:
-        previous_state = {
-            "token": existing_pending.get("token"),
-            "expires_at": existing_pending.get("expires_at"),
-            "role": existing_pending.get("role"),
-            "invited_by_user_id": existing_pending.get("invited_by_user_id"),
-            "last_email_sent_at": existing_pending.get("last_email_sent_at"),
-            "last_email_error": existing_pending.get("last_email_error"),
-        }
         update_result = await client.table("workspace_invitations") \
             .update(
                 {
@@ -453,7 +442,6 @@ async def create_or_refresh_workspace_invitation(
                 detail="Pending invitation changed, please retry",
             )
     else:
-        created_new = True
         insert_result = await client.table("workspace_invitations") \
             .insert(
                 {

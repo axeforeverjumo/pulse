@@ -3,11 +3,11 @@
 import logging
 import httpx
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.dependencies import get_current_user_jwt, get_current_user_id
-from lib.supabase_client import get_async_service_role_client, get_authenticated_async_client
+from lib.supabase_client import get_async_service_role_client
 
 # ── Models ──
 
@@ -326,7 +326,7 @@ async def dispatch_to_agents(
             if agent["tier"] == "core":
                 import anthropic
                 client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-                system_prompt = f"""Eres {agent["name"]}.
+                system_prompt = f"""Eres {agent['name']}.
 
 {agent.get('soul_md', '')}
 
@@ -335,11 +335,19 @@ async def dispatch_to_agents(
 Responde siempre en español. Sé útil, directo y mantén tu personalidad.
 El usuario te ha mencionado en un mensaje grupal. Responde SOLO a la parte que va dirigida a ti."""
 
+                message_for_agent = f"[{user_name}]: {agent_messages.get(agent['id'], request.message)}"
+                if request.email_context:
+                    message_for_agent = (
+                        message_for_agent
+                        + "\n\n[Contexto - Email abierto por el usuario]:\n"
+                        + request.email_context[:2000]
+                    )
+
                 response = await client.messages.create(
                     model=agent.get("model", "claude-haiku-4-5-20251001"),
                     max_tokens=2048,
                     system=system_prompt,
-                    messages=[{"role": "user", "content": f"[{user_name}]: {agent_messages.get(agent['id'], request.message) + ('\n\n[Contexto - Email abierto por el usuario]:\n' + request.email_context[:2000] if request.email_context else '')}"}],
+                    messages=[{"role": "user", "content": message_for_agent}],
                 )
                 return {
                     "agent_id": agent["id"],
@@ -353,7 +361,7 @@ El usuario te ha mencionado en un mensaje grupal. Responde SOLO a la parte que v
                     response = await http_client.post(
                         OPENCLAW_BRIDGE_URL,
                         json={
-                            "model": f"openclaw:{agent["openclaw_agent_id"]}",
+                            "model": f"openclaw:{agent['openclaw_agent_id']}",
                             "messages": [{"role": "user", "content": f"[Pulse: {user_name}] {request.message}"}],
                         },
                     )
@@ -372,16 +380,16 @@ El usuario te ha mencionado en un mensaje grupal. Responde SOLO a la parte que v
                         "agent_name": agent["name"],
                         "avatar_url": agent.get("avatar_url", ""),
                         "tier": agent["tier"],
-                        "content": f"Error: {agent["name"]} no está disponible ahora mismo.",
+                        "content": f"Error: {agent['name']} no está disponible ahora mismo.",
                     }
         except Exception as e:
-            logger.error(f"Dispatch error for agent {agent["name"]}: {e}")
+            logger.error(f"Dispatch error for agent {agent['name']}: {e}")
             return {
                 "agent_id": agent["id"],
                 "agent_name": agent["name"],
                 "avatar_url": agent.get("avatar_url", ""),
                 "tier": agent["tier"],
-                "content": f"Error al contactar con {agent["name"]}: {str(e)}",
+                "content": f"Error al contactar con {agent['name']}: {str(e)}",
             }
 
     responses = await asyncio.gather(*[call_agent(a) for a in mentioned_agents])
@@ -743,11 +751,16 @@ async def update_agent(
         raise HTTPException(400, "Los agentes Advance se gestionan desde OpenClaw")
 
     update_data = {}
-    if request.name is not None: update_data["name"] = request.name
-    if request.description is not None: update_data["description"] = request.description
-    if request.soul_md is not None: update_data["soul_md"] = request.soul_md
-    if request.identity_md is not None: update_data["identity_md"] = request.identity_md
-    if request.category is not None: update_data["category"] = request.category
+    if request.name is not None:
+        update_data["name"] = request.name
+    if request.description is not None:
+        update_data["description"] = request.description
+    if request.soul_md is not None:
+        update_data["soul_md"] = request.soul_md
+    if request.identity_md is not None:
+        update_data["identity_md"] = request.identity_md
+    if request.category is not None:
+        update_data["category"] = request.category
 
     if not update_data:
         return {"agent": agent_result.data}
@@ -841,4 +854,3 @@ async def admin_unassign_agent(
 
 
 # ── Agent Creation (Core only) ──
-
