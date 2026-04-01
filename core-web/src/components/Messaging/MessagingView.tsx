@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../../api/client";
+import { avatarGradient } from "../../utils/avatarGradient";
 import {
   PaperAirplaneIcon,
   PhoneIcon,
@@ -68,6 +69,7 @@ export default function MessagingView() {
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const qrPollRef = useRef<NodeJS.Timeout | null>(null);
   const warmupPollRef = useRef<NodeJS.Timeout | null>(null);
+  const hydratedChatsRef = useRef<Set<string>>(new Set());
 
   // Load accounts on mount
   useEffect(() => {
@@ -102,7 +104,10 @@ export default function MessagingView() {
   // Poll for new messages in active chat
   useEffect(() => {
     if (!activeChat) return;
-    loadMessages(activeChat.id);
+
+    ensureChatHistory(activeChat.id).finally(() => {
+      loadMessages(activeChat.id);
+    });
 
     pollRef.current = setInterval(() => {
       loadMessages(activeChat.id);
@@ -216,6 +221,22 @@ export default function MessagingView() {
     warmupPollRef.current = setInterval(tick, 1200);
   };
 
+  const ensureChatHistory = async (chatId: string) => {
+    if (activeTab !== "whatsapp") return;
+    if (hydratedChatsRef.current.has(chatId)) return;
+
+    hydratedChatsRef.current.add(chatId);
+    try {
+      await api<{ synced: number }>(`/messaging/chats/${chatId}/sync-history`, {
+        method: "POST",
+      });
+      await loadChats();
+    } catch (err) {
+      console.error("Failed to sync chat history:", err);
+      hydratedChatsRef.current.delete(chatId);
+    }
+  };
+
   const loadMessages = async (chatId: string) => {
     try {
       const data = await api<{ messages: ExternalMessage[] }>(
@@ -322,6 +343,7 @@ export default function MessagingView() {
           setShowSetup(false);
           setQrCode("");
           setForceSetup(false);
+          hydratedChatsRef.current.clear();
           await loadAccounts();
           startChatsWarmup();
           return;
@@ -369,6 +391,7 @@ export default function MessagingView() {
       setQrCode("");
       if (qrPollRef.current) clearInterval(qrPollRef.current);
       if (warmupPollRef.current) clearInterval(warmupPollRef.current);
+      hydratedChatsRef.current.clear();
       setForceSetup(true);
       loadAccounts();
     }
@@ -378,6 +401,12 @@ export default function MessagingView() {
   const handleLinkWhatsApp = async () => {
     setForceSetup(false);
     await linkWhatsApp();
+  };
+
+  const formatPreview = (preview?: string) => {
+    if (!preview) return "";
+    if (preview === "[media]") return "Adjunto multimedia";
+    return preview;
   };
 
   const formatTime = (iso: string) => {
@@ -591,9 +620,20 @@ export default function MessagingView() {
                   }`}
                 >
                   {/* Avatar */}
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-white font-medium text-sm shrink-0">
-                    {chat.contact_name?.[0]?.toUpperCase() || "?"}
-                  </div>
+                  {chat.contact_avatar_url ? (
+                    <img
+                      src={chat.contact_avatar_url}
+                      alt={chat.contact_name}
+                      className="w-10 h-10 rounded-full object-cover shrink-0"
+                    />
+                  ) : (
+                    <div
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-medium text-sm shrink-0"
+                      style={{ background: avatarGradient(chat.contact_name || chat.remote_jid) }}
+                    >
+                      {chat.contact_name?.[0]?.toUpperCase() || "?"}
+                    </div>
+                  )}
                   {/* Info */}
                   <div className="flex-1 min-w-0 text-left">
                     <div className="flex items-center justify-between">
@@ -608,7 +648,7 @@ export default function MessagingView() {
                     </div>
                     <div className="flex items-center justify-between mt-0.5">
                       <span className="text-[12px] text-gray-500 truncate">
-                        {chat.last_message_preview || ""}
+                        {formatPreview(chat.last_message_preview)}
                       </span>
                       {chat.unread_count > 0 && (
                         <span className="ml-2 w-5 h-5 rounded-full bg-green-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
@@ -632,9 +672,20 @@ export default function MessagingView() {
           <>
             {/* Chat header */}
             <div className="h-12 bg-white border-b border-gray-200 flex items-center px-4 gap-3">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-white font-medium text-xs">
-                {activeChat.contact_name?.[0]?.toUpperCase() || "?"}
-              </div>
+              {activeChat.contact_avatar_url ? (
+                <img
+                  src={activeChat.contact_avatar_url}
+                  alt={activeChat.contact_name}
+                  className="w-8 h-8 rounded-full object-cover"
+                />
+              ) : (
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-white font-medium text-xs"
+                  style={{ background: avatarGradient(activeChat.contact_name || activeChat.remote_jid) }}
+                >
+                  {activeChat.contact_name?.[0]?.toUpperCase() || "?"}
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <div className="text-[13px] font-medium text-gray-900">
                   {activeChat.contact_name}

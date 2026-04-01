@@ -13,7 +13,7 @@ import asyncio
 import logging
 import httpx
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Set
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
@@ -155,12 +155,21 @@ async def _sync_whatsapp_chats_from_evolution(
             if not isinstance(last_message_at, str) or not last_message_at:
                 last_message_at = _iso_from_epoch_seconds(last_message.get("messageTimestamp"))
 
+            avatar_url = (
+                chat.get("profilePicUrl")
+                or chat.get("profilePictureUrl")
+                or chat.get("profile_pic_url")
+            )
+            if not isinstance(avatar_url, str) or not avatar_url:
+                avatar_url = None
+
             rows.append(
                 {
                     "account_id": account_id,
                     "remote_jid": remote_jid,
                     "contact_name": (chat.get("pushName") or remote_jid.split("@")[0])[:120],
                     "contact_phone": remote_jid.split("@")[0],
+                    "contact_avatar_url": avatar_url,
                     "is_group": remote_jid.endswith("@g.us"),
                     "last_message_at": last_message_at,
                     "last_message_preview": _message_preview(msg_payload, msg_type),
@@ -229,6 +238,8 @@ async def _sync_whatsapp_messages_for_chat(
             key = record.get("key") if isinstance(record.get("key"), dict) else {}
             message = record.get("message") if isinstance(record.get("message"), dict) else {}
             remote_message_id = key.get("id") or ""
+            if not remote_message_id:
+                continue
 
             row = {
                 "chat_id": chat_id,
@@ -246,9 +257,32 @@ async def _sync_whatsapp_messages_for_chat(
         if not rows:
             return 0
 
-        await supabase.table("external_messages").insert(rows).execute()
+        remote_ids: Set[str] = {row["remote_message_id"] for row in rows if row.get("remote_message_id")}
+        existing_ids: Set[str] = set()
+        if remote_ids:
+            existing = await (
+                supabase.table("external_messages")
+                .select("remote_message_id")
+                .eq("chat_id", chat_id)
+                .in_("remote_message_id", list(remote_ids))
+                .execute()
+            )
+            existing_ids = {
+                msg.get("remote_message_id")
+                for msg in (existing.data or [])
+                if msg.get("remote_message_id")
+            }
 
-        newest = rows[-1]
+        new_rows = [
+            row for row in rows
+            if row.get("remote_message_id") not in existing_ids
+        ]
+        if not new_rows:
+            return 0
+
+        await supabase.table("external_messages").insert(new_rows).execute()
+
+        newest = new_rows[-1]
         await supabase.table("external_chats").update(
             {
                 "last_message_at": newest.get("created_at") or datetime.now(timezone.utc).isoformat(),
@@ -256,8 +290,8 @@ async def _sync_whatsapp_messages_for_chat(
             }
         ).eq("id", chat_id).execute()
 
-        logger.info("Synced %s messages for chat %s (%s)", len(rows), chat_id, remote_jid)
-        return len(rows)
+        logger.info("Synced %s messages for chat %s (%s)", len(new_rows), chat_id, remote_jid)
+        return len(new_rows)
     except Exception as e:
         logger.warning("WhatsApp message sync failed for chat %s: %s", chat_id, e)
         return 0
@@ -742,6 +776,42 @@ async def list_messages(
 
     return {"messages": list(reversed(messages))}
 
+
+
+@router.post("/chats/{chat_id}/sync-history")
+async def sync_chat_history(
+    chat_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Force a one-shot WhatsApp history sync for a chat."""
+    supabase = await get_async_service_role_client()
+
+    chat = await (
+        supabase.table("external_chats")
+        .select("id, remote_jid, account:external_accounts(user_id, provider, instance_name)")
+        .eq("id", chat_id)
+        .maybe_single()
+        .execute()
+    )
+    if not chat or not chat.data:
+        raise HTTPException(404, "Chat no encontrado")
+
+    account = chat.data.get("account") or {}
+    if account.get("user_id") != user_id:
+        raise HTTPException(404, "Chat no encontrado")
+
+    if account.get("provider") != "whatsapp" or not account.get("instance_name"):
+        return {"synced": 0}
+
+    synced = await _sync_whatsapp_messages_for_chat(
+        supabase=supabase,
+        chat_id=chat_id,
+        remote_jid=chat.data.get("remote_jid", ""),
+        instance_name=account.get("instance_name"),
+        max_messages=300,
+    )
+    return {"synced": synced}
 
 @router.post("/chats/{chat_id}/send")
 async def send_message(
