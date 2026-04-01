@@ -21,6 +21,7 @@ import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, Set
+from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 
@@ -397,6 +398,16 @@ async def _fetch_remote_media_url(media_url: str) -> tuple[Optional[bytes], Opti
         return None, None, None
 
 
+def _is_whatsapp_cdn_media_url(media_url: Optional[str]) -> bool:
+    if not isinstance(media_url, str) or not media_url.strip():
+        return False
+    try:
+        host = (urlparse(media_url.strip()).hostname or "").lower()
+    except Exception:
+        return False
+    return host.endswith("mmg.whatsapp.net") or host.endswith("mmg.whatsapp.com")
+
+
 async def _fetch_whatsapp_media_payload(
     instance_name: Optional[str],
     remote_jid: Optional[str],
@@ -404,77 +415,80 @@ async def _fetch_whatsapp_media_payload(
     media_type: Optional[str],
     media_url: Optional[str],
 ) -> tuple[Optional[bytes], Optional[str], Optional[str]]:
-    direct_bytes, direct_mime, direct_name = await _fetch_remote_media_url(media_url or "")
-    if direct_bytes:
-        final_mime, final_name = _finalize_media_metadata(
-            media_type=media_type,
-            remote_message_id=remote_message_id,
-            mime_type=direct_mime,
-            file_name=direct_name,
-        )
-        return direct_bytes, final_mime, final_name
+    # Prioritize Evolution decode endpoint first. Direct WhatsApp CDN URLs can return
+    # encrypted bytes (still 200) that browsers cannot play inline.
+    if instance_name and remote_jid and remote_message_id:
+        body = {
+            "message": {
+                "key": {
+                    "id": remote_message_id,
+                    "remoteJid": remote_jid,
+                }
+            },
+            "convertToMp4": _normalize_media_type(media_type) in {"video", "gif"},
+        }
 
-    if not instance_name or not remote_jid or not remote_message_id:
-        return None, None, None
-
-    body = {
-        "message": {
-            "key": {
-                "id": remote_message_id,
-                "remoteJid": remote_jid,
-            }
-        },
-        "convertToMp4": _normalize_media_type(media_type) in {"video", "gif"},
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=35.0) as client:
-            response = await client.post(
-                f"{EVOLUTION_API_URL}/chat/getBase64FromMediaMessage/{instance_name}",
-                json=body,
-                headers={"apikey": EVOLUTION_API_KEY},
-            )
-        if response.status_code not in (200, 201):
-            response_detail = ""
-            try:
-                payload = response.json()
-                if isinstance(payload, dict):
-                    response_detail = str(
-                        payload.get("response", {}).get("message")
-                        or payload.get("message")
-                        or payload
+        try:
+            async with httpx.AsyncClient(timeout=35.0) as client:
+                response = await client.post(
+                    f"{EVOLUTION_API_URL}/chat/getBase64FromMediaMessage/{instance_name}",
+                    json=body,
+                    headers={"apikey": EVOLUTION_API_KEY},
+                )
+            if response.status_code in (200, 201):
+                payload = response.json() if response.content else {}
+                media_bytes, mime_type, file_name = _extract_media_payload(payload)
+                if media_bytes:
+                    final_mime, final_name = _finalize_media_metadata(
+                        media_type=media_type,
+                        remote_message_id=remote_message_id,
+                        mime_type=mime_type,
+                        file_name=file_name,
                     )
-            except Exception:
-                response_detail = response.text[:180] if response.text else ""
+                    return media_bytes, final_mime, final_name
+            else:
+                response_detail = ""
+                try:
+                    payload = response.json()
+                    if isinstance(payload, dict):
+                        response_detail = str(
+                            payload.get("response", {}).get("message")
+                            or payload.get("message")
+                            or payload
+                        )
+                except Exception:
+                    response_detail = response.text[:180] if response.text else ""
+                logger.warning(
+                    "getBase64FromMediaMessage failed (%s) for instance=%s msg=%s detail=%s",
+                    response.status_code,
+                    instance_name,
+                    remote_message_id,
+                    response_detail[:180],
+                )
+        except Exception as exc:
             logger.warning(
-                "getBase64FromMediaMessage failed (%s) for instance=%s msg=%s detail=%s",
-                response.status_code,
+                "getBase64FromMediaMessage request error for instance=%s msg=%s: %s",
                 instance_name,
                 remote_message_id,
-                response_detail[:180],
+                exc,
             )
-            return None, None, None
-        payload = response.json() if response.content else {}
-    except Exception as exc:
-        logger.warning(
-            "getBase64FromMediaMessage request error for instance=%s msg=%s: %s",
-            instance_name,
-            remote_message_id,
-            exc,
-        )
+
+    # Fallback to direct URL only for non-WhatsApp CDN hosts.
+    # mmg.whatsapp.* often serves encrypted payloads (unplayable without decrypt step).
+    if _is_whatsapp_cdn_media_url(media_url):
         return None, None, None
 
-    media_bytes, mime_type, file_name = _extract_media_payload(payload)
-    if not media_bytes:
+    direct_bytes, direct_mime, direct_name = await _fetch_remote_media_url(media_url or "")
+    if not direct_bytes:
         return None, None, None
 
     final_mime, final_name = _finalize_media_metadata(
         media_type=media_type,
         remote_message_id=remote_message_id,
-        mime_type=mime_type,
-        file_name=file_name,
+        mime_type=direct_mime,
+        file_name=direct_name,
     )
-    return media_bytes, final_mime, final_name
+    return direct_bytes, final_mime, final_name
 
 
 def _get_telegram_bot_token() -> str:
