@@ -20,14 +20,14 @@ import os
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List, Dict, Any, Set
+from typing import Optional, Dict, Any, Set
 from urllib.parse import urlparse
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from api.dependencies import get_current_user_jwt, get_current_user_id
 from api.config import settings
-from lib.supabase_client import get_async_service_role_client, get_authenticated_async_client
+from lib.supabase_client import get_async_service_role_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/messaging", tags=["messaging"])
