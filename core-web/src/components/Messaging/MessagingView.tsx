@@ -10,6 +10,7 @@ import {
   SparklesIcon,
   QrCodeIcon,
 } from "@heroicons/react/24/outline";
+import { PlayIcon, PauseIcon } from "@heroicons/react/24/solid";
 
 interface ExternalAccount {
   id: string;
@@ -70,6 +71,7 @@ interface ParsedDirectives {
 const MEDIA_LABELS: Record<string, string> = {
   image: "Imagen",
   video: "Video",
+  gif: "GIF",
   audio: "Audio",
   document: "Documento",
   sticker: "Sticker",
@@ -142,6 +144,129 @@ function extractApiErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
+function formatAudioTime(totalSeconds: number): string {
+  const safeSeconds = Number.isFinite(totalSeconds) && totalSeconds > 0 ? totalSeconds : 0;
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = Math.floor(safeSeconds % 60);
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function InlineAudioPlayer({
+  src,
+  outgoing,
+}: {
+  src: string;
+  outgoing: boolean;
+}) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleLoaded = () => {
+      setDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
+    };
+    const handleTimeUpdate = () => {
+      setCurrentTime(Number.isFinite(audio.currentTime) ? audio.currentTime : 0);
+    };
+    const handlePlay = () => setPlaying(true);
+    const handlePause = () => setPlaying(false);
+    const handleEnded = () => setPlaying(false);
+
+    audio.addEventListener("loadedmetadata", handleLoaded);
+    audio.addEventListener("timeupdate", handleTimeUpdate);
+    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("pause", handlePause);
+    audio.addEventListener("ended", handleEnded);
+
+    return () => {
+      audio.removeEventListener("loadedmetadata", handleLoaded);
+      audio.removeEventListener("timeupdate", handleTimeUpdate);
+      audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("pause", handlePause);
+      audio.removeEventListener("ended", handleEnded);
+    };
+  }, [src]);
+
+  const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+
+  const togglePlayback = async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (audio.paused) {
+      try {
+        await audio.play();
+      } catch (err) {
+        console.error("Failed to play audio:", err);
+      }
+      return;
+    }
+    audio.pause();
+  };
+
+  const seek = (value: number) => {
+    const audio = audioRef.current;
+    if (!audio || duration <= 0) return;
+    const bounded = Math.max(0, Math.min(100, value));
+    audio.currentTime = (bounded / 100) * duration;
+  };
+
+  return (
+    <div
+      className={`w-[272px] rounded-2xl px-3 py-2 ${
+        outgoing ? "bg-emerald-700 text-white" : "bg-slate-800 text-white"
+      }`}
+    >
+      <audio ref={audioRef} src={src} preload="metadata" className="hidden" />
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={togglePlayback}
+          className="h-9 w-9 shrink-0 rounded-full bg-emerald-400/90 hover:bg-emerald-300 text-slate-900 flex items-center justify-center transition-colors"
+          title={playing ? "Pausar audio" : "Reproducir audio"}
+        >
+          {playing ? <PauseIcon className="h-5 w-5" /> : <PlayIcon className="h-5 w-5 ml-0.5" />}
+        </button>
+
+        <div className="min-w-0 flex-1">
+          <div className="relative h-7 overflow-hidden rounded-full bg-white/15">
+            <div
+              className="absolute inset-0 opacity-70"
+              style={{
+                backgroundImage:
+                  "repeating-linear-gradient(90deg, rgba(255,255,255,0.9) 0px, rgba(255,255,255,0.9) 3px, transparent 3px, transparent 8px)",
+              }}
+            />
+            <div
+              className="absolute inset-y-0 left-0 bg-emerald-300/70"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={0.1}
+            value={progress}
+            onChange={(event) => seek(Number(event.target.value))}
+            className="mt-1 h-1 w-full cursor-pointer accent-emerald-300"
+            aria-label="Posición del audio"
+          />
+        </div>
+      </div>
+
+      <div className="mt-1 flex items-center justify-between text-[11px] text-white/80">
+        <span>{formatAudioTime(currentTime)}</span>
+        <span>{duration > 0 ? formatAudioTime(duration) : "--:--"}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function MessagingView() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const [accounts, setAccounts] = useState<ExternalAccount[]>([]);
@@ -175,11 +300,13 @@ export default function MessagingView() {
   const [suggesting, setSuggesting] = useState(false);
   const [linkError, setLinkError] = useState("");
   const [resolvedMediaUrls, setResolvedMediaUrls] = useState<Record<string, string>>({});
+  const [mediaMimeByMessage, setMediaMimeByMessage] = useState<Record<string, string>>({});
   const [mediaLoadingByMessage, setMediaLoadingByMessage] = useState<Record<string, boolean>>({});
   const [mediaErrorByMessage, setMediaErrorByMessage] = useState<Record<string, string>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
   const resolvedMediaUrlsRef = useRef<Record<string, string>>({});
+  const prefetchedMediaIdsRef = useRef<Set<string>>(new Set());
   const sendQueueRef = useRef<Promise<void>>(Promise.resolve());
   const postSendRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeChatIdRef = useRef<string | null>(null);
@@ -295,6 +422,18 @@ export default function MessagingView() {
         if (currentIds.has(id)) next[id] = loading;
       });
       return next;
+    });
+
+    setMediaMimeByMessage((prev) => {
+      const next: Record<string, string> = {};
+      Object.entries(prev).forEach(([id, mime]) => {
+        if (currentIds.has(id)) next[id] = mime;
+      });
+      return next;
+    });
+
+    prefetchedMediaIdsRef.current.forEach((id) => {
+      if (!currentIds.has(id)) prefetchedMediaIdsRef.current.delete(id);
     });
 
     setMediaErrorByMessage((prev) => {
@@ -435,6 +574,10 @@ export default function MessagingView() {
       const blob = await response.blob();
       const objectUrl = URL.createObjectURL(blob);
       setResolvedMediaUrls((prev) => ({ ...prev, [messageId]: objectUrl }));
+      setMediaMimeByMessage((prev) => ({
+        ...prev,
+        [messageId]: blob.type || "",
+      }));
       return objectUrl;
     } catch (err) {
       console.error("Failed to fetch message media:", err);
@@ -460,6 +603,37 @@ export default function MessagingView() {
       window.open(mediaUrl, "_blank", "noopener,noreferrer");
     }
   };
+
+  useEffect(() => {
+    const pendingMediaIds = messages
+      .filter((msg) => Boolean(msg.media_type))
+      .map((msg) => msg.id)
+      .filter(
+        (id) =>
+          !resolvedMediaUrls[id] &&
+          !mediaLoadingByMessage[id] &&
+          !mediaErrorByMessage[id] &&
+          !prefetchedMediaIdsRef.current.has(id),
+      );
+
+    if (pendingMediaIds.length === 0) return;
+
+    const batch = pendingMediaIds.slice(0, 6);
+    batch.forEach((id) => prefetchedMediaIdsRef.current.add(id));
+
+    let cancelled = false;
+    const warmMedia = async () => {
+      for (const mediaId of batch) {
+        if (cancelled) break;
+        await fetchMediaForMessage(mediaId);
+      }
+    };
+
+    warmMedia();
+    return () => {
+      cancelled = true;
+    };
+  }, [messages, resolvedMediaUrls, mediaLoadingByMessage, mediaErrorByMessage]);
 
   const loadChats = async () => {
     try {
@@ -961,6 +1135,7 @@ export default function MessagingView() {
     if (preview === "[adjunto]") return "Adjunto multimedia";
     if (preview === "[imagen]") return "Imagen";
     if (preview === "[video]") return "Video";
+    if (preview === "[gif]") return "GIF";
     if (preview === "[audio]") return "Audio";
     if (preview === "[documento]") return "Documento";
     if (preview === "[sticker]") return "Sticker";
@@ -1441,6 +1616,7 @@ export default function MessagingView() {
                       if (!msg.media_type) return null;
 
                       const objectUrl = resolvedMediaUrls[msg.id];
+                      const mimeType = mediaMimeByMessage[msg.id] || "";
                       const isLoadingMedia = Boolean(mediaLoadingByMessage[msg.id]);
                       const mediaError = mediaErrorByMessage[msg.id];
                       const hasMeaningfulText = Boolean(
@@ -1463,64 +1639,100 @@ export default function MessagingView() {
                                 <img
                                   src={objectUrl}
                                   alt="Imagen"
-                                  className="max-w-[220px] max-h-[220px] rounded-lg object-cover"
+                                  className="max-w-[280px] max-h-[320px] rounded-xl object-cover"
                                 />
                               </a>
                             ) : (
-                              <button
-                                onClick={() => fetchMediaForMessage(msg.id)}
-                                disabled={isLoadingMedia}
-                                className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-700 underline disabled:opacity-60"
-                              >
-                                {isLoadingMedia ? "Cargando imagen..." : "Ver imagen"}
-                              </button>
+                              <div className="inline-flex items-center rounded-lg bg-gray-100 px-3 py-2 text-[11px] text-gray-600">
+                                {isLoadingMedia ? "Cargando imagen..." : "Preparando imagen..."}
+                              </div>
                             )
                           ) : msg.media_type === "video" ? (
                             objectUrl ? (
                               <video
                                 controls
                                 src={objectUrl}
-                                className="max-w-[220px] max-h-[220px] rounded-lg"
+                                className="max-w-[280px] max-h-[320px] rounded-xl bg-black"
                               />
                             ) : (
-                              <button
-                                onClick={() => fetchMediaForMessage(msg.id)}
-                                disabled={isLoadingMedia}
-                                className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-700 underline disabled:opacity-60"
-                              >
-                                {isLoadingMedia ? "Cargando video..." : "Ver video"}
-                              </button>
+                              <div className="inline-flex items-center rounded-lg bg-gray-100 px-3 py-2 text-[11px] text-gray-600">
+                                {isLoadingMedia ? "Cargando video..." : "Preparando video..."}
+                              </div>
+                            )
+                          ) : msg.media_type === "gif" ? (
+                            objectUrl ? (
+                              mimeType.startsWith("image/") ? (
+                                <img
+                                  src={objectUrl}
+                                  alt="GIF"
+                                  className="max-w-[280px] max-h-[320px] rounded-xl object-cover"
+                                />
+                              ) : (
+                                <video
+                                  autoPlay
+                                  loop
+                                  muted
+                                  playsInline
+                                  src={objectUrl}
+                                  className="max-w-[280px] max-h-[320px] rounded-xl bg-black"
+                                />
+                              )
+                            ) : (
+                              <div className="inline-flex items-center rounded-lg bg-gray-100 px-3 py-2 text-[11px] text-gray-600">
+                                {isLoadingMedia ? "Cargando GIF..." : "Preparando GIF..."}
+                              </div>
                             )
                           ) : msg.media_type === "audio" ? (
                             objectUrl ? (
-                              <audio controls src={objectUrl} className="w-[220px]" />
+                              <InlineAudioPlayer
+                                src={objectUrl}
+                                outgoing={msg.direction === "out"}
+                              />
                             ) : (
-                              <button
-                                onClick={() => fetchMediaForMessage(msg.id)}
-                                disabled={isLoadingMedia}
-                                className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-700 underline disabled:opacity-60"
-                              >
-                                {isLoadingMedia ? "Cargando audio..." : "Reproducir audio"}
-                              </button>
+                              <div className="inline-flex items-center rounded-lg bg-gray-100 px-3 py-2 text-[11px] text-gray-600">
+                                {isLoadingMedia ? "Cargando audio..." : "Preparando audio..."}
+                              </div>
                             )
                           ) : (
-                            <button
-                              onClick={() => openMediaInNewTab(msg.id)}
-                              disabled={isLoadingMedia}
-                              className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-700 underline disabled:opacity-60"
-                            >
-                              {isLoadingMedia
-                                ? "Cargando adjunto..."
-                                : `Abrir ${mediaLabel(msg.media_type)}`}
-                            </button>
+                            objectUrl ? (
+                              <button
+                                onClick={() => openMediaInNewTab(msg.id)}
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-700 underline"
+                              >
+                                {`Abrir ${mediaLabel(msg.media_type)}`}
+                              </button>
+                            ) : (
+                              <div className="inline-flex items-center rounded-lg bg-gray-100 px-3 py-2 text-[11px] text-gray-600">
+                                {isLoadingMedia ? "Cargando adjunto..." : "Preparando adjunto..."}
+                              </div>
+                            )
                           )}
                           {mediaError && (
-                            <p className="text-[10px] text-red-500 mt-1">{mediaError}</p>
+                            <div className="mt-1 flex items-center gap-2">
+                              <p className="text-[10px] text-red-500">{mediaError}</p>
+                              <button
+                                type="button"
+                                onClick={() => fetchMediaForMessage(msg.id)}
+                                className="text-[10px] font-medium text-sky-700 underline"
+                              >
+                                Reintentar
+                              </button>
+                            </div>
                           )}
                         </div>
                       );
                     })()}
-                    {msg.content && (
+                    {msg.content &&
+                      ![
+                        "[audio]",
+                        "[video]",
+                        "[gif]",
+                        "[imagen]",
+                        "[documento]",
+                        "[sticker]",
+                        "[adjunto]",
+                        "[media]",
+                      ].includes(msg.content.trim().toLowerCase()) && (
                       <p className="whitespace-pre-wrap">{msg.content}</p>
                     )}
                     <div

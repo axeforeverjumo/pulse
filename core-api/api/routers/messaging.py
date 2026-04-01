@@ -43,6 +43,7 @@ TELEGRAM_API_BASE = "https://api.telegram.org"
 WHATSAPP_MEDIA_PLACEHOLDERS: Dict[str, str] = {
     "image": "[imagen]",
     "video": "[video]",
+    "gif": "[gif]",
     "audio": "[audio]",
     "document": "[documento]",
     "sticker": "[sticker]",
@@ -99,6 +100,8 @@ def _normalize_media_type(raw: Optional[str]) -> Optional[str]:
     value = (raw or "").strip().lower()
     if not value:
         return None
+    if "gif" in value:
+        return "gif"
     if "image" in value:
         return "image"
     if "video" in value:
@@ -138,6 +141,10 @@ def _extract_media_info(message: Any, msg_data: Optional[Dict[str, Any]] = None)
         if not isinstance(blob, dict):
             continue
 
+        resolved_media_type = media_type
+        if media_type == "video" and blob.get("gifPlayback") is True:
+            resolved_media_type = "gif"
+
         media_url = None
         for url_key in media_url_keys:
             raw_url = blob.get(url_key)
@@ -152,7 +159,7 @@ def _extract_media_info(message: Any, msg_data: Optional[Dict[str, Any]] = None)
                     media_url = raw_url.strip()
                     break
 
-        return media_type, media_url
+        return resolved_media_type, media_url
 
     if isinstance(msg_data, dict):
         hint = msg_data.get("messageType")
@@ -274,6 +281,8 @@ def _default_mime_for_media_type(media_type: Optional[str]) -> str:
     normalized = _normalize_media_type(media_type)
     if normalized == "image":
         return "image/jpeg"
+    if normalized == "gif":
+        return "video/mp4"
     if normalized == "video":
         return "video/mp4"
     if normalized == "audio":
@@ -415,7 +424,7 @@ async def _fetch_whatsapp_media_payload(
                 "remoteJid": remote_jid,
             }
         },
-        "convertToMp4": _normalize_media_type(media_type) == "video",
+        "convertToMp4": _normalize_media_type(media_type) in {"video", "gif"},
     }
 
     try:
