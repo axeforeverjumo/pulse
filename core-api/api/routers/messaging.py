@@ -1140,37 +1140,54 @@ async def get_auto_reply_summary(
         return {"items": [], "count": 0}
 
     safe_limit = max(1, min(limit, 100))
-    messages_result = None
-    last_error: Optional[Exception] = None
-    for attempt in range(2):
-        try:
-            messages_result = await (
-                supabase.table("external_messages")
-                .select("id, chat_id, content, created_at, status")
-                .in_("chat_id", chat_ids)
-                .eq("direction", "out")
-                .eq("is_auto_reply", True)
-                .order("created_at", desc=True)
-                .limit(safe_limit)
-                .execute()
-            )
-            last_error = None
-            break
-        except Exception as exc:
-            last_error = exc
-            if attempt == 0:
-                await asyncio.sleep(0.2)
+    chunk_size = 40
+    collected: list[dict] = []
 
-    if last_error is not None:
-        logger.warning(
-            "Auto-reply summary query failed for account %s: %s",
-            account_id,
-            last_error,
-        )
+    for index in range(0, len(chat_ids), chunk_size):
+        chunk_chat_ids = chat_ids[index:index + chunk_size]
+        if not chunk_chat_ids:
+            continue
+
+        chunk_result = None
+        chunk_error: Optional[Exception] = None
+        for attempt in range(2):
+            try:
+                chunk_result = await (
+                    supabase.table("external_messages")
+                    .select("id, chat_id, content, created_at, status")
+                    .in_("chat_id", chunk_chat_ids)
+                    .eq("direction", "out")
+                    .eq("is_auto_reply", True)
+                    .order("created_at", desc=True)
+                    .limit(safe_limit)
+                    .execute()
+                )
+                chunk_error = None
+                break
+            except Exception as exc:
+                chunk_error = exc
+                if attempt == 0:
+                    await asyncio.sleep(0.2)
+
+        if chunk_error is not None:
+            logger.warning(
+                "Auto-reply summary chunk failed for account %s (chunk %s): %s",
+                account_id,
+                index // chunk_size,
+                chunk_error,
+            )
+            continue
+
+        collected.extend(chunk_result.data or [])
+
+    if not collected:
         return {"items": [], "count": 0}
 
+    collected.sort(key=lambda row: row.get("created_at") or "", reverse=True)
+    selected = collected[:safe_limit]
+
     items = []
-    for msg in messages_result.data or []:
+    for msg in selected:
         chat_meta = chat_map.get(msg.get("chat_id"), {})
         items.append(
             {
