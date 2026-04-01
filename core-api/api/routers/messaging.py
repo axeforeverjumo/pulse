@@ -1593,31 +1593,41 @@ async def _auto_reply(account, chat_id, remote_jid, instance, incoming_text, con
         style_desc = style_profile.get("description", "Responde de forma natural y directa.")
         agent_context = ""
 
-        if agent_id and account.get("workspace_id"):
+        selected_agent = None
+        if account.get("workspace_id") and (agent_id or agent_name):
             try:
-                agent_result = await supabase.table("agent_instances")\
-                    .select("id, name, system_prompt, config")\
-                    .eq("id", agent_id)\
-                    .eq("workspace_id", account["workspace_id"])\
-                    .maybe_single()\
-                    .execute()
-                selected_agent = agent_result.data if agent_result else None
+                if agent_id:
+                    agent_result = await supabase.table("agent_instances")\
+                        .select("id, name, system_prompt, config")\
+                        .eq("id", agent_id)\
+                        .eq("workspace_id", account["workspace_id"])\
+                        .maybe_single()\
+                        .execute()
+                    selected_agent = agent_result.data if agent_result else None
+                elif agent_name:
+                    agents_result = await supabase.table("agent_instances")\
+                        .select("id, name, system_prompt, config")\
+                        .eq("workspace_id", account["workspace_id"])\
+                        .execute()
+                    for candidate in (agents_result.data or []):
+                        name_value = candidate.get("name")
+                        if not isinstance(name_value, str):
+                            continue
+                        if name_value.strip().lower() == agent_name.strip().lower():
+                            selected_agent = candidate
+                            break
             except Exception as e:
-                logger.warning(f"Could not load assigned agent {agent_id}: {e}")
+                lookup_key = agent_id or agent_name or "unknown"
+                logger.warning(f"Could not load assigned agent ({lookup_key}): {e}")
                 selected_agent = None
 
-            if selected_agent:
-                agent_context = (
-                    f"Agente asignado: {selected_agent.get('name', 'Sin nombre')}\n"
-                    f"System prompt del agente:\n{selected_agent.get('system_prompt', '').strip() or '(vacio)'}\n\n"
-                    "Configuracion del agente:\n"
-                    f"{_format_agent_config(selected_agent.get('config'))}"
-                )
-            elif agent_name:
-                agent_context = (
-                    f"Agente asignado (referencia): {agent_name}. "
-                    "No se pudo cargar su configuracion completa; usa el contexto conversacional."
-                )
+        if selected_agent:
+            agent_context = (
+                f"Agente asignado: {selected_agent.get('name', 'Sin nombre')}\n"
+                f"System prompt del agente:\n{selected_agent.get('system_prompt', '').strip() or '(vacio)'}\n\n"
+                "Configuracion del agente:\n"
+                f"{_format_agent_config(selected_agent.get('config'))}"
+            )
         elif agent_name:
             agent_context = f"Agente asignado (referencia): {agent_name}."
 
