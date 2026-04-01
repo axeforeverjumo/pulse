@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useProjectsStore } from '../../../stores/projectsStore';
 import {
   useProjectBoards,
@@ -11,7 +11,6 @@ import { Plus, Columns3 } from 'lucide-react';
 import { Icon } from '../../ui/Icon';
 import ConfirmModal from './ConfirmModal';
 import Dropdown from '../../Dropdown/Dropdown';
-import { SIDEBAR } from '../../../lib/sidebar';
 
 interface ProjectSidebarProps {
   onCreateClick: () => void;
@@ -34,7 +33,7 @@ export default function ProjectSidebar({ onCreateClick, onSelectProject }: Proje
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [editingBoardId, setEditingBoardId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
-  const menuButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const [menuButtons, setMenuButtons] = useState<Record<string, HTMLButtonElement | null>>({});
 
   const handleDeleteClick = (e: React.MouseEvent, board: ProjectBoard) => {
     e.stopPropagation();
@@ -76,13 +75,13 @@ export default function ProjectSidebar({ onCreateClick, onSelectProject }: Proje
   };
 
   return (
-    <div className={`flex flex-col h-full ${SIDEBAR.bg} border-r border-black/5`}>
+    <div className={`flex flex-col h-full bg-gradient-to-b from-[#f4faff] to-[#edf4fb] border-r border-[#d3e0ef]`}>
       {/* Header */}
-      <div className="h-12 flex items-center justify-between pl-4 pr-2 shrink-0">
-        <h2 className="text-base font-semibold text-text-body">Proyectos</h2>
+      <div className="h-14 flex items-center justify-between pl-4 pr-3 shrink-0 border-b border-[#dce8f6]">
+        <h2 className="text-[15px] font-semibold text-slate-800">Proyectos</h2>
         <button
           onClick={onCreateClick}
-          className="p-1 rounded bg-white border border-black/10 hover:border-black/20 text-text-secondary hover:text-text-body transition-colors focus-visible:ring-2 focus-visible:ring-brand-primary"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white border border-[#d0dded] text-slate-600 hover:text-slate-900 hover:border-[#bfd1e7] transition-colors focus-visible:ring-2 focus-visible:ring-brand-primary"
           title="Nuevo proyecto"
           aria-label="Nuevo proyecto"
         >
@@ -109,10 +108,10 @@ export default function ProjectSidebar({ onCreateClick, onSelectProject }: Proje
                       }
                     }
                   }}
-                  className={`w-full flex items-center gap-2 px-2 h-[32px] rounded-md text-sm transition-colors group cursor-pointer ${
+                  className={`w-full flex items-center gap-2 px-2.5 h-[35px] rounded-lg text-sm transition-colors group cursor-pointer ${
                     activeProjectId === board.id
-                      ? SIDEBAR.selected
-                      : `${SIDEBAR.item} hover:bg-black/5`
+                      ? "bg-[#d9e8fb] text-slate-900 shadow-[inset_0_0_0_1px_rgba(144,175,210,0.45)]"
+                      : "text-slate-700 hover:bg-white/70"
                   }`}
                 >
                   <Icon icon={Columns3} size={16} className="flex-shrink-0" aria-hidden="true" />
@@ -140,13 +139,16 @@ export default function ProjectSidebar({ onCreateClick, onSelectProject }: Proje
                     }`}>
                       <button
                         ref={(el) => {
-                          if (el) menuButtonRefs.current.set(board.id, el);
+                          setMenuButtons((prev) => {
+                            if (prev[board.id] === el) return prev;
+                            return { ...prev, [board.id]: el };
+                          });
                         }}
                         onClick={(e) => {
                           e.stopPropagation();
                           setOpenMenuId(openMenuId === board.id ? null : board.id);
                         }}
-                        className="p-1 rounded text-text-tertiary hover:text-text-body hover:bg-bg-gray-light transition-colors focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:opacity-100"
+                        className="p-1 rounded text-slate-500 hover:text-slate-900 hover:bg-[#e8f0fa] transition-colors focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:opacity-100"
                         title="Más opciones"
                         aria-label={`Options for ${board.name}`}
                       >
@@ -155,7 +157,7 @@ export default function ProjectSidebar({ onCreateClick, onSelectProject }: Proje
                       <Dropdown
                         isOpen={openMenuId === board.id}
                         onClose={() => setOpenMenuId(null)}
-                        trigger={{ current: menuButtonRefs.current.get(board.id) || null }}
+                        trigger={{ current: menuButtons[board.id] || null }}
                       >
                         <button
                           onClick={(e) => handleRenameClick(e, board)}

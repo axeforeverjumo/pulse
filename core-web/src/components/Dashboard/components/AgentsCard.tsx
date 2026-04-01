@@ -91,7 +91,7 @@ export default function AgentsCard() {
   const navigate = useNavigate();
   const workspaces = useWorkspaceStore((state) => state.workspaces);
   const [agentsByWorkspace, setAgentsByWorkspace] = useState<Record<string, AgentWithWorkspace[]>>({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   // Get all workspaces (agents can exist in any workspace)
   const workspaceInfos = useMemo(() => {
@@ -104,6 +104,8 @@ export default function AgentsCard() {
 
   // Fetch agents from all workspaces
   useEffect(() => {
+    if (workspaceInfos.length === 0) return;
+
     const fetchAllAgents = async () => {
       setLoading(true);
       const results: Record<string, AgentWithWorkspace[]> = {};
@@ -129,11 +131,7 @@ export default function AgentsCard() {
       setLoading(false);
     };
 
-    if (workspaceInfos.length > 0) {
-      fetchAllAgents();
-    } else {
-      setLoading(false);
-    }
+    void fetchAllAgents();
   }, [workspaceInfos]);
 
   // Aggregate and sort all agents
@@ -182,7 +180,7 @@ export default function AgentsCard() {
             onClick={handleViewAll}
             className="text-[12px] font-medium text-text-secondary hover:text-text-body transition-colors"
           >
-            View all
+            Ver todo
           </button>
         )
       }

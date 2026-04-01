@@ -88,7 +88,7 @@ export default function EmailsCard() {
             onClick={handleViewAll}
             className="text-[12px] font-medium text-text-secondary hover:text-text-body transition-colors"
           >
-            View all
+            Ver todo
           </button>
         )
       }

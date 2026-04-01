@@ -14,7 +14,7 @@ import ProjectsListView from "./components/ProjectsListView";
 import ProjectsSettingsModal from "./components/ProjectsSettingsModal";
 import ProjectsSettingsDropdown from "./components/ProjectsSettingsDropdown";
 import { HeaderButtons } from "../MiniAppHeader";
-import { Columns3 } from "lucide-react";
+import { Columns3, PanelLeft, X } from "lucide-react";
 import { Icon } from "../ui/Icon";
 
 export default function ProjectsView() {
@@ -37,6 +37,7 @@ export default function ProjectsView() {
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const queryClient = useQueryClient();
 
   // React Query: fetch boards for auto-select
@@ -101,7 +102,6 @@ export default function ProjectsView() {
     }
   }, [activeProjectId, workspaceId]);
 
-
   // Set view context for sidebar chat
   useEffect(() => {
     useViewContextStore.getState().setCurrentView("projects");
@@ -127,6 +127,10 @@ export default function ProjectsView() {
   const navigateToProject = useCallback((boardId: string) => {
     navigate(`/workspace/${workspaceId}/projects/${boardId}`);
   }, [navigate, workspaceId]);
+  const handleSelectProject = useCallback((boardId: string) => {
+    navigateToProject(boardId);
+    setIsMobileSidebarOpen(false);
+  }, [navigateToProject]);
 
   const handleSaveBoardSettings = useCallback(async (name: string, description: string) => {
     if (!activeProjectId) return;
@@ -154,22 +158,46 @@ export default function ProjectsView() {
 
   return (
     <div className="flex-1 flex h-full min-w-0 overflow-hidden">
-      {/* Main content container - light bg with rounded corners */}
-      <div className="flex-1 flex overflow-hidden bg-bg-mini-app">
-        {/* Sidebar */}
-        <div className="w-[212px] shrink-0 flex flex-col overflow-hidden">
-          <ProjectSidebar onCreateClick={() => setShowCreateModal(true)} onSelectProject={navigateToProject} />
+      <div className="relative flex-1 flex min-w-0 overflow-hidden rounded-[20px] bg-gradient-to-b from-[#f6fbff] to-[#edf4fb]">
+        {/* Desktop Sidebar */}
+        <div className="hidden md:flex md:w-[232px] md:shrink-0 md:flex-col md:overflow-hidden">
+          <ProjectSidebar onCreateClick={() => setShowCreateModal(true)} onSelectProject={handleSelectProject} />
+        </div>
+
+        {/* Mobile Sidebar Overlay */}
+        {isMobileSidebarOpen && (
+          <div
+            className="absolute inset-0 z-30 bg-slate-950/28 md:hidden"
+            onClick={() => setIsMobileSidebarOpen(false)}
+          />
+        )}
+        <div
+          className={`absolute inset-y-0 left-0 z-40 w-[84%] max-w-[292px] transition-transform duration-300 md:hidden ${
+            isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          <div className="h-full overflow-hidden border-r border-[#d2deec] shadow-2xl">
+            <ProjectSidebar onCreateClick={() => setShowCreateModal(true)} onSelectProject={handleSelectProject} />
+          </div>
         </div>
 
         {/* Board Content */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white rounded-r-lg">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white/92 md:rounded-r-[20px]">
           {activeProjectId ? (
             <>
               {/* Board Header */}
-              <div className="h-12 flex items-center justify-between pl-5 pr-3 border-b border-border-gray">
-                <div className="flex items-center gap-2">
-                  <Icon icon={Columns3} size={18} className="text-text-body" />
-                  <h1 className="text-base font-semibold text-text-body">
+              <div className="h-14 flex items-center justify-between gap-2 border-b border-[#e4edf8] pl-3 pr-2 sm:pl-5 sm:pr-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileSidebarOpen(true)}
+                    className="md:hidden inline-flex h-8 items-center gap-1 rounded-lg border border-[#d7e4f2] bg-white px-2 text-xs font-semibold text-slate-700 shadow-sm"
+                  >
+                    <Icon icon={PanelLeft} size={14} />
+                    Tableros
+                  </button>
+                  <Icon icon={Columns3} size={18} className="text-slate-700 hidden sm:block" />
+                  <h1 className="text-sm sm:text-base font-semibold text-slate-900 truncate">
                     {activeBoard?.name || "Project Board"}
                   </h1>
                 </div>
@@ -188,11 +216,19 @@ export default function ProjectsView() {
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center relative">
-              <div className="text-center">
+              <div className="text-center px-4">
+                <button
+                  type="button"
+                  onClick={() => setIsMobileSidebarOpen((prev) => !prev)}
+                  className="mb-4 md:hidden inline-flex h-9 items-center gap-2 rounded-xl border border-[#d7e4f2] bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm"
+                >
+                  <Icon icon={isMobileSidebarOpen ? X : PanelLeft} size={16} />
+                  {isMobileSidebarOpen ? "Cerrar panel" : "Ver proyectos"}
+                </button>
                 <p className="text-text-tertiary mb-4">Sin proyectos aún</p>
                 <button
                   onClick={() => setShowCreateModal(true)}
-                  className="px-4 py-2 bg-brand-primary text-white rounded-md hover:opacity-90 transition-opacity"
+                  className="px-4 py-2 bg-brand-primary text-white rounded-lg hover:opacity-90 transition-opacity"
                 >
                   Crea tu primer proyecto
                 </button>
@@ -207,7 +243,7 @@ export default function ProjectsView() {
         <CreateProjectModal
           isOpen={showCreateModal}
           onClose={() => setShowCreateModal(false)}
-          onCreated={navigateToProject}
+          onCreated={handleSelectProject}
         />
       )}
 
