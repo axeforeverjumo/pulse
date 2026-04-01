@@ -1113,10 +1113,14 @@ async def get_auto_reply_summary(
     if not account or not account.data or account.data.get("user_id") != user_id:
         raise HTTPException(404, "Cuenta no encontrada")
 
+    # Limit candidate chats to keep PostgREST query size bounded.
+    # Large `in_(chat_id, ...)` lists can trigger transport/protocol failures.
     chats_result = await (
         supabase.table("external_chats")
-        .select("id, contact_name, remote_jid")
+        .select("id, contact_name, remote_jid, last_message_at")
         .eq("account_id", account_id)
+        .order("last_message_at", desc=True)
+        .limit(200)
         .execute()
     )
     chats = chats_result.data or []
@@ -1136,16 +1140,34 @@ async def get_auto_reply_summary(
         return {"items": [], "count": 0}
 
     safe_limit = max(1, min(limit, 100))
-    messages_result = await (
-        supabase.table("external_messages")
-        .select("id, chat_id, content, created_at, status")
-        .in_("chat_id", chat_ids)
-        .eq("direction", "out")
-        .eq("is_auto_reply", True)
-        .order("created_at", desc=True)
-        .limit(safe_limit)
-        .execute()
-    )
+    messages_result = None
+    last_error: Optional[Exception] = None
+    for attempt in range(2):
+        try:
+            messages_result = await (
+                supabase.table("external_messages")
+                .select("id, chat_id, content, created_at, status")
+                .in_("chat_id", chat_ids)
+                .eq("direction", "out")
+                .eq("is_auto_reply", True)
+                .order("created_at", desc=True)
+                .limit(safe_limit)
+                .execute()
+            )
+            last_error = None
+            break
+        except Exception as exc:
+            last_error = exc
+            if attempt == 0:
+                await asyncio.sleep(0.2)
+
+    if last_error is not None:
+        logger.warning(
+            "Auto-reply summary query failed for account %s: %s",
+            account_id,
+            last_error,
+        )
+        return {"items": [], "count": 0}
 
     items = []
     for msg in messages_result.data or []:
