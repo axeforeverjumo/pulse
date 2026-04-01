@@ -73,6 +73,14 @@ export default function MessagingView() {
     loadAccounts();
   }, []);
 
+  // Keep account status updated (connected/disconnected) without manual refresh.
+  useEffect(() => {
+    const accountsPoll = setInterval(() => {
+      loadAccounts();
+    }, 8000);
+    return () => clearInterval(accountsPoll);
+  }, []);
+
   // Load chats when accounts change
   useEffect(() => {
     if (accounts.length > 0) loadChats();
@@ -88,7 +96,7 @@ export default function MessagingView() {
 
     const chatsPoll = setInterval(() => {
       loadChats();
-    }, 5000);
+    }, 3000);
 
     return () => clearInterval(chatsPoll);
   }, [accounts, activeTab]);
@@ -101,7 +109,7 @@ export default function MessagingView() {
     pollRef.current = setInterval(() => {
       loadMessages(activeChat.id);
       loadChats(); // refresh unread counts
-    }, 5000);
+    }, 3000);
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);

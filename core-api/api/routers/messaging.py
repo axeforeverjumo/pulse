@@ -12,7 +12,8 @@ Evolution API v2.3.7 endpoints used:
 import asyncio
 import logging
 import httpx
-from typing import Optional, List
+from datetime import datetime, timezone
+from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
@@ -27,6 +28,239 @@ EVOLUTION_API_KEY = "pulse-evolution-key-2026"
 WEBHOOK_BASE_URL = "https://pulse.factoriaia.com/api/messaging/webhook/whatsapp"
 
 # ── Models ──
+
+def _coerce_epoch_seconds(raw: Any) -> Optional[int]:
+    """Convert Evolution timestamp payloads to unix seconds."""
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, (int, float)):
+        return int(raw)
+    if isinstance(raw, str) and raw.isdigit():
+        return int(raw)
+    if isinstance(raw, dict):
+        low = raw.get("low")
+        if isinstance(low, (int, float)):
+            return int(low)
+    return None
+
+
+def _iso_from_epoch_seconds(raw: Any) -> Optional[str]:
+    ts = _coerce_epoch_seconds(raw)
+    if ts is None:
+        return None
+    try:
+        return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+    except Exception:
+        return None
+
+
+def _extract_message_text(message: Any) -> str:
+    """Extract plain text from WhatsApp message payload variants."""
+    if not isinstance(message, dict):
+        return ""
+
+    candidates = [
+        message.get("conversation"),
+        message.get("extendedTextMessage", {}).get("text"),
+        message.get("imageMessage", {}).get("caption"),
+        message.get("videoMessage", {}).get("caption"),
+        message.get("documentMessage", {}).get("caption"),
+        message.get("buttonsResponseMessage", {}).get("selectedDisplayText"),
+        message.get("templateButtonReplyMessage", {}).get("selectedDisplayText"),
+        message.get("listResponseMessage", {}).get("title"),
+        message.get("pollCreationMessage", {}).get("name"),
+    ]
+
+    nested_document = (
+        message.get("documentWithCaptionMessage", {})
+        .get("message", {})
+        .get("documentMessage", {})
+        .get("caption")
+    )
+    candidates.append(nested_document)
+
+    for value in candidates:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _message_preview(message: Any, fallback_type: Optional[str] = None) -> str:
+    text = _extract_message_text(message)
+    if text:
+        return text[:100]
+    return "[media]" if fallback_type else ""
+
+
+def _should_refresh_chat_snapshot(config: Dict[str, Any], now_utc: datetime) -> bool:
+    """Throttle expensive chat snapshot pulls from Evolution API."""
+    last_sync_raw = config.get("last_chat_sync_at")
+    if not isinstance(last_sync_raw, str):
+        return True
+
+    try:
+        last_sync = datetime.fromisoformat(last_sync_raw.replace("Z", "+00:00"))
+        return (now_utc - last_sync).total_seconds() >= 45
+    except Exception:
+        return True
+
+
+async def _sync_whatsapp_chats_from_evolution(
+    supabase,
+    account: Dict[str, Any],
+    max_chats: int = 1000,
+) -> int:
+    """Backfill WhatsApp chats from Evolution so UI can render full list fast."""
+    account_id = account.get("id")
+    instance_name = account.get("instance_name")
+    if not account_id or not instance_name:
+        return 0
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{EVOLUTION_API_URL}/chat/findChats/{instance_name}",
+                json={"where": {}},
+                headers={"apikey": EVOLUTION_API_KEY},
+            )
+
+        if resp.status_code != 200:
+            logger.warning(
+                "Chat sync skipped for %s: status=%s body=%s",
+                instance_name,
+                resp.status_code,
+                resp.text[:200],
+            )
+            return 0
+
+        payload = resp.json()
+        chats_raw = payload.get("data", payload) if isinstance(payload, dict) else payload
+        if not isinstance(chats_raw, list):
+            return 0
+
+        rows = []
+        for chat in chats_raw[:max_chats]:
+            if not isinstance(chat, dict):
+                continue
+
+            remote_jid = chat.get("remoteJid")
+            if not isinstance(remote_jid, str) or not remote_jid:
+                continue
+
+            last_message = chat.get("lastMessage") if isinstance(chat.get("lastMessage"), dict) else {}
+            msg_payload = last_message.get("message") if isinstance(last_message.get("message"), dict) else {}
+            msg_type = last_message.get("messageType") if isinstance(last_message.get("messageType"), str) else None
+
+            last_message_at = chat.get("updatedAt")
+            if not isinstance(last_message_at, str) or not last_message_at:
+                last_message_at = _iso_from_epoch_seconds(last_message.get("messageTimestamp"))
+
+            rows.append(
+                {
+                    "account_id": account_id,
+                    "remote_jid": remote_jid,
+                    "contact_name": (chat.get("pushName") or remote_jid.split("@")[0])[:120],
+                    "contact_phone": remote_jid.split("@")[0],
+                    "is_group": remote_jid.endswith("@g.us"),
+                    "last_message_at": last_message_at,
+                    "last_message_preview": _message_preview(msg_payload, msg_type),
+                }
+            )
+
+        if not rows:
+            return 0
+
+        await supabase.table("external_chats").upsert(
+            rows,
+            on_conflict="account_id,remote_jid",
+        ).execute()
+        logger.info("Synced %s WhatsApp chats for instance %s", len(rows), instance_name)
+        return len(rows)
+    except Exception as e:
+        logger.warning("WhatsApp chat sync failed for %s: %s", instance_name, e)
+        return 0
+
+
+async def _sync_whatsapp_messages_for_chat(
+    supabase,
+    chat_id: str,
+    remote_jid: str,
+    instance_name: str,
+    max_messages: int = 80,
+) -> int:
+    """Hydrate a chat history from Evolution when local DB is empty."""
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{EVOLUTION_API_URL}/chat/findMessages/{instance_name}",
+                json={"where": {"key": {"remoteJid": remote_jid}}},
+                headers={"apikey": EVOLUTION_API_KEY},
+            )
+
+        if resp.status_code != 200:
+            logger.warning(
+                "Message sync skipped for chat %s (%s): status=%s body=%s",
+                chat_id,
+                remote_jid,
+                resp.status_code,
+                resp.text[:200],
+            )
+            return 0
+
+        payload = resp.json()
+        records = []
+        if isinstance(payload, dict):
+            messages_obj = payload.get("messages")
+            if isinstance(messages_obj, dict) and isinstance(messages_obj.get("records"), list):
+                records = messages_obj.get("records") or []
+            elif isinstance(payload.get("data"), list):
+                records = payload.get("data") or []
+        elif isinstance(payload, list):
+            records = payload
+
+        if not records:
+            return 0
+
+        rows = []
+        for record in records[-max_messages:]:
+            if not isinstance(record, dict):
+                continue
+
+            key = record.get("key") if isinstance(record.get("key"), dict) else {}
+            message = record.get("message") if isinstance(record.get("message"), dict) else {}
+            remote_message_id = key.get("id") or ""
+
+            row = {
+                "chat_id": chat_id,
+                "remote_message_id": remote_message_id,
+                "direction": "out" if key.get("fromMe") else "in",
+                "content": _extract_message_text(message),
+                "sender_name": record.get("pushName") or remote_jid.split("@")[0],
+                "sender_jid": key.get("participant") or key.get("remoteJid") or remote_jid,
+            }
+            created_at = _iso_from_epoch_seconds(record.get("messageTimestamp"))
+            if created_at:
+                row["created_at"] = created_at
+            rows.append(row)
+
+        if not rows:
+            return 0
+
+        await supabase.table("external_messages").insert(rows).execute()
+
+        newest = rows[-1]
+        await supabase.table("external_chats").update(
+            {
+                "last_message_at": newest.get("created_at") or datetime.now(timezone.utc).isoformat(),
+                "last_message_preview": (newest.get("content") or "[media]")[:100],
+            }
+        ).eq("id", chat_id).execute()
+
+        logger.info("Synced %s messages for chat %s (%s)", len(rows), chat_id, remote_jid)
+        return len(rows)
+    except Exception as e:
+        logger.warning("WhatsApp message sync failed for chat %s: %s", chat_id, e)
+        return 0
 
 class LinkWhatsAppRequest(BaseModel):
     workspace_id: str
@@ -327,24 +561,120 @@ async def list_chats(
     supabase = await get_async_service_role_client()
 
     # Get user's account IDs
-    accounts_q = supabase.table("external_accounts").select("id").eq("user_id", user_id)
+    accounts_q = (
+        supabase.table("external_accounts")
+        .select("id, provider, status, instance_name, config")
+        .eq("user_id", user_id)
+    )
     if provider:
         accounts_q = accounts_q.eq("provider", provider)
     accounts_result = await accounts_q.execute()
-    account_ids = [a["id"] for a in (accounts_result.data or [])]
+    accounts = accounts_result.data or []
+    account_ids = [a["id"] for a in accounts]
 
     if not account_ids:
         return {"chats": []}
 
-    # Get chats ordered by last message
-    chats_result = await supabase.table("external_chats")\
-        .select("*, account:external_accounts(provider)")\
-        .in_("account_id", account_ids)\
-        .order("last_message_at", desc=True)\
-        .limit(100)\
-        .execute()
+    async def fetch_chats():
+        return await (
+            supabase.table("external_chats")
+            .select("*, account:external_accounts(provider)")
+            .in_("account_id", account_ids)
+            .order("last_message_at", desc=True)
+            .limit(500)
+            .execute()
+        )
 
-    return {"chats": chats_result.data or []}
+    chats_result = await fetch_chats()
+    chats = chats_result.data or []
+
+    # If WhatsApp looks nearly empty, bootstrap from Evolution API.
+    if provider == "whatsapp" and len(chats) < 20:
+        now_utc = datetime.now(timezone.utc)
+        for account in accounts:
+            if account.get("provider") != "whatsapp":
+                continue
+            if account.get("status") != "connected":
+                continue
+            if not account.get("instance_name"):
+                continue
+
+            config = account.get("config") if isinstance(account.get("config"), dict) else {}
+            if not _should_refresh_chat_snapshot(config, now_utc):
+                continue
+
+            synced_count = await _sync_whatsapp_chats_from_evolution(supabase, account)
+            if synced_count:
+                new_config = {
+                    **config,
+                    "last_chat_sync_at": now_utc.isoformat(),
+                    "last_chat_sync_count": synced_count,
+                }
+                await (
+                    supabase.table("external_accounts")
+                    .update({"config": new_config})
+                    .eq("id", account["id"])
+                    .execute()
+                )
+
+        chats_result = await fetch_chats()
+        chats = chats_result.data or []
+
+    return {"chats": chats}
+
+
+@router.get("/unread-summary")
+async def get_messaging_unread_summary(
+    workspace_id: Optional[str] = None,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Return unread totals for external messaging, grouped by workspace."""
+    supabase = await get_async_service_role_client()
+
+    accounts_q = (
+        supabase.table("external_accounts")
+        .select("id, workspace_id")
+        .eq("user_id", user_id)
+    )
+    if workspace_id:
+        accounts_q = accounts_q.eq("workspace_id", workspace_id)
+
+    accounts_result = await accounts_q.execute()
+    accounts = accounts_result.data or []
+    if not accounts:
+        return {"total_unread": 0, "chats_with_unread": 0, "unread_by_workspace": {}}
+
+    account_ids = [a["id"] for a in accounts]
+    workspace_by_account = {
+        a["id"]: a.get("workspace_id") for a in accounts if a.get("id") and a.get("workspace_id")
+    }
+
+    chats_result = await (
+        supabase.table("external_chats")
+        .select("id, account_id, unread_count")
+        .in_("account_id", account_ids)
+        .gt("unread_count", 0)
+        .execute()
+    )
+    unread_chats = chats_result.data or []
+
+    unread_by_workspace: Dict[str, int] = {}
+    total_unread = 0
+    for chat in unread_chats:
+        count = int(chat.get("unread_count") or 0)
+        if count <= 0:
+            continue
+        total_unread += count
+        workspace = workspace_by_account.get(chat.get("account_id"))
+        if workspace:
+            unread_by_workspace[workspace] = unread_by_workspace.get(workspace, 0) + count
+
+    return {
+        "total_unread": total_unread,
+        "chats_with_unread": len(unread_chats),
+        "unread_by_workspace": unread_by_workspace,
+    }
 
 
 # ── Messages ──
@@ -360,6 +690,20 @@ async def list_messages(
     """List messages in a chat."""
     supabase = await get_async_service_role_client()
 
+    chat = await (
+        supabase.table("external_chats")
+        .select("id, remote_jid, account:external_accounts(user_id, provider, instance_name)")
+        .eq("id", chat_id)
+        .maybe_single()
+        .execute()
+    )
+    if not chat or not chat.data:
+        raise HTTPException(404, "Chat no encontrado")
+
+    account = chat.data.get("account") or {}
+    if account.get("user_id") != user_id:
+        raise HTTPException(404, "Chat no encontrado")
+
     query = supabase.table("external_messages")\
         .select("*")\
         .eq("chat_id", chat_id)\
@@ -370,6 +714,25 @@ async def list_messages(
         query = query.lt("created_at", before)
 
     result = await query.execute()
+    messages = result.data or []
+
+    # If local history is empty, hydrate from Evolution API for this chat.
+    if (
+        not before
+        and not messages
+        and account.get("provider") == "whatsapp"
+        and account.get("instance_name")
+    ):
+        synced = await _sync_whatsapp_messages_for_chat(
+            supabase=supabase,
+            chat_id=chat_id,
+            remote_jid=chat.data.get("remote_jid", ""),
+            instance_name=account.get("instance_name"),
+            max_messages=max(limit, 80),
+        )
+        if synced:
+            result = await query.execute()
+            messages = result.data or []
 
     # Mark as read
     await supabase.table("external_chats")\
@@ -377,7 +740,7 @@ async def list_messages(
         .eq("id", chat_id)\
         .execute()
 
-    return {"messages": list(reversed(result.data or []))}
+    return {"messages": list(reversed(messages))}
 
 
 @router.post("/chats/{chat_id}/send")
@@ -392,7 +755,7 @@ async def send_message(
 
     # Get chat and account info
     chat = await supabase.table("external_chats")\
-        .select("*, account:external_accounts(instance_name, provider)")\
+        .select("*, account:external_accounts(instance_name, provider, user_id)")\
         .eq("id", chat_id)\
         .maybe_single()\
         .execute()
@@ -402,6 +765,8 @@ async def send_message(
 
     chat_data = chat.data
     account = chat_data["account"]
+    if account.get("user_id") != user_id:
+        raise HTTPException(404, "Chat no encontrado")
 
     if account["provider"] == "whatsapp":
         # Send via Evolution API
@@ -524,7 +889,7 @@ async def whatsapp_webhook(request: Request):
         messages = data if isinstance(data, list) else [data]
         for msg_data in messages:
             key = msg_data.get("key", {})
-            message = msg_data.get("message", {})
+            message = msg_data.get("message", {}) if isinstance(msg_data.get("message"), dict) else {}
 
             # Skip outgoing messages
             if key.get("fromMe", False):
@@ -535,17 +900,13 @@ async def whatsapp_webhook(request: Request):
                 continue
 
             # Extract text content
-            text = (
-                message.get("conversation", "") or
-                message.get("extendedTextMessage", {}).get("text", "") or
-                ""
-            )
+            text = _extract_message_text(message)
 
             # Get or create chat
             contact_name = msg_data.get("pushName", "") or remote_jid.split("@")[0]
 
             chat_result = await supabase.table("external_chats")\
-                .select("id, auto_reply_enabled, auto_reply_directives")\
+                .select("id, auto_reply_enabled, auto_reply_directives, unread_count")\
                 .eq("account_id", account["id"])\
                 .eq("remote_jid", remote_jid)\
                 .maybe_single()\
@@ -564,12 +925,23 @@ async def whatsapp_webhook(request: Request):
                     "is_group": "@g.us" in remote_jid,
                 }).execute()
                 chat_id = new_chat.data[0]["id"]
-                chat_config = {"auto_reply_enabled": None, "auto_reply_directives": None}
+                chat_config = {"auto_reply_enabled": None, "auto_reply_directives": None, "unread_count": 0}
+
+            remote_message_id = key.get("id", "")
+            if remote_message_id:
+                exists = await supabase.table("external_messages")\
+                    .select("id")\
+                    .eq("chat_id", chat_id)\
+                    .eq("remote_message_id", remote_message_id)\
+                    .limit(1)\
+                    .execute()
+                if exists.data:
+                    continue
 
             # Save incoming message
             await supabase.table("external_messages").insert({
                 "chat_id": chat_id,
-                "remote_message_id": key.get("id", ""),
+                "remote_message_id": remote_message_id,
                 "direction": "in",
                 "content": text,
                 "sender_name": contact_name,
@@ -581,14 +953,11 @@ async def whatsapp_webhook(request: Request):
                 "last_message_at": "now()",
                 "last_message_preview": text[:100] if text else "[media]",
                 "contact_name": contact_name,
-                "unread_count": supabase.rpc("increment_unread", {"chat_id_param": chat_id}).execute() if False else 0,
             }).eq("id", chat_id).execute()
 
-            # Increment unread
-            await supabase.rpc("", {}).execute() if False else None
-            # Simple increment via SQL
+            # Increment unread counter after persisting message
             await supabase.table("external_chats")\
-                .update({"unread_count": chat_config.get("unread_count", 0) + 1 if "unread_count" in chat_config else 1})\
+                .update({"unread_count": int(chat_config.get("unread_count") or 0) + 1})\
                 .eq("id", chat_id)\
                 .execute()
 

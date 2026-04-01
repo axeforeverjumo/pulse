@@ -183,7 +183,7 @@ export interface Workspace {
 export interface WorkspaceApp {
   id: string;
   workspace_id: string;
-  app_type: 'chat' | 'team' | 'files' | 'messages' | 'dashboard' | 'projects' | 'email' | 'calendar' | 'agents';
+  app_type: 'chat' | 'team' | 'files' | 'messages' | 'dashboard' | 'projects' | 'email' | 'calendar' | 'agents' | 'messaging';
   is_public: boolean;
   position: number;
   config: Record<string, unknown>;
