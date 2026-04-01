@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useProjectsStore } from '../../../stores/projectsStore';
 import {
   useProjectBoards,
@@ -17,6 +17,117 @@ interface ProjectSidebarProps {
   onSelectProject: (boardId: string) => void;
 }
 
+interface ProjectBoardRowProps {
+  board: ProjectBoard;
+  activeProjectId: string | null;
+  editingBoardId: string | null;
+  editingName: string;
+  openMenuId: string | null;
+  setEditingName: (name: string) => void;
+  setOpenMenuId: (id: string | null) => void;
+  onSelectProject: (boardId: string) => void;
+  onRenameKeyDown: (e: React.KeyboardEvent, boardId: string) => void;
+  onRenameSubmit: (boardId: string) => void;
+  onRenameClick: (e: React.MouseEvent, board: ProjectBoard) => void;
+  onDeleteClick: (e: React.MouseEvent, board: ProjectBoard) => void;
+}
+
+function ProjectBoardRow({
+  board,
+  activeProjectId,
+  editingBoardId,
+  editingName,
+  openMenuId,
+  setEditingName,
+  setOpenMenuId,
+  onSelectProject,
+  onRenameKeyDown,
+  onRenameSubmit,
+  onRenameClick,
+  onDeleteClick,
+}: ProjectBoardRowProps) {
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => editingBoardId !== board.id && onSelectProject(board.id)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          if (editingBoardId !== board.id) {
+            onSelectProject(board.id);
+          }
+        }
+      }}
+      className={`w-full flex items-center gap-2 px-2.5 h-[35px] rounded-lg text-sm transition-colors group cursor-pointer ${
+        activeProjectId === board.id
+          ? "bg-[#d9e8fb] text-slate-900 shadow-[inset_0_0_0_1px_rgba(144,175,210,0.45)]"
+          : "text-slate-700 hover:bg-white/70"
+      }`}
+    >
+      <Icon icon={Columns3} size={16} className="flex-shrink-0" aria-hidden="true" />
+      {editingBoardId === board.id ? (
+        <input
+          type="text"
+          value={editingName}
+          onChange={(e) => setEditingName(e.target.value)}
+          onKeyDown={(e) => onRenameKeyDown(e, board.id)}
+          onBlur={() => onRenameSubmit(board.id)}
+          onClick={(e) => e.stopPropagation()}
+          autoFocus
+          className="flex-1 text-sm bg-white border border-border-gray rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-brand-primary"
+        />
+      ) : (
+        <span className="flex-1 text-left truncate">
+          {board.name}
+        </span>
+      )}
+
+      {/* Hover Actions - three-dots menu */}
+      {editingBoardId !== board.id && (
+        <div className={`relative flex-shrink-0 ${
+          activeProjectId === board.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+        }`}>
+          <button
+            ref={menuButtonRef}
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpenMenuId(openMenuId === board.id ? null : board.id);
+            }}
+            className="p-1 rounded text-slate-500 hover:text-slate-900 hover:bg-[#e8f0fa] transition-colors focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:opacity-100"
+            title="Más opciones"
+            aria-label={`Options for ${board.name}`}
+          >
+            <EllipsisHorizontalIcon className="w-3.5 h-3.5" aria-hidden="true" />
+          </button>
+          <Dropdown
+            isOpen={openMenuId === board.id}
+            onClose={() => setOpenMenuId(null)}
+            trigger={menuButtonRef}
+          >
+            <button
+              onClick={(e) => onRenameClick(e, board)}
+              className="w-full px-3 py-1.5 text-left text-sm text-text-body hover:bg-bg-gray flex items-center gap-2 focus-visible:bg-bg-gray focus-visible:outline-none"
+            >
+              <PencilIcon className="w-3.5 h-3.5" aria-hidden="true" />
+              Rename
+            </button>
+            <button
+              onClick={(e) => onDeleteClick(e, board)}
+              className="w-full px-3 py-1.5 text-left text-sm text-red-500 hover:bg-bg-gray flex items-center gap-2 focus-visible:bg-bg-gray focus-visible:outline-none"
+            >
+              <TrashIcon className="w-3.5 h-3.5" aria-hidden="true" />
+              Delete
+            </button>
+          </Dropdown>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ProjectSidebar({ onCreateClick, onSelectProject }: ProjectSidebarProps) {
   // UI state from store
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
@@ -33,7 +144,6 @@ export default function ProjectSidebar({ onCreateClick, onSelectProject }: Proje
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [editingBoardId, setEditingBoardId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
-  const [menuButtons, setMenuButtons] = useState<Record<string, HTMLButtonElement | null>>({});
 
   const handleDeleteClick = (e: React.MouseEvent, board: ProjectBoard) => {
     e.stopPropagation();
@@ -95,88 +205,21 @@ export default function ProjectSidebar({ onCreateClick, onSelectProject }: Proje
           <div className="px-2">
             <div className="space-y-0.5">
               {boards.map((board: ProjectBoard) => (
-                <div
+                <ProjectBoardRow
                   key={board.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => editingBoardId !== board.id && onSelectProject(board.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      if (editingBoardId !== board.id) {
-                        onSelectProject(board.id);
-                      }
-                    }
-                  }}
-                  className={`w-full flex items-center gap-2 px-2.5 h-[35px] rounded-lg text-sm transition-colors group cursor-pointer ${
-                    activeProjectId === board.id
-                      ? "bg-[#d9e8fb] text-slate-900 shadow-[inset_0_0_0_1px_rgba(144,175,210,0.45)]"
-                      : "text-slate-700 hover:bg-white/70"
-                  }`}
-                >
-                  <Icon icon={Columns3} size={16} className="flex-shrink-0" aria-hidden="true" />
-                  {editingBoardId === board.id ? (
-                    <input
-                      type="text"
-                      value={editingName}
-                      onChange={(e) => setEditingName(e.target.value)}
-                      onKeyDown={(e) => handleRenameKeyDown(e, board.id)}
-                      onBlur={() => handleRenameSubmit(board.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      autoFocus
-                      className="flex-1 text-sm bg-white border border-border-gray rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-brand-primary"
-                    />
-                  ) : (
-                    <span className="flex-1 text-left truncate">
-                      {board.name}
-                    </span>
-                  )}
-
-                  {/* Hover Actions - three-dots menu */}
-                  {editingBoardId !== board.id && (
-                    <div className={`relative flex-shrink-0 ${
-                      activeProjectId === board.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
-                    }`}>
-                      <button
-                        ref={(el) => {
-                          setMenuButtons((prev) => {
-                            if (prev[board.id] === el) return prev;
-                            return { ...prev, [board.id]: el };
-                          });
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenMenuId(openMenuId === board.id ? null : board.id);
-                        }}
-                        className="p-1 rounded text-slate-500 hover:text-slate-900 hover:bg-[#e8f0fa] transition-colors focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:opacity-100"
-                        title="Más opciones"
-                        aria-label={`Options for ${board.name}`}
-                      >
-                        <EllipsisHorizontalIcon className="w-3.5 h-3.5" aria-hidden="true" />
-                      </button>
-                      <Dropdown
-                        isOpen={openMenuId === board.id}
-                        onClose={() => setOpenMenuId(null)}
-                        trigger={{ current: menuButtons[board.id] || null }}
-                      >
-                        <button
-                          onClick={(e) => handleRenameClick(e, board)}
-                          className="w-full px-3 py-1.5 text-left text-sm text-text-body hover:bg-bg-gray flex items-center gap-2 focus-visible:bg-bg-gray focus-visible:outline-none"
-                        >
-                          <PencilIcon className="w-3.5 h-3.5" aria-hidden="true" />
-                          Rename
-                        </button>
-                        <button
-                          onClick={(e) => handleDeleteClick(e, board)}
-                          className="w-full px-3 py-1.5 text-left text-sm text-red-500 hover:bg-bg-gray flex items-center gap-2 focus-visible:bg-bg-gray focus-visible:outline-none"
-                        >
-                          <TrashIcon className="w-3.5 h-3.5" aria-hidden="true" />
-                          Delete
-                        </button>
-                      </Dropdown>
-                    </div>
-                  )}
-                </div>
+                  board={board}
+                  activeProjectId={activeProjectId}
+                  editingBoardId={editingBoardId}
+                  editingName={editingName}
+                  openMenuId={openMenuId}
+                  setEditingName={setEditingName}
+                  setOpenMenuId={setOpenMenuId}
+                  onSelectProject={onSelectProject}
+                  onRenameKeyDown={handleRenameKeyDown}
+                  onRenameSubmit={handleRenameSubmit}
+                  onRenameClick={handleRenameClick}
+                  onDeleteClick={handleDeleteClick}
+                />
               ))}
             </div>
           </div>
