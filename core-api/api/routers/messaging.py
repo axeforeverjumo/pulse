@@ -92,9 +92,9 @@ async def link_whatsapp(
                 "webhookUrl": WEBHOOK_BASE_URL,
                 "webhookByEvents": True,
                 "webhookEvents": [
-                    "messages.upsert",
-                    "messages.update",
-                    "connection.update",
+                    "MESSAGES_UPSERT",
+                    "MESSAGES_UPDATE",
+                    "CONNECTION_UPDATE",
                 ],
             },
             headers={"apikey": EVOLUTION_API_KEY},
