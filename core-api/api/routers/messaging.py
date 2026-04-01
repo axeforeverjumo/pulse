@@ -10,14 +10,18 @@ Evolution API v2.3.7 endpoints used:
 """
 
 import asyncio
+import base64
+import binascii
 import json
 import logging
+import mimetypes
 import httpx
 import os
+import re
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, Set
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 
 from api.dependencies import get_current_user_jwt, get_current_user_id
@@ -99,13 +103,15 @@ def _normalize_media_type(raw: Optional[str]) -> Optional[str]:
         return "image"
     if "video" in value:
         return "video"
-    if "audio" in value or "voice" in value:
+    if "audio" in value or "voice" in value or "ptt" in value:
         return "audio"
     if "document" in value or "file" in value:
         return "document"
     if "sticker" in value:
         return "sticker"
-    return "media"
+    if value in {"media", "mediamessage"}:
+        return "media"
+    return None
 
 
 def _extract_media_info(message: Any, msg_data: Optional[Dict[str, Any]] = None) -> tuple[Optional[str], Optional[str]]:
@@ -202,6 +208,216 @@ def _message_preview(message: Any, fallback_type: Optional[str] = None) -> str:
     if text:
         return text[:100]
     return _media_placeholder(_normalize_media_type(fallback_type) or "media")
+
+
+def _extract_remote_message_id(payload: Any) -> str:
+    """Best-effort extraction of outbound message id returned by provider APIs."""
+    if isinstance(payload, dict):
+        key_block = payload.get("key")
+        if isinstance(key_block, dict):
+            value = key_block.get("id")
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+
+        for key in ("messageId", "message_id", "id", "stanzaId"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+
+        for nested_key in ("message", "data", "response", "result", "sentMessage"):
+            nested = payload.get(nested_key)
+            candidate = _extract_remote_message_id(nested)
+            if candidate:
+                return candidate
+
+    elif isinstance(payload, list):
+        for item in payload:
+            candidate = _extract_remote_message_id(item)
+            if candidate:
+                return candidate
+
+    return ""
+
+
+def _decode_base64_blob(raw: str) -> Optional[bytes]:
+    if not isinstance(raw, str):
+        return None
+    value = raw.strip()
+    if not value:
+        return None
+    if value.lower().startswith("data:") and "," in value:
+        value = value.split(",", 1)[1].strip()
+    if not value:
+        return None
+    padding = len(value) % 4
+    if padding:
+        value += "=" * (4 - padding)
+    try:
+        return base64.b64decode(value, validate=False)
+    except (ValueError, binascii.Error):
+        return None
+
+
+def _parse_content_disposition_filename(content_disposition: Optional[str]) -> Optional[str]:
+    if not isinstance(content_disposition, str) or not content_disposition:
+        return None
+    match = re.search(r"filename\*?=(?:UTF-8'')?\"?([^\";]+)\"?", content_disposition, flags=re.IGNORECASE)
+    if not match:
+        return None
+    value = match.group(1).strip()
+    if not value:
+        return None
+    return os.path.basename(value)
+
+
+def _default_mime_for_media_type(media_type: Optional[str]) -> str:
+    normalized = _normalize_media_type(media_type)
+    if normalized == "image":
+        return "image/jpeg"
+    if normalized == "video":
+        return "video/mp4"
+    if normalized == "audio":
+        return "audio/ogg"
+    if normalized == "document":
+        return "application/octet-stream"
+    if normalized == "sticker":
+        return "image/webp"
+    return "application/octet-stream"
+
+
+def _infer_filename(
+    remote_message_id: Optional[str],
+    mime_type: Optional[str],
+    fallback: Optional[str] = None,
+) -> str:
+    if isinstance(fallback, str) and fallback.strip():
+        return os.path.basename(fallback.strip())
+    ext = ""
+    if isinstance(mime_type, str) and mime_type.strip():
+        ext = mimetypes.guess_extension(mime_type.split(";")[0].strip()) or ""
+    base = (remote_message_id or "media").strip() or "media"
+    return f"{base}{ext}"
+
+
+def _extract_media_payload(data: Any) -> tuple[Optional[bytes], Optional[str], Optional[str]]:
+    if isinstance(data, str):
+        decoded = _decode_base64_blob(data)
+        if decoded:
+            return decoded, None, None
+        return None, None, None
+
+    if isinstance(data, list):
+        for item in data:
+            blob, mime, name = _extract_media_payload(item)
+            if blob:
+                return blob, mime, name
+        return None, None, None
+
+    if not isinstance(data, dict):
+        return None, None, None
+
+    mime = data.get("mimetype") or data.get("mimeType") or data.get("mime")
+    filename = data.get("fileName") or data.get("filename") or data.get("name")
+
+    for key in ("base64", "data", "buffer", "media"):
+        value = data.get(key)
+        if isinstance(value, str):
+            guessed_mime = mime
+            if value.lower().startswith("data:") and "," in value:
+                head = value.split(",", 1)[0]
+                head_mime = head[5:].split(";", 1)[0].strip()
+                if head_mime:
+                    guessed_mime = guessed_mime or head_mime
+            decoded = _decode_base64_blob(value)
+            if decoded:
+                return decoded, guessed_mime, filename
+
+    for nested_key in ("message", "response", "result", "mediaMessage"):
+        nested = data.get(nested_key)
+        decoded, nested_mime, nested_name = _extract_media_payload(nested)
+        if decoded:
+            return decoded, nested_mime or mime, nested_name or filename
+
+    return None, mime if isinstance(mime, str) else None, filename if isinstance(filename, str) else None
+
+
+async def _fetch_remote_media_url(media_url: str) -> tuple[Optional[bytes], Optional[str], Optional[str]]:
+    if not isinstance(media_url, str) or not media_url.strip():
+        return None, None, None
+    try:
+        async with httpx.AsyncClient(timeout=25.0, follow_redirects=True) as client:
+            response = await client.get(
+                media_url.strip(),
+                headers={
+                    "User-Agent": "Mozilla/5.0",
+                    "Accept": "*/*",
+                },
+            )
+        if response.status_code not in (200, 206) or not response.content:
+            return None, None, None
+        mime = response.headers.get("content-type", "").split(";", 1)[0].strip() or None
+        filename = _parse_content_disposition_filename(response.headers.get("content-disposition"))
+        return response.content, mime, filename
+    except Exception:
+        return None, None, None
+
+
+async def _fetch_whatsapp_media_payload(
+    instance_name: Optional[str],
+    remote_jid: Optional[str],
+    remote_message_id: Optional[str],
+    media_type: Optional[str],
+    media_url: Optional[str],
+) -> tuple[Optional[bytes], Optional[str], Optional[str]]:
+    direct_bytes, direct_mime, direct_name = await _fetch_remote_media_url(media_url or "")
+    if direct_bytes:
+        return direct_bytes, direct_mime, direct_name
+
+    if not instance_name or not remote_jid or not remote_message_id:
+        return None, None, None
+
+    body = {
+        "message": {
+            "key": {
+                "id": remote_message_id,
+                "remoteJid": remote_jid,
+            }
+        },
+        "convertToMp4": _normalize_media_type(media_type) == "video",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=35.0) as client:
+            response = await client.post(
+                f"{EVOLUTION_API_URL}/chat/getBase64FromMediaMessage/{instance_name}",
+                json=body,
+                headers={"apikey": EVOLUTION_API_KEY},
+            )
+        if response.status_code not in (200, 201):
+            logger.warning(
+                "getBase64FromMediaMessage failed (%s) for instance=%s msg=%s",
+                response.status_code,
+                instance_name,
+                remote_message_id,
+            )
+            return None, None, None
+        payload = response.json() if response.content else {}
+    except Exception as exc:
+        logger.warning(
+            "getBase64FromMediaMessage request error for instance=%s msg=%s: %s",
+            instance_name,
+            remote_message_id,
+            exc,
+        )
+        return None, None, None
+
+    media_bytes, mime_type, file_name = _extract_media_payload(payload)
+    if not media_bytes:
+        return None, None, None
+
+    final_mime = (mime_type or "").strip() or _default_mime_for_media_type(media_type)
+    final_name = _infer_filename(remote_message_id, final_mime, file_name)
+    return media_bytes, final_mime, final_name
 
 
 def _get_telegram_bot_token() -> str:
@@ -1206,6 +1422,72 @@ async def get_auto_reply_summary(
 
 # ── Messages ──
 
+@router.get("/messages/{message_id}/media")
+async def get_message_media(
+    message_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Resolve external message media through backend (avoids direct WhatsApp CDN 403)."""
+    supabase = await get_async_service_role_client()
+
+    message_result = await (
+        supabase.table("external_messages")
+        .select(
+            "id, media_type, media_url, remote_message_id, "
+            "chat:external_chats(id, remote_jid, account:external_accounts(user_id, provider, instance_name))"
+        )
+        .eq("id", message_id)
+        .maybe_single()
+        .execute()
+    )
+    message = message_result.data if message_result else None
+    if not message:
+        raise HTTPException(404, "Mensaje no encontrado")
+
+    chat = message.get("chat") or {}
+    account = chat.get("account") or {}
+    if account.get("user_id") != user_id:
+        raise HTTPException(404, "Mensaje no encontrado")
+
+    provider = account.get("provider")
+    media_type = message.get("media_type")
+    media_url = message.get("media_url")
+    remote_message_id = message.get("remote_message_id")
+    remote_jid = chat.get("remote_jid")
+    instance_name = account.get("instance_name")
+
+    payload_bytes: Optional[bytes] = None
+    mime_type: Optional[str] = None
+    file_name: Optional[str] = None
+
+    if provider == "whatsapp":
+        payload_bytes, mime_type, file_name = await _fetch_whatsapp_media_payload(
+            instance_name=instance_name,
+            remote_jid=remote_jid,
+            remote_message_id=remote_message_id,
+            media_type=media_type,
+            media_url=media_url,
+        )
+    elif provider == "telegram":
+        payload_bytes, mime_type, file_name = await _fetch_remote_media_url(media_url or "")
+        if not payload_bytes:
+            raise HTTPException(404, "Este adjunto de Telegram no esta disponible para descarga")
+    else:
+        raise HTTPException(400, "Proveedor no soportado para multimedia")
+
+    if not payload_bytes:
+        raise HTTPException(502, "No se pudo recuperar el adjunto multimedia")
+
+    final_mime = (mime_type or "").strip() or _default_mime_for_media_type(media_type)
+    final_name = _infer_filename(remote_message_id, final_mime, file_name)
+    headers = {
+        "Cache-Control": "private, max-age=300",
+        "Content-Disposition": f'inline; filename="{final_name}"',
+    }
+    return Response(content=payload_bytes, media_type=final_mime, headers=headers)
+
+
 @router.get("/chats/{chat_id}/messages")
 async def list_messages(
     chat_id: str,
@@ -1349,6 +1631,11 @@ async def send_message(
             if resp.status_code not in (200, 201):
                 logger.error(f"Send message error: {resp.status_code} {resp.text}")
                 raise HTTPException(502, "Error al enviar mensaje")
+            try:
+                response_payload = resp.json() if resp.content else {}
+            except Exception:
+                response_payload = {}
+            remote_message_id = _extract_remote_message_id(response_payload)
 
     elif account["provider"] == "telegram":
         remote_jid = chat_data.get("remote_jid")
@@ -1514,7 +1801,7 @@ async def whatsapp_webhook(request: Request):
                 chat_id = new_chat.data[0]["id"]
                 chat_config = {"auto_reply_enabled": None, "auto_reply_directives": None, "unread_count": 0}
 
-            remote_message_id = key.get("id", "")
+            remote_message_id = key.get("id", "") or _extract_remote_message_id(msg_data)
             if remote_message_id:
                 exists = await supabase.table("external_messages")\
                     .select("id")\
@@ -1523,6 +1810,20 @@ async def whatsapp_webhook(request: Request):
                     .limit(1)\
                     .execute()
                 if exists.data:
+                    continue
+
+            if text:
+                recent_threshold = (datetime.now(timezone.utc) - timedelta(minutes=2)).isoformat()
+                probable_echo = await supabase.table("external_messages")\
+                    .select("id")\
+                    .eq("chat_id", chat_id)\
+                    .eq("direction", "out")\
+                    .eq("content", text)\
+                    .gte("created_at", recent_threshold)\
+                    .limit(1)\
+                    .execute()
+                if probable_echo.data:
+                    logger.info("Skipping probable outgoing echo in chat %s", chat_id)
                     continue
 
             # Save incoming message
