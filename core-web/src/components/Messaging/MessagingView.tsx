@@ -223,6 +223,7 @@ export default function MessagingView() {
           if (qrPollRef.current) clearInterval(qrPollRef.current);
           setShowSetup(false);
           setQrCode("");
+          setForceSetup(false);
           loadAccounts();
           return;
         }
@@ -242,7 +243,41 @@ export default function MessagingView() {
     };
   }, []);
 
+  const [unlinking, setUnlinking] = useState(false);
+  // forceSetup=true means we explicitly want to show the link/QR flow
+  // regardless of what the API returns for account status
+  const [forceSetup, setForceSetup] = useState(false);
+
   const currentAccount = accounts.find((a) => a.provider === activeTab);
+
+  const [confirmUnlink, setConfirmUnlink] = useState(false);
+
+  const unlinkWhatsApp = async () => {
+    if (!currentAccount || unlinking) return;
+    setUnlinking(true);
+    setConfirmUnlink(false);
+    try {
+      await api("/messaging/whatsapp/unlink", { method: "DELETE" });
+    } catch (err) {
+      console.error("Failed to unlink:", err);
+    } finally {
+      setUnlinking(false);
+      setAccounts([]);
+      setChats([]);
+      setActiveChat(null);
+      setShowSetup(false);
+      setQrCode("");
+      if (qrPollRef.current) clearInterval(qrPollRef.current);
+      setForceSetup(true);
+      loadAccounts();
+    }
+  };
+
+  // When user explicitly starts linking, clear forceSetup (it's already in setup mode)
+  const handleLinkWhatsApp = async () => {
+    setForceSetup(false);
+    await linkWhatsApp();
+  };
 
   const formatTime = (iso: string) => {
     const d = new Date(iso);
@@ -293,19 +328,50 @@ export default function MessagingView() {
           </button>
           <div className="flex-1" />
           {currentAccount && (
-            <div
-              className={`w-2 h-2 rounded-full ${
-                currentAccount.status === "connected"
-                  ? "bg-green-500"
-                  : "bg-red-400"
-              }`}
-              title={currentAccount.status}
-            />
+            <>
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  currentAccount.status === "connected"
+                    ? "bg-green-500"
+                    : "bg-red-400"
+                }`}
+                title={currentAccount.status}
+              />
+              {activeTab === "whatsapp" && (
+                confirmUnlink ? (
+                  <div className="flex items-center gap-1 ml-1">
+                    <span className="text-[10px] text-gray-500">¿Seguro?</span>
+                    <button
+                      onClick={unlinkWhatsApp}
+                      disabled={unlinking}
+                      className="text-[11px] text-red-500 hover:text-red-700 font-medium disabled:opacity-50"
+                    >
+                      {unlinking ? "..." : "Sí"}
+                    </button>
+                    <button
+                      onClick={() => setConfirmUnlink(false)}
+                      className="text-[11px] text-gray-400 hover:text-gray-600"
+                    >
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmUnlink(true)}
+                    className="text-[11px] text-red-400 hover:text-red-600 transition-colors ml-1"
+                    title="Cerrar sesión de WhatsApp"
+                  >
+                    Cerrar sesión
+                  </button>
+                )
+              )}
+            </>
           )}
         </div>
 
         {/* Connect prompt or chat list */}
-        {!currentAccount || currentAccount.status !== "connected" ? (
+        {/* Show setup flow when: no account, disconnected, forceSetup (just unlinked), or account not connected */}
+        {forceSetup || !currentAccount || currentAccount.status !== "connected" ? (
           <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
             {activeTab === "telegram" ? (
               /* Telegram coming soon placeholder */
@@ -355,6 +421,29 @@ export default function MessagingView() {
                   Cancelar
                 </button>
               </>
+            ) : currentAccount && currentAccount.status === "disconnected" && !forceSetup ? (
+              /* Disconnected state — phone removed the session */
+              <>
+                <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center mb-3">
+                  <PhoneIcon className="w-6 h-6 text-orange-500" />
+                </div>
+                <p className="text-sm font-medium text-gray-900 mb-1">
+                  WhatsApp desconectado
+                </p>
+                <p className="text-xs text-gray-500 mb-4 max-w-[220px]">
+                  Tu sesion de WhatsApp fue cerrada desde el telefono. Vuelve a vincular para reconectar.
+                </p>
+                {linkError && (
+                  <p className="text-xs text-red-500 mb-3">{linkError}</p>
+                )}
+                <button
+                  onClick={handleLinkWhatsApp}
+                  disabled={qrLoading}
+                  className="px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 disabled:opacity-50 transition-colors"
+                >
+                  {qrLoading ? "Generando QR..." : "Reconectar WhatsApp"}
+                </button>
+              </>
             ) : (
               <>
                 <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center mb-3">
@@ -370,7 +459,7 @@ export default function MessagingView() {
                   <p className="text-xs text-red-500 mb-3">{linkError}</p>
                 )}
                 <button
-                  onClick={linkWhatsApp}
+                  onClick={handleLinkWhatsApp}
                   disabled={qrLoading}
                   className="px-4 py-2 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 disabled:opacity-50 transition-colors"
                 >
@@ -382,8 +471,14 @@ export default function MessagingView() {
         ) : (
           <div className="flex-1 overflow-y-auto">
             {chats.length === 0 ? (
-              <div className="p-6 text-center text-sm text-gray-400">
-                No hay conversaciones aun
+              <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center mb-3">
+                  <PhoneIcon className="w-5 h-5 text-green-500" />
+                </div>
+                <p className="text-sm font-medium text-gray-700 mb-1">WhatsApp conectado</p>
+                <p className="text-xs text-gray-400 max-w-[200px]">
+                  Las conversaciones aparecerán aquí cuando recibas o envíes mensajes.
+                </p>
               </div>
             ) : (
               chats.map((chat) => (

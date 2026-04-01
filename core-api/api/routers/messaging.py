@@ -89,13 +89,15 @@ async def link_whatsapp(
                 "instanceName": instance_name,
                 "integration": "WHATSAPP-BAILEYS",
                 "qrcode": True,
-                "webhookUrl": WEBHOOK_BASE_URL,
-                "webhookByEvents": True,
-                "webhookEvents": [
-                    "MESSAGES_UPSERT",
-                    "MESSAGES_UPDATE",
-                    "CONNECTION_UPDATE",
-                ],
+                "webhook": {
+                    "url": WEBHOOK_BASE_URL,
+                    "byEvents": True,
+                    "events": [
+                        "MESSAGES_UPSERT",
+                        "MESSAGES_UPDATE",
+                        "CONNECTION_UPDATE",
+                    ],
+                },
             },
             headers={"apikey": EVOLUTION_API_KEY},
         )
@@ -242,15 +244,75 @@ async def list_accounts(
     user_jwt: str = Depends(get_current_user_jwt),
     user_id: str = Depends(get_current_user_id),
 ):
-    """List user's linked messaging accounts."""
+    """List user's linked messaging accounts.
+
+    For accounts whose DB status is 'connected', we verify live state from
+    Evolution API. If the instance is no longer open (e.g. user disconnected
+    from their phone), we update the DB to 'disconnected' so the UI reflects
+    the real state.
+    """
     supabase = await get_async_service_role_client()
 
     result = await supabase.table("external_accounts")\
-        .select("id, provider, status, phone_number, away_mode, away_message, created_at")\
+        .select("id, provider, status, phone_number, away_mode, away_message, instance_name, created_at")\
         .eq("user_id", user_id)\
         .execute()
 
-    return {"accounts": result.data or []}
+    accounts = result.data or []
+
+    # For WhatsApp accounts that appear connected, verify live state
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        for account in accounts:
+            if account.get("provider") != "whatsapp":
+                continue
+            if account.get("status") not in ("connected", "connecting", "qr_pending"):
+                continue
+
+            instance_name = account.get("instance_name")
+            if not instance_name:
+                continue
+
+            try:
+                state_resp = await client.get(
+                    f"{EVOLUTION_API_URL}/instance/connectionState/{instance_name}",
+                    headers={"apikey": EVOLUTION_API_KEY},
+                )
+                if state_resp.status_code == 200:
+                    state_data = state_resp.json()
+                    live_state = state_data.get("instance", {}).get("state", "unknown")
+                    logger.info(f"Live connection state for {instance_name}: {live_state}")
+
+                    if live_state == "open":
+                        if account["status"] != "connected":
+                            await supabase.table("external_accounts")\
+                                .update({"status": "connected"})\
+                                .eq("id", account["id"])\
+                                .execute()
+                            account["status"] = "connected"
+                    else:
+                        # Not open — mark as disconnected if DB says connected
+                        if account["status"] in ("connected", "connecting"):
+                            await supabase.table("external_accounts")\
+                                .update({"status": "disconnected"})\
+                                .eq("id", account["id"])\
+                                .execute()
+                            account["status"] = "disconnected"
+                elif state_resp.status_code == 404:
+                    # Instance doesn't exist in Evolution API anymore
+                    if account["status"] in ("connected", "connecting", "qr_pending"):
+                        await supabase.table("external_accounts")\
+                            .update({"status": "disconnected"})\
+                            .eq("id", account["id"])\
+                            .execute()
+                        account["status"] = "disconnected"
+            except Exception as e:
+                logger.warning(f"Could not check live state for {instance_name}: {e}")
+
+    # Remove internal field before returning
+    for account in accounts:
+        account.pop("instance_name", None)
+
+    return {"accounts": accounts}
 
 
 # ── Chats ──
@@ -389,7 +451,7 @@ async def whatsapp_webhook(request: Request):
 
     logger.info(f"WhatsApp webhook: event={event} instance={instance}")
 
-    if event == "connection.update":
+    if event in ("connection.update", "CONNECTION_UPDATE"):
         # Update connection status
         state = data.get("state", "")
         supabase = await get_async_service_role_client()
@@ -419,7 +481,7 @@ async def whatsapp_webhook(request: Request):
 
         return {"status": "ok"}
 
-    if event == "messages.upsert":
+    if event in ("messages.upsert", "MESSAGES_UPSERT"):
         supabase = await get_async_service_role_client()
 
         # Get account
