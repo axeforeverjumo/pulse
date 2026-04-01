@@ -437,21 +437,45 @@ async def send_message(
 
 # ── Webhook (receives messages from Evolution API) ──
 
+def _normalize_webhook_event(raw_event: str, event_suffix: Optional[str]) -> str:
+    """Normalize Evolution event names from payload and suffix route variants."""
+    event = (raw_event or "").strip()
+    suffix = (event_suffix or "").strip().lower()
+
+    if not event and suffix:
+        suffix_map = {
+            "connection-update": "connection.update",
+            "messages-upsert": "messages.upsert",
+            "messages-update": "messages.update",
+        }
+        event = suffix_map.get(suffix, suffix.replace("-", "."))
+
+    return event.lower().replace("_", ".").replace("-", ".")
+
 @router.post("/webhook/whatsapp")
+@router.post("/webhook/whatsapp/{event_suffix}")
 async def whatsapp_webhook(request: Request):
     """Receive incoming WhatsApp messages from Evolution API."""
     try:
         body = await request.json()
     except Exception:
         return {"status": "ignored"}
-
-    event = body.get("event", "")
+    event_suffix = request.path_params.get("event_suffix")
+    event = _normalize_webhook_event(body.get("event", ""), event_suffix)
     instance = body.get("instance", "")
     data = body.get("data", {})
 
+    if isinstance(instance, dict):
+        instance = (
+            instance.get("instanceName")
+            or instance.get("instance_name")
+            or instance.get("name")
+            or ""
+        )
+
     logger.info(f"WhatsApp webhook: event={event} instance={instance}")
 
-    if event in ("connection.update", "CONNECTION_UPDATE"):
+    if event == "connection.update":
         # Update connection status
         state = data.get("state", "")
         supabase = await get_async_service_role_client()
@@ -481,7 +505,7 @@ async def whatsapp_webhook(request: Request):
 
         return {"status": "ok"}
 
-    if event in ("messages.upsert", "MESSAGES_UPSERT"):
+    if event == "messages.upsert":
         supabase = await get_async_service_role_client()
 
         # Get account
