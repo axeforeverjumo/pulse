@@ -1088,7 +1088,7 @@ async def link_telegram(
 ):
     """Start Telegram linking flow via bot deep-link token."""
     if not _get_telegram_bot_token():
-        raise HTTPException(503, "Telegram no esta configurado en este servidor")
+        raise HTTPException(503, "Telegram no esta configurado en este servidor: falta TELEGRAM_BOT_TOKEN")
 
     supabase = await get_async_service_role_client()
     bot_username = await _ensure_telegram_webhook()
