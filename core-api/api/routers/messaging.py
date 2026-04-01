@@ -311,6 +311,20 @@ def _infer_filename(
     return f"{base}{ext}"
 
 
+def _finalize_media_metadata(
+    media_type: Optional[str],
+    remote_message_id: Optional[str],
+    mime_type: Optional[str],
+    file_name: Optional[str],
+) -> tuple[str, str]:
+    fallback_mime = _default_mime_for_media_type(media_type)
+    final_mime = fallback_mime if _is_generic_mime(mime_type) else (mime_type or "").strip()
+    final_name = _infer_filename(remote_message_id, final_mime, file_name)
+    if final_name.lower().endswith(".enc") and fallback_mime != "application/octet-stream":
+        final_name = _infer_filename(remote_message_id, fallback_mime, None)
+    return final_mime, final_name
+
+
 def _extract_media_payload(data: Any) -> tuple[Optional[bytes], Optional[str], Optional[str]]:
     if isinstance(data, str):
         decoded = _decode_base64_blob(data)
@@ -383,7 +397,13 @@ async def _fetch_whatsapp_media_payload(
 ) -> tuple[Optional[bytes], Optional[str], Optional[str]]:
     direct_bytes, direct_mime, direct_name = await _fetch_remote_media_url(media_url or "")
     if direct_bytes:
-        return direct_bytes, direct_mime, direct_name
+        final_mime, final_name = _finalize_media_metadata(
+            media_type=media_type,
+            remote_message_id=remote_message_id,
+            mime_type=direct_mime,
+            file_name=direct_name,
+        )
+        return direct_bytes, final_mime, final_name
 
     if not instance_name or not remote_jid or not remote_message_id:
         return None, None, None
@@ -439,11 +459,12 @@ async def _fetch_whatsapp_media_payload(
     if not media_bytes:
         return None, None, None
 
-    fallback_mime = _default_mime_for_media_type(media_type)
-    final_mime = fallback_mime if _is_generic_mime(mime_type) else (mime_type or "").strip()
-    final_name = _infer_filename(remote_message_id, final_mime, file_name)
-    if final_name.lower().endswith(".enc") and fallback_mime != "application/octet-stream":
-        final_name = _infer_filename(remote_message_id, fallback_mime, None)
+    final_mime, final_name = _finalize_media_metadata(
+        media_type=media_type,
+        remote_message_id=remote_message_id,
+        mime_type=mime_type,
+        file_name=file_name,
+    )
     return media_bytes, final_mime, final_name
 
 
