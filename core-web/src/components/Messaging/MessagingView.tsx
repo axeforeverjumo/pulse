@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { api, getWorkspaceAgents, type AgentInstance } from "../../api/client";
+import { API_BASE } from "../../lib/apiBase";
+import { useAuthStore } from "../../stores/authStore";
 import { avatarGradient } from "../../utils/avatarGradient";
 import {
   PaperAirplaneIcon,
@@ -167,8 +169,12 @@ export default function MessagingView() {
   const [telegramDeepLink, setTelegramDeepLink] = useState("");
   const [suggesting, setSuggesting] = useState(false);
   const [linkError, setLinkError] = useState("");
+  const [resolvedMediaUrls, setResolvedMediaUrls] = useState<Record<string, string>>({});
+  const [mediaLoadingByMessage, setMediaLoadingByMessage] = useState<Record<string, boolean>>({});
+  const [mediaErrorByMessage, setMediaErrorByMessage] = useState<Record<string, string>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
+  const resolvedMediaUrlsRef = useRef<Record<string, string>>({});
   const sendQueueRef = useRef<Promise<void>>(Promise.resolve());
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const qrPollRef = useRef<NodeJS.Timeout | null>(null);
@@ -184,6 +190,18 @@ export default function MessagingView() {
     () => agents.find((agent) => agent.id === selectedAgentId),
     [agents, selectedAgentId],
   );
+
+  useEffect(() => {
+    resolvedMediaUrlsRef.current = resolvedMediaUrls;
+  }, [resolvedMediaUrls]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(resolvedMediaUrlsRef.current).forEach((url) => {
+        URL.revokeObjectURL(url);
+      });
+    };
+  }, []);
 
   // Load accounts on mount
   useEffect(() => {
@@ -240,6 +258,40 @@ export default function MessagingView() {
   // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  useEffect(() => {
+    const currentIds = new Set(messages.map((msg) => msg.id));
+
+    setResolvedMediaUrls((prev) => {
+      let changed = false;
+      const next: Record<string, string> = {};
+      Object.entries(prev).forEach(([id, url]) => {
+        if (currentIds.has(id)) {
+          next[id] = url;
+        } else {
+          URL.revokeObjectURL(url);
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+
+    setMediaLoadingByMessage((prev) => {
+      const next: Record<string, boolean> = {};
+      Object.entries(prev).forEach(([id, loading]) => {
+        if (currentIds.has(id)) next[id] = loading;
+      });
+      return next;
+    });
+
+    setMediaErrorByMessage((prev) => {
+      const next: Record<string, string> = {};
+      Object.entries(prev).forEach(([id, error]) => {
+        if (currentIds.has(id)) next[id] = error;
+      });
+      return next;
+    });
   }, [messages]);
 
   const areChatsEqual = (left: ExternalChat[], right: ExternalChat[]) => {
@@ -328,6 +380,66 @@ export default function MessagingView() {
       setAutoReplySummary([]);
     } finally {
       setSummaryLoading(false);
+    }
+  };
+
+  const fetchMediaForMessage = async (messageId: string): Promise<string | null> => {
+    if (resolvedMediaUrls[messageId]) return resolvedMediaUrls[messageId];
+    if (mediaLoadingByMessage[messageId]) return null;
+
+    const token = useAuthStore.getState().session?.access_token;
+    if (!token) {
+      setMediaErrorByMessage((prev) => ({
+        ...prev,
+        [messageId]: "Sesión expirada. Recarga la página.",
+      }));
+      return null;
+    }
+
+    setMediaLoadingByMessage((prev) => ({ ...prev, [messageId]: true }));
+    setMediaErrorByMessage((prev) => {
+      const next = { ...prev };
+      delete next[messageId];
+      return next;
+    });
+
+    try {
+      const response = await fetch(`${API_BASE}/messaging/messages/${messageId}/media`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        let detail = `Error ${response.status}`;
+        try {
+          const json = await response.json();
+          detail = json?.detail || json?.message || detail;
+        } catch {
+          // keep fallback detail
+        }
+        throw new Error(detail);
+      }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      setResolvedMediaUrls((prev) => ({ ...prev, [messageId]: objectUrl }));
+      return objectUrl;
+    } catch (err) {
+      console.error("Failed to fetch message media:", err);
+      setMediaErrorByMessage((prev) => ({
+        ...prev,
+        [messageId]: "No se pudo cargar el adjunto.",
+      }));
+      return null;
+    } finally {
+      setMediaLoadingByMessage((prev) => ({ ...prev, [messageId]: false }));
+    }
+  };
+
+  const openMediaInNewTab = async (messageId: string) => {
+    const mediaUrl = await fetchMediaForMessage(messageId);
+    if (mediaUrl) {
+      window.open(mediaUrl, "_blank", "noopener,noreferrer");
     }
   };
 
@@ -804,6 +916,7 @@ export default function MessagingView() {
   const formatPreview = (preview?: string) => {
     if (!preview) return "";
     if (preview === "[media]") return "Adjunto multimedia";
+    if (preview === "[adjunto]") return "Adjunto multimedia";
     if (preview === "[imagen]") return "Imagen";
     if (preview === "[video]") return "Video";
     if (preview === "[audio]") return "Audio";
@@ -1282,28 +1395,89 @@ export default function MessagingView() {
                         Auto-respuesta
                       </div>
                     )}
-                    {msg.media_type === "image" && msg.media_url ? (
-                      <a href={msg.media_url} target="_blank" rel="noreferrer" className="block">
-                        <img
-                          src={msg.media_url}
-                          alt="Imagen"
-                          className="max-w-[220px] max-h-[220px] rounded-lg object-cover mb-1"
-                        />
-                      </a>
-                    ) : msg.media_url ? (
-                      <a
-                        href={msg.media_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-700 underline mb-1"
-                      >
-                        Abrir {mediaLabel(msg.media_type)}
-                      </a>
-                    ) : msg.media_type ? (
-                      <p className="text-[11px] font-medium text-gray-500 mb-1">
-                        {mediaLabel(msg.media_type)}
-                      </p>
-                    ) : null}
+                    {(() => {
+                      if (!msg.media_type) return null;
+
+                      const objectUrl = resolvedMediaUrls[msg.id];
+                      const isLoadingMedia = Boolean(mediaLoadingByMessage[msg.id]);
+                      const mediaError = mediaErrorByMessage[msg.id];
+                      const hasMeaningfulText = Boolean(
+                        msg.content &&
+                          !["[adjunto]", "[media]"].includes(msg.content.trim().toLowerCase()),
+                      );
+                      const shouldShowLabel =
+                        msg.media_type !== "media" || !hasMeaningfulText;
+
+                      return (
+                        <div className="mb-1">
+                          {shouldShowLabel && (
+                            <p className="text-[11px] font-medium text-gray-500 mb-1">
+                              {mediaLabel(msg.media_type)}
+                            </p>
+                          )}
+                          {msg.media_type === "image" ? (
+                            objectUrl ? (
+                              <a href={objectUrl} target="_blank" rel="noreferrer" className="block">
+                                <img
+                                  src={objectUrl}
+                                  alt="Imagen"
+                                  className="max-w-[220px] max-h-[220px] rounded-lg object-cover"
+                                />
+                              </a>
+                            ) : (
+                              <button
+                                onClick={() => fetchMediaForMessage(msg.id)}
+                                disabled={isLoadingMedia}
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-700 underline disabled:opacity-60"
+                              >
+                                {isLoadingMedia ? "Cargando imagen..." : "Ver imagen"}
+                              </button>
+                            )
+                          ) : msg.media_type === "video" ? (
+                            objectUrl ? (
+                              <video
+                                controls
+                                src={objectUrl}
+                                className="max-w-[220px] max-h-[220px] rounded-lg"
+                              />
+                            ) : (
+                              <button
+                                onClick={() => fetchMediaForMessage(msg.id)}
+                                disabled={isLoadingMedia}
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-700 underline disabled:opacity-60"
+                              >
+                                {isLoadingMedia ? "Cargando video..." : "Ver video"}
+                              </button>
+                            )
+                          ) : msg.media_type === "audio" ? (
+                            objectUrl ? (
+                              <audio controls src={objectUrl} className="w-[220px]" />
+                            ) : (
+                              <button
+                                onClick={() => fetchMediaForMessage(msg.id)}
+                                disabled={isLoadingMedia}
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-700 underline disabled:opacity-60"
+                              >
+                                {isLoadingMedia ? "Cargando audio..." : "Reproducir audio"}
+                              </button>
+                            )
+                          ) : (
+                            <button
+                              onClick={() => openMediaInNewTab(msg.id)}
+                              disabled={isLoadingMedia}
+                              className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-700 underline disabled:opacity-60"
+                            >
+                              {isLoadingMedia
+                                ? "Cargando adjunto..."
+                                : `Abrir ${mediaLabel(msg.media_type)}`}
+                            </button>
+                          )}
+                          {mediaError && (
+                            <p className="text-[10px] text-red-500 mt-1">{mediaError}</p>
+                          )}
+                        </div>
+                      );
+                    })()}
                     {msg.content && (
                       <p className="whitespace-pre-wrap">{msg.content}</p>
                     )}
