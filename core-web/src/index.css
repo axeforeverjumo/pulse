@@ -1,5 +1,5 @@
 /* Core Design System Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Chivo+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Chivo+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
 
 @import "tailwindcss";
 
@@ -22,40 +22,40 @@ p {
 /* Core Design System - Tailwind Theme */
 @theme {
   /* Brand */
-  --color-brand-primary: #000000;
-  --color-brand-secondary: #F6F5F3;
+  --color-brand-primary: #102033;
+  --color-brand-secondary: #ecf4ff;
 
   /* Text */
-  --color-text-dark: #000000;
-  --color-text-body: #000000;
-  --color-text-secondary: #000000a8;
-  --color-text-tertiary: #00000054;
-  --color-text-light: #FFFFFF;
-  --color-text-info: #6EAFFF;
-  --color-text-success: #589F72;
-  --color-text-danger: #EA6B6B;
-  --color-text-warning: #F0A442;
+  --color-text-dark: #0f172a;
+  --color-text-body: #111827;
+  --color-text-secondary: #334155;
+  --color-text-tertiary: #64748b;
+  --color-text-light: #ffffff;
+  --color-text-info: #2563eb;
+  --color-text-success: #0f766e;
+  --color-text-danger: #c2410c;
+  --color-text-warning: #ca8a04;
 
   /* Background */
-  --color-bg-info-light: #F0F7FF;
-  --color-bg-success-light: #DEFBE6;
-  --color-bg-danger-light: #FCF1F1;
-  --color-bg-warning-light: #FDF4E7;
-  --color-bg-white: #FFFFFF;
-  --color-bg-light: #FDFDFD;
-  --color-bg-gray: #F4F3F1;
-  --color-bg-gray-dark: #E5E7EB;
-  --color-bg-shell: #F6F6F6;
-  --color-bg-main-sidebar: #E8EBF0;
-  --color-bg-mini-app: #EAEAEA;
-  --color-bg-dark: #000000;
-  --color-bg-black: #000000;
+  --color-bg-info-light: #eef5ff;
+  --color-bg-success-light: #ebf8f4;
+  --color-bg-danger-light: #fff3ea;
+  --color-bg-warning-light: #fff8e8;
+  --color-bg-white: #ffffff;
+  --color-bg-light: #fbfdff;
+  --color-bg-gray: #f1f5f9;
+  --color-bg-gray-dark: #dbe4ef;
+  --color-bg-shell: #eff4fb;
+  --color-bg-main-sidebar: #e8f0fb;
+  --color-bg-mini-app: #eef3f9;
+  --color-bg-dark: #0f172a;
+  --color-bg-black: #020617;
 
   /* Border */
-  --color-border-light: #EAEAEA;
-  --color-border-gray: #E7E7E6;
-  --color-border-gray-dark: #B1B0AF;
-  --color-border-dark: #3D3D3C;
+  --color-border-light: #dbe7f5;
+  --color-border-gray: #cfdced;
+  --color-border-gray-dark: #94a3b8;
+  --color-border-dark: #334155;
 
   /* Gray scale */
   --color-gray-50: #F4F3F1;
@@ -129,11 +129,11 @@ p {
   --color-indigo-800: #1D2EDA;
   --color-indigo-900: #0E166F;
 
-  /* Fonts - system stack */
-  --font-sans: system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-  --font-display: system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  /* Fonts */
+  --font-sans: 'Manrope', 'Avenir Next', 'Segoe UI', sans-serif;
+  --font-display: 'Sora', 'Avenir Next', 'Segoe UI', sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-  --font-label: ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  --font-label: 'Space Grotesk', 'Avenir Next', 'Segoe UI', sans-serif;
 
   /* Spacing scale */
   --spacing-xs: 4px;
@@ -163,6 +163,10 @@ body {
   position: fixed;
   font-family: var(--font-sans);
   color: var(--color-text-body);
+  background:
+    radial-gradient(1200px 600px at 0% -10%, rgba(56, 189, 248, 0.2), transparent 60%),
+    radial-gradient(1000px 560px at 100% 0%, rgba(16, 185, 129, 0.17), transparent 58%),
+    linear-gradient(180deg, #f6fbff 0%, #edf4fb 48%, #e8f1fa 100%);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -176,6 +180,41 @@ html {
   height: 100vh;
   width: 100vw;
   overflow: hidden;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #9cb0c8 #eaf0f8;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #eaf0f8;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #9cb0c8 0%, #7891af 100%);
+  border-radius: 999px;
+  border: 2px solid #eaf0f8;
+}
+
+.app-surface {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(249, 252, 255, 0.96) 100%);
+  border: 1px solid rgba(174, 198, 224, 0.52);
+  box-shadow:
+    0 18px 55px -32px rgba(15, 23, 42, 0.35),
+    0 2px 10px rgba(15, 23, 42, 0.06);
+}
+
+.app-soft-card {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(174, 198, 224, 0.46);
+  backdrop-filter: blur(12px);
 }
 
 /* Core Design System - Button Base Styles */
@@ -605,4 +644,3 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-

@@ -5,6 +5,7 @@ import { API_BASE } from "../../lib/apiBase";
 import { useAuthStore } from "../../stores/authStore";
 import { avatarGradient } from "../../utils/avatarGradient";
 import {
+  ArrowLeftIcon,
   PaperAirplaneIcon,
   PhoneIcon,
   SparklesIcon,
@@ -1070,12 +1071,16 @@ export default function MessagingView() {
   }
 
   return (
-    <div className="flex-1 flex h-full">
+    <div className="flex-1 flex h-full min-h-0 bg-gradient-to-br from-[#f8fbff] via-[#f2f7fd] to-[#edf3fb]">
       {/* Left sidebar - Chat list */}
-      <div className="w-80 border-r border-gray-200 flex flex-col bg-white">
+      <div
+        className={`${
+          activeChat ? "hidden md:flex" : "flex"
+        } w-full md:w-[340px] md:min-w-[320px] md:max-w-[360px] border-r border-[#d9e5f3] flex-col bg-white/82 backdrop-blur-md`}
+      >
         {/* Header */}
-        <div className="h-12 border-b border-gray-200 flex items-center px-4 gap-2">
-          <span className="px-3 py-1 text-[12px] font-medium rounded-md bg-green-50 text-green-700">
+        <div className="h-14 border-b border-[#d9e5f3] flex items-center px-4 gap-2">
+          <span className="px-3 py-1 text-[12px] font-semibold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
             WhatsApp
           </span>
           <div className="flex-1" />
@@ -1332,12 +1337,24 @@ export default function MessagingView() {
       </div>
 
       {/* Right side - Conversation */}
-      <div className="flex-1 flex flex-col bg-[#F0F0F0]">
+      <div
+        className={`${
+          activeChat ? "flex" : "hidden md:flex"
+        } flex-1 min-w-0 flex-col bg-[#f0f4f9]`}
+      >
         {activeChat ? (
           <>
             {/* Chat header */}
-            <div className="bg-white border-b border-gray-200 px-4 py-2">
+            <div className="bg-white/90 backdrop-blur-md border-b border-[#d9e5f3] px-3 md:px-4 py-2">
               <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setActiveChat(null)}
+                  className="md:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100"
+                  title="Volver a chats"
+                >
+                  <ArrowLeftIcon className="w-4 h-4" />
+                </button>
                 {activeChat.contact_avatar_url ? (
                   <img
                     src={activeChat.contact_avatar_url}
@@ -1373,7 +1390,7 @@ export default function MessagingView() {
                     setSelectedAgentId(e.target.value);
                     setAgentRulesError("");
                   }}
-                  className="flex-1 px-2 py-1 text-[11px] bg-gray-50 rounded-md border border-gray-200 focus:outline-none focus:ring-1 focus:ring-violet-300"
+                  className="flex-1 px-2 py-1 text-[11px] bg-gray-50 rounded-md border border-gray-200 focus:outline-none focus:ring-1 focus:ring-cyan-300"
                 >
                   <option value="">
                     {agentsLoading
@@ -1411,7 +1428,7 @@ export default function MessagingView() {
                   setAgentRulesError("");
                 }}
                 placeholder="Instrucciones extra para este agente en este chat"
-                className="mt-2 w-full px-2 py-1 text-[11px] bg-gray-50 rounded-md border border-gray-200 focus:outline-none focus:ring-1 focus:ring-violet-300"
+                className="mt-2 w-full px-2 py-1 text-[11px] bg-gray-50 rounded-md border border-gray-200 focus:outline-none focus:ring-1 focus:ring-cyan-300"
               />
               {agentRulesError && (
                 <p className="mt-1 text-[10px] text-red-500">{agentRulesError}</p>
@@ -1422,14 +1439,14 @@ export default function MessagingView() {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1.5">
+            <div className="flex-1 overflow-y-auto px-3 md:px-4 py-3 space-y-1.5">
               {messages.map((msg) => (
                 <div
                   key={msg.id}
                   className={`flex ${msg.direction === "out" ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`max-w-[70%] px-3 py-2 rounded-xl text-[13px] leading-relaxed ${
+                    className={`max-w-[88%] md:max-w-[72%] px-3 py-2 rounded-xl text-[13px] leading-relaxed ${
                       msg.direction === "out"
                         ? msg.is_auto_reply
                           ? "bg-violet-100 text-violet-900"
@@ -1582,7 +1599,7 @@ export default function MessagingView() {
             </div>
 
             {/* Input */}
-            <div className="bg-white border-t border-gray-200 px-4 py-3">
+            <div className="bg-white/90 backdrop-blur-md border-t border-[#d9e5f3] px-3 md:px-4 py-3">
               <div className="flex items-end gap-2">
                 <button
                   onClick={suggestReply}
@@ -1620,7 +1637,7 @@ export default function MessagingView() {
                     }}
                     placeholder="Escribe un mensaje..."
                     rows={1}
-                    className="w-full px-3 py-2 text-[13px] bg-gray-50 rounded-xl border-0 focus:outline-none focus:ring-1 focus:ring-green-300 resize-none"
+                    className="w-full px-3 py-2 text-[13px] bg-gray-50 rounded-xl border-0 focus:outline-none focus:ring-1 focus:ring-cyan-300 resize-none"
                   />
                 </div>
                 <button

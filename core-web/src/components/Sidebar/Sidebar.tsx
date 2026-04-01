@@ -816,12 +816,13 @@ export default function Sidebar() {
         }))
     : [];
 
-  // Icon button styles (dark sidebar)
+  // Icon button styles (modern sidebar)
   const iconBtn =
-    "w-10 h-10 flex items-center justify-center rounded-lg transition-all relative outline-none focus:outline-none";
-  const iconBtnActive = "bg-black/10 text-text-body";
+    "group/icon w-10 h-10 flex items-center justify-center rounded-xl transition-all relative outline-none focus:outline-none border border-transparent backdrop-blur-md";
+  const iconBtnActive =
+    "bg-slate-900 text-white border-slate-900 shadow-[0_10px_24px_-14px_rgba(15,23,42,0.95)]";
   const iconBtnInactive =
-    "text-[#323232] hover:bg-black/5";
+    "text-slate-600 hover:text-slate-900 hover:bg-white/80 hover:border-[#cfdbeb]";
 
   return (
     <>
@@ -830,7 +831,7 @@ export default function Sidebar() {
         tabIndex={0}
         onKeyDown={handleSidebarKeyDown}
         onFocus={() => setActiveZone("main-sidebar")}
-        className="w-16 shrink-0 bg-[#E3E3E5] text-text-secondary h-full flex flex-col items-center pb-3 outline-none pt-3"
+        className="w-16 shrink-0 text-text-secondary h-full flex flex-col items-center pb-3 outline-none pt-3 bg-gradient-to-b from-[#e8f1fc]/95 via-[#f2f8ff]/95 to-[#eaf3fd]/95 border-r border-[#d7e4f3] shadow-[inset_-1px_0_0_rgba(255,255,255,0.65)]"
       >
         {/* Product & Workspace Selector */}
         <div className="relative mb-4">
@@ -852,8 +853,8 @@ export default function Sidebar() {
             }
             className={`w-10 h-10 flex items-center justify-center rounded-lg transition-all ${
               openMenu === "view-selector"
-                ? "bg-black/10"
-                : "hover:bg-black/5"
+                ? "bg-slate-900 text-white"
+                : "hover:bg-white/70"
             }`}
           >
             <AnimatePresence mode="wait">
@@ -864,7 +865,7 @@ export default function Sidebar() {
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.08 }}
                 className={`w-9 h-9 flex items-center justify-center rounded-lg overflow-hidden ${
-                  activeProductType === 'workspace' && selectedView === "dashboard" ? "bg-white shadow-sm" : ""
+                  activeProductType === 'workspace' && selectedView === "dashboard" ? "bg-white shadow-[0_6px_20px_-14px_rgba(15,23,42,0.55)]" : ""
                 }`}
               >
                 {activeProductType === 'ai_builder' ? (
@@ -915,7 +916,7 @@ export default function Sidebar() {
             });
 
             return hasUnreadsInOtherWorkspaces ? (
-              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border-[1.5px] border-[#E3E3E5]" />
+                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border-[1.5px] border-[#e8f1fc]" />
             ) : null;
           })()}
           <Dropdown
@@ -1120,7 +1121,7 @@ export default function Sidebar() {
                   <Icon icon={app.icon} size={20} active={isItemActive} />
                 </button>
                 {hasUnread && (
-                  <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-[#E3E3E5]" />
+                  <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-[#e8f1fc]" />
                 )}
               </div>
             );

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -24,6 +24,13 @@ import { useResumeRevalidation } from "./hooks/useResumeRevalidation";
 import { Sentry, setSentryUser } from "./lib/sentry";
 import { identifyUser, resetUser, trackPageView } from "./lib/posthog";
 import { FeatureErrorBoundary } from "./components/ui/FeatureErrorBoundary";
+import {
+  Folder,
+  MessageCircle,
+  Pin,
+  Smartphone,
+  Users,
+} from "lucide-react";
 
 const OAuthCallback = lazy(() => import("./components/OAuthCallback"));
 const InviteAcceptPage = lazy(() => import("./pages/InviteAcceptPage"));
@@ -110,17 +117,17 @@ function RouteLoading() {
   return (
     <div className="flex-1 flex h-full overflow-hidden">
       {/* Skeleton for mini app content area */}
-      <div className="flex-1 flex overflow-hidden bg-white">
+      <div className="flex-1 flex overflow-hidden bg-[#f7fbff]">
         {/* Skeleton sidebar */}
-        <div className="w-[212px] shrink-0 bg-gray-50 border-r border-gray-100 p-3">
+        <div className="w-[212px] shrink-0 bg-[#edf4fb] border-r border-[#d9e6f5] p-3">
           {/* Sidebar header */}
-          <div className="h-5 w-24 bg-gray-200 rounded animate-pulse mb-4" />
+          <div className="h-5 w-24 bg-[#d3dfef] rounded-full animate-pulse mb-4" />
           {/* Sidebar items */}
           <div className="space-y-1">
             {[...Array(8)].map((_, i) => (
               <div key={i} className="flex items-center gap-2 h-[35px] px-2">
-                <div className="w-4 h-4 bg-gray-200 rounded animate-pulse" />
-                <div className="flex-1 h-3 bg-gray-200 rounded animate-pulse" />
+                <div className="w-4 h-4 bg-[#d3dfef] rounded animate-pulse" />
+                <div className="flex-1 h-3 bg-[#d3dfef] rounded-full animate-pulse" />
               </div>
             ))}
           </div>
@@ -128,19 +135,19 @@ function RouteLoading() {
         {/* Skeleton main content */}
         <div className="flex-1 p-6">
           {/* Header */}
-          <div className="h-6 w-48 bg-gray-100 rounded animate-pulse mb-6" />
+          <div className="h-6 w-48 bg-[#dde8f6] rounded-full animate-pulse mb-6" />
           {/* Content blocks */}
           <div className="space-y-6">
             {[...Array(4)].map((_, i) => (
               <div key={i} className="flex gap-3">
-                <div className="w-10 h-10 bg-gray-100 rounded-lg animate-pulse shrink-0" />
+                <div className="w-10 h-10 bg-[#dde8f6] rounded-xl animate-pulse shrink-0" />
                 <div className="flex-1 space-y-2">
                   <div className="flex items-center gap-2">
-                    <div className="h-3.5 w-24 bg-gray-100 rounded animate-pulse" />
-                    <div className="h-2.5 w-12 bg-gray-50 rounded animate-pulse" />
+                    <div className="h-3.5 w-24 bg-[#dde8f6] rounded-full animate-pulse" />
+                    <div className="h-2.5 w-12 bg-[#eaf1fa] rounded-full animate-pulse" />
                   </div>
-                  <div className="h-3 w-full bg-gray-100 rounded animate-pulse" />
-                  <div className="h-3 w-3/4 bg-gray-100 rounded animate-pulse" />
+                  <div className="h-3 w-full bg-[#dde8f6] rounded-full animate-pulse" />
+                  <div className="h-3 w-3/4 bg-[#dde8f6] rounded-full animate-pulse" />
                 </div>
               </div>
             ))}
@@ -153,51 +160,142 @@ function RouteLoading() {
 
 function SidebarSkeleton() {
   return (
-    <div className="w-16 shrink-0 bg-[#E3E3E5] flex flex-col items-center py-3 gap-3">
+    <div className="w-16 shrink-0 bg-gradient-to-b from-[#e9f1fb] via-[#f2f8ff] to-[#edf4fd] border-r border-[#dce8f5] flex flex-col items-center py-3 gap-3">
       {/* Logo placeholder */}
-      <div className="w-10 h-10 rounded-xl bg-black/10 animate-pulse" />
+      <div className="w-10 h-10 rounded-xl bg-[#cddcf0] animate-pulse" />
       {/* Icon placeholders */}
       <div className="flex-1 flex flex-col items-center gap-2 mt-4">
         {[...Array(6)].map((_, i) => (
-          <div key={i} className="w-10 h-10 rounded-lg bg-black/5 animate-pulse" />
+          <div key={i} className="w-10 h-10 rounded-xl bg-[#d7e5f4] animate-pulse" />
         ))}
       </div>
       {/* Bottom icon placeholder */}
-      <div className="w-10 h-10 rounded-lg bg-black/5 animate-pulse" />
+      <div className="w-10 h-10 rounded-xl bg-[#d7e5f4] animate-pulse" />
     </div>
   );
 }
 
+const mobileNavItems = [
+  { id: "chat", label: "Chat", type: "chat", icon: MessageCircle },
+  { id: "messages", label: "Equipo", type: "messages", icon: Users },
+  { id: "files", label: "Archivos", type: "files", icon: Folder },
+  { id: "projects", label: "Proyectos", type: "projects", icon: Pin },
+  { id: "messaging", label: "WhatsApp", type: "messaging", icon: Smartphone },
+] as const;
+
 // Layout with sidebar for app routes
 function AppLayout({ children }: { children: React.ReactNode }) {
   const { isLoading: authLoading } = useAuthStore();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { activeWorkspaceId, workspaces } = useWorkspaceStore();
+
+  const activeWorkspace = useMemo(() => {
+    if (activeWorkspaceId) {
+      const matched = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
+      if (matched) return matched;
+    }
+    return workspaces.find((workspace) => workspace.isDefault) || workspaces[0] || null;
+  }, [activeWorkspaceId, workspaces]);
+
+  const resolveMobilePath = (appType: string) => {
+    if (!activeWorkspace) {
+      if (appType === "chat") return "/chat";
+      if (appType === "email") return "/email";
+      if (appType === "calendar") return "/calendar";
+      if (appType === "messaging") return "/messaging";
+      return "/chat";
+    }
+
+    const isDefaultWorkspace = Boolean(activeWorkspace.isDefault);
+    const topLevelApps = new Set(["chat", "email", "calendar", "messaging"]);
+
+    if (isDefaultWorkspace && topLevelApps.has(appType)) {
+      return `/${appType}`;
+    }
+    return `/workspace/${activeWorkspace.id}/${appType}`;
+  };
+
+  const isMobileAppActive = (appType: string) => {
+    const path = location.pathname;
+    if (appType === "chat") {
+      return /^\/chat(\/|$)/.test(path) || /\/workspace\/[^/]+\/chat(\/|$)/.test(path);
+    }
+    if (appType === "messaging") {
+      return /^\/messaging(\/|$)/.test(path) || /\/workspace\/[^/]+\/messaging(\/|$)/.test(path);
+    }
+    return new RegExp(`/workspace/[^/]+/${appType}(\\/|$)`).test(path);
+  };
 
   return (
     <KeyboardNavigationProvider>
       <Toaster position="top-right" richColors />
-      <div className="h-screen w-screen overflow-hidden flex bg-[#E3E3E5]">
-        {/* Main Sidebar */}
-        <Suspense fallback={<SidebarSkeleton />}>
-          <Sidebar />
-        </Suspense>
-        {/* Content area - inset with spacing to show sidebar bg */}
-        <div className="flex-1 flex min-w-0 min-h-0 pt-2 pr-2 pb-2 gap-2">
-          {/* Main content */}
-          <main className="flex-1 flex min-w-0 overflow-hidden rounded-lg bg-[#FCFCFC] border border-border-light shadow-[0_0_1px_rgba(0,0,0,0.25)]">
-            {authLoading ? (
-              <RouteLoading />
-            ) : (
-              <FeatureErrorBoundary feature="this view">
-                <Suspense fallback={<RouteLoading />}>{children}</Suspense>
-              </FeatureErrorBoundary>
-            )}
-          </main>
-          {/* AI Chat Panel - right side */}
-          <FeatureErrorBoundary feature="Chat">
-            <Suspense fallback={null}>
-              <ChatPanel />
+      <div className="h-[100dvh] w-screen overflow-hidden relative">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute -top-24 -left-16 h-64 w-64 rounded-full bg-cyan-200/45 blur-3xl" />
+          <div className="absolute top-12 right-0 h-72 w-72 rounded-full bg-emerald-200/35 blur-3xl" />
+          <div className="absolute bottom-0 left-1/3 h-56 w-56 rounded-full bg-sky-100/50 blur-3xl" />
+        </div>
+
+        <div className="relative z-10 h-full w-full flex flex-col lg:flex-row">
+          {/* Desktop Sidebar */}
+          <div className="hidden lg:flex lg:shrink-0">
+            <Suspense fallback={<SidebarSkeleton />}>
+              <Sidebar />
             </Suspense>
-          </FeatureErrorBoundary>
+          </div>
+
+          {/* Content area */}
+          <div className="flex-1 flex min-w-0 min-h-0 p-2 sm:p-3 lg:p-3 xl:p-4 gap-2 sm:gap-3">
+            <main className="app-surface flex-1 flex min-w-0 overflow-hidden rounded-[20px] lg:rounded-[24px]">
+              {authLoading ? (
+                <RouteLoading />
+              ) : (
+                <FeatureErrorBoundary feature="this view">
+                  <Suspense fallback={<RouteLoading />}>{children}</Suspense>
+                </FeatureErrorBoundary>
+              )}
+            </main>
+
+            {/* AI Chat Panel - desktop only */}
+            <div className="hidden xl:flex">
+              <FeatureErrorBoundary feature="Chat">
+                <Suspense fallback={null}>
+                  <ChatPanel />
+                </Suspense>
+              </FeatureErrorBoundary>
+            </div>
+          </div>
+
+          {/* Mobile Dock Navigation */}
+          <nav className="lg:hidden mx-2 mb-2 rounded-2xl app-soft-card px-1.5 py-1.5 border border-[#d2deec]">
+            <div className="grid grid-cols-5 gap-1">
+              {mobileNavItems.map((item) => {
+                const active = isMobileAppActive(item.type);
+                const IconComponent = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => navigate(resolveMobilePath(item.type))}
+                    className={`flex flex-col items-center justify-center rounded-xl px-1 py-1.5 transition-all ${
+                      active ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-white/75"
+                    }`}
+                    title={item.label}
+                  >
+                    <IconComponent className="h-4 w-4" />
+                    <span
+                      className={`mt-1 text-[10px] font-semibold leading-none ${
+                        active ? "text-white/90" : "text-slate-500"
+                      }`}
+                    >
+                      {item.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
         </div>
       </div>
     </KeyboardNavigationProvider>
