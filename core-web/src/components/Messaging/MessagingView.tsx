@@ -6,7 +6,6 @@ import {
   PhoneIcon,
   SparklesIcon,
   QrCodeIcon,
-  ArrowPathIcon,
   ClockIcon,
 } from "@heroicons/react/24/outline";
 
