@@ -153,9 +153,11 @@ function formatAudioTime(totalSeconds: number): string {
 
 function InlineAudioPlayer({
   src,
+  mimeType,
   outgoing,
 }: {
   src: string;
+  mimeType?: string;
   outgoing: boolean;
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -221,7 +223,9 @@ function InlineAudioPlayer({
         outgoing ? "bg-emerald-700 text-white" : "bg-slate-800 text-white"
       }`}
     >
-      <audio ref={audioRef} src={src} preload="metadata" className="hidden" />
+      <audio ref={audioRef} preload="metadata" className="hidden">
+        <source src={src} type={mimeType || "audio/ogg"} />
+      </audio>
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -618,18 +622,21 @@ export default function MessagingView() {
 
     if (pendingMediaIds.length === 0) return;
 
-    const batch = pendingMediaIds.slice(0, 6);
+    // Prioritize newest media first so the visible/latest conversation loads fast.
+    const batch = pendingMediaIds.slice(-3).reverse();
     batch.forEach((id) => prefetchedMediaIdsRef.current.add(id));
 
     let cancelled = false;
     const warmMedia = async () => {
-      for (const mediaId of batch) {
-        if (cancelled) break;
-        await fetchMediaForMessage(mediaId);
-      }
+      await Promise.all(
+        batch.map(async (mediaId) => {
+          if (cancelled) return;
+          await fetchMediaForMessage(mediaId);
+        }),
+      );
     };
 
-    warmMedia();
+    void warmMedia();
     return () => {
       cancelled = true;
     };
@@ -1686,6 +1693,7 @@ export default function MessagingView() {
                             objectUrl ? (
                               <InlineAudioPlayer
                                 src={objectUrl}
+                                mimeType={mimeType}
                                 outgoing={msg.direction === "out"}
                               />
                             ) : (
