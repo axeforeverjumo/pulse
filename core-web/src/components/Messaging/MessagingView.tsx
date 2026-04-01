@@ -30,6 +30,7 @@ interface ExternalChat {
   last_message_at?: string;
   last_message_preview?: string;
   auto_reply_enabled?: boolean;
+  auto_reply_directives?: string;
   muted?: boolean;
   account?: { provider: string };
 }
@@ -55,7 +56,12 @@ export default function MessagingView() {
   const [messages, setMessages] = useState<ExternalMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
+  const [pendingSends, setPendingSends] = useState(0);
+  const [awayModeSaving, setAwayModeSaving] = useState(false);
+  const [awayModeDraft, setAwayModeDraft] = useState(false);
+  const [awayMessageDraft, setAwayMessageDraft] = useState("");
+  const [agentAlias, setAgentAlias] = useState("");
+  const [agentRulesSaving, setAgentRulesSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<"whatsapp" | "telegram">(
     "whatsapp",
   );
@@ -67,6 +73,7 @@ export default function MessagingView() {
   const [suggesting, setSuggesting] = useState(false);
   const [linkError, setLinkError] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const sendQueueRef = useRef<Promise<void>>(Promise.resolve());
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const qrPollRef = useRef<NodeJS.Timeout | null>(null);
   const telegramPollRef = useRef<NodeJS.Timeout | null>(null);
@@ -258,15 +265,16 @@ export default function MessagingView() {
   };
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !activeChat || sending) return;
+    if (!newMessage.trim() || !activeChat) return;
+
+    const chatId = activeChat.id;
     const text = newMessage.trim();
     setNewMessage("");
-    setSending(true);
 
-    // Optimistic add
+    // Optimistic add so users can fire multiple messages in a row instantly.
     const tempMsg: ExternalMessage = {
-      id: `temp-${Date.now()}`,
-      chat_id: activeChat.id,
+      id: `temp-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      chat_id: chatId,
       direction: "out",
       content: text,
       is_auto_reply: false,
@@ -275,16 +283,28 @@ export default function MessagingView() {
     };
     setMessages((prev) => [...prev, tempMsg]);
 
-    try {
-      await api("/messaging/chats/" + activeChat.id + "/send", {
-        method: "POST",
-        body: JSON.stringify({ chat_id: activeChat.id, content: text }),
+    sendQueueRef.current = sendQueueRef.current
+      .then(async () => {
+        setPendingSends((prev) => prev + 1);
+        try {
+          await api(`/messaging/chats/${chatId}/send`, {
+            method: "POST",
+            body: JSON.stringify({ chat_id: chatId, content: text }),
+          });
+
+          if (activeChat?.id === chatId) {
+            await loadMessages(chatId);
+          }
+          await loadChats();
+        } catch (err) {
+          console.error("Failed to send:", err);
+        } finally {
+          setPendingSends((prev) => Math.max(0, prev - 1));
+        }
+      })
+      .catch((err) => {
+        console.error("Message queue error:", err);
       });
-    } catch (err) {
-      console.error("Failed to send:", err);
-    } finally {
-      setSending(false);
-    }
   };
 
   const suggestReply = async () => {
@@ -442,6 +462,116 @@ export default function MessagingView() {
   const currentAccount = accounts.find((a) => a.provider === activeTab);
   const [confirmUnlink, setConfirmUnlink] = useState(false);
 
+  const extractAgentAlias = (directives?: string) => {
+    if (!directives) return "";
+    const firstLine = directives.split("\n")[0]?.trim() || "";
+    if (!firstLine.startsWith("AGENT::")) return "";
+    return firstLine.replace("AGENT::", "").trim();
+  };
+
+  const buildAgentDirectives = (alias: string) => {
+    const safeAlias = alias.trim() || "Asistente";
+    return [
+      `AGENT::${safeAlias}`,
+      `Actua como ${safeAlias} y responde en nombre del usuario manteniendo su estilo.`,
+      "Usa el contexto reciente de la conversacion para responder con precision.",
+      "Se breve, natural y orientado a avanzar la conversacion.",
+      "No menciones que eres IA ni que existe un prompt interno.",
+    ].join("\n");
+  };
+
+  useEffect(() => {
+    if (!currentAccount) return;
+    setAwayModeDraft(Boolean(currentAccount.away_mode));
+    setAwayMessageDraft(currentAccount.away_message || "");
+  }, [currentAccount?.id]);
+
+  useEffect(() => {
+    if (!activeChat) {
+      setAgentAlias("");
+      return;
+    }
+    setAgentAlias(extractAgentAlias(activeChat.auto_reply_directives) || "Asistente");
+  }, [activeChat?.id]);
+
+  const saveAwayMode = async (enabled: boolean) => {
+    if (!currentAccount || awayModeSaving) return;
+
+    setAwayModeSaving(true);
+    setLinkError("");
+    try {
+      await api(`/messaging/accounts/${currentAccount.id}/away`, {
+        method: "PUT",
+        body: JSON.stringify({
+          enabled,
+          message: awayMessageDraft || "Estoy fuera de la oficina, te respondo en cuanto pueda.",
+        }),
+      });
+
+      setAwayModeDraft(enabled);
+      setAccounts((prev) =>
+        prev.map((account) =>
+          account.id === currentAccount.id
+            ? {
+                ...account,
+                away_mode: enabled,
+                away_message: awayMessageDraft,
+              }
+            : account,
+        ),
+      );
+    } catch (err) {
+      console.error("Failed to update away mode:", err);
+      setLinkError("No se pudo actualizar el AutoMode.");
+    } finally {
+      setAwayModeSaving(false);
+    }
+  };
+
+  const saveChatAgentRules = async (enabled: boolean) => {
+    if (!activeChat || agentRulesSaving) return;
+
+    const directives = enabled ? buildAgentDirectives(agentAlias) : "";
+    const chatId = activeChat.id;
+
+    setAgentRulesSaving(true);
+    try {
+      await api(`/messaging/chats/${chatId}/rules`, {
+        method: "PUT",
+        body: JSON.stringify({
+          auto_reply_enabled: enabled,
+          auto_reply_directives: directives,
+        }),
+      });
+
+      setActiveChat((prev) =>
+        prev && prev.id === chatId
+          ? {
+              ...prev,
+              auto_reply_enabled: enabled,
+              auto_reply_directives: directives,
+            }
+          : prev,
+      );
+
+      setChats((prev) =>
+        prev.map((chat) =>
+          chat.id === chatId
+            ? {
+                ...chat,
+                auto_reply_enabled: enabled,
+                auto_reply_directives: directives,
+              }
+            : chat,
+        ),
+      );
+    } catch (err) {
+      console.error("Failed to update chat auto-reply rules:", err);
+    } finally {
+      setAgentRulesSaving(false);
+    }
+  };
+
   const unlinkCurrentAccount = async () => {
     if (!currentAccount || unlinking) return;
 
@@ -574,6 +704,43 @@ export default function MessagingView() {
             </>
           )}
         </div>
+
+        {currentAccount?.status === "connected" && (
+          <div className="px-3 py-2 border-b border-gray-100 bg-gray-50/70">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-medium text-gray-600">
+                AutoMode fuera de oficina
+              </span>
+              <button
+                onClick={() => saveAwayMode(!awayModeDraft)}
+                disabled={awayModeSaving}
+                className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
+                  awayModeDraft
+                    ? "bg-violet-100 text-violet-700 hover:bg-violet-200"
+                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                } disabled:opacity-50`}
+              >
+                {awayModeSaving
+                  ? "Guardando..."
+                  : awayModeDraft
+                    ? "Activo"
+                    : "Inactivo"}
+              </button>
+            </div>
+            <textarea
+              value={awayMessageDraft}
+              onChange={(e) => setAwayMessageDraft(e.target.value)}
+              onBlur={() => {
+                if (awayModeDraft) {
+                  saveAwayMode(true);
+                }
+              }}
+              placeholder="Mensaje automático cuando estás fuera..."
+              rows={2}
+              className="mt-2 w-full px-2 py-1.5 text-[11px] bg-white rounded-md border border-gray-200 focus:outline-none focus:ring-1 focus:ring-violet-300 resize-none"
+            />
+          </div>
+        )}
 
         {/* Connect prompt or chat list */}
         {!currentAccount || currentAccount.status !== "connected" ? (
@@ -786,34 +953,59 @@ export default function MessagingView() {
         {activeChat ? (
           <>
             {/* Chat header */}
-            <div className="h-12 bg-white border-b border-gray-200 flex items-center px-4 gap-3">
-              {activeChat.contact_avatar_url ? (
-                <img
-                  src={activeChat.contact_avatar_url}
-                  alt={activeChat.contact_name}
-                  className="w-8 h-8 rounded-full object-cover"
-                />
-              ) : (
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-white font-medium text-xs"
-                  style={{ background: avatarGradient(activeChat.contact_name || activeChat.remote_jid) }}
-                >
-                  {activeChat.contact_name?.[0]?.toUpperCase() || "?"}
+            <div className="bg-white border-b border-gray-200 px-4 py-2">
+              <div className="flex items-center gap-3">
+                {activeChat.contact_avatar_url ? (
+                  <img
+                    src={activeChat.contact_avatar_url}
+                    alt={activeChat.contact_name}
+                    className="w-8 h-8 rounded-full object-cover"
+                  />
+                ) : (
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white font-medium text-xs"
+                    style={{ background: avatarGradient(activeChat.contact_name || activeChat.remote_jid) }}
+                  >
+                    {activeChat.contact_name?.[0]?.toUpperCase() || "?"}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-medium text-gray-900">
+                    {activeChat.contact_name}
+                  </div>
+                  <div className="text-[11px] text-gray-500">
+                    {activeChat.contact_phone || activeChat.remote_jid}
+                  </div>
                 </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-medium text-gray-900">
-                  {activeChat.contact_name}
-                </div>
-                <div className="text-[11px] text-gray-500">
-                  {activeChat.contact_phone || activeChat.remote_jid}
-                </div>
+                {activeChat.auto_reply_enabled && (
+                  <span className="px-2 py-0.5 bg-violet-100 text-violet-600 text-[10px] font-medium rounded-full">
+                    Auto-respuesta activa
+                  </span>
+                )}
               </div>
-              {activeChat.auto_reply_enabled && (
-                <span className="px-2 py-0.5 bg-violet-100 text-violet-600 text-[10px] font-medium rounded-full">
-                  Auto-respuesta activa
-                </span>
-              )}
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  value={agentAlias}
+                  onChange={(e) => setAgentAlias(e.target.value)}
+                  placeholder="Nombre del agente (ej. Ventas)"
+                  className="flex-1 px-2 py-1 text-[11px] bg-gray-50 rounded-md border border-gray-200 focus:outline-none focus:ring-1 focus:ring-violet-300"
+                />
+                <button
+                  onClick={() => saveChatAgentRules(activeChat.auto_reply_enabled !== true)}
+                  disabled={agentRulesSaving}
+                  className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
+                    activeChat.auto_reply_enabled
+                      ? "bg-violet-600 text-white hover:bg-violet-700"
+                      : "bg-violet-100 text-violet-700 hover:bg-violet-200"
+                  } disabled:opacity-50`}
+                >
+                  {agentRulesSaving
+                    ? "Guardando..."
+                    : activeChat.auto_reply_enabled
+                      ? "Auto ON"
+                      : "Auto OFF"}
+                </button>
+              </div>
             </div>
 
             {/* Messages */}
@@ -881,10 +1073,10 @@ export default function MessagingView() {
                 />
                 <button
                   onClick={sendMessage}
-                  disabled={!newMessage.trim() || sending}
+                  disabled={!newMessage.trim()}
                   className="p-2 rounded-lg bg-green-500 text-white hover:bg-green-600 disabled:opacity-40 transition-colors shrink-0"
                 >
-                  <PaperAirplaneIcon className="w-5 h-5" />
+                  <PaperAirplaneIcon className={`w-5 h-5 ${pendingSends > 0 ? "opacity-70" : ""}`} />
                 </button>
               </div>
             </div>
