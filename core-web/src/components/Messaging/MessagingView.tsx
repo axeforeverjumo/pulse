@@ -426,9 +426,15 @@ export default function MessagingView() {
       return objectUrl;
     } catch (err) {
       console.error("Failed to fetch message media:", err);
+      const rawMessage = err instanceof Error ? err.message : "";
+      const normalized = rawMessage.toLowerCase();
+      let userMessage = "No se pudo cargar el adjunto.";
+      if (normalized.includes("expirado") || normalized.includes("410")) {
+        userMessage = "Este adjunto ya no esta disponible en WhatsApp.";
+      }
       setMediaErrorByMessage((prev) => ({
         ...prev,
-        [messageId]: "No se pudo cargar el adjunto.",
+        [messageId]: userMessage,
       }));
       return null;
     } finally {

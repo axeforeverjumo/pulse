@@ -285,6 +285,18 @@ def _default_mime_for_media_type(media_type: Optional[str]) -> str:
     return "application/octet-stream"
 
 
+def _is_generic_mime(mime_type: Optional[str]) -> bool:
+    if not isinstance(mime_type, str):
+        return True
+    normalized = mime_type.split(";", 1)[0].strip().lower()
+    return normalized in {
+        "",
+        "application/octet-stream",
+        "binary/octet-stream",
+        "application/download",
+    }
+
+
 def _infer_filename(
     remote_message_id: Optional[str],
     mime_type: Optional[str],
@@ -394,11 +406,23 @@ async def _fetch_whatsapp_media_payload(
                 headers={"apikey": EVOLUTION_API_KEY},
             )
         if response.status_code not in (200, 201):
+            response_detail = ""
+            try:
+                payload = response.json()
+                if isinstance(payload, dict):
+                    response_detail = str(
+                        payload.get("response", {}).get("message")
+                        or payload.get("message")
+                        or payload
+                    )
+            except Exception:
+                response_detail = response.text[:180] if response.text else ""
             logger.warning(
-                "getBase64FromMediaMessage failed (%s) for instance=%s msg=%s",
+                "getBase64FromMediaMessage failed (%s) for instance=%s msg=%s detail=%s",
                 response.status_code,
                 instance_name,
                 remote_message_id,
+                response_detail[:180],
             )
             return None, None, None
         payload = response.json() if response.content else {}
@@ -415,8 +439,11 @@ async def _fetch_whatsapp_media_payload(
     if not media_bytes:
         return None, None, None
 
-    final_mime = (mime_type or "").strip() or _default_mime_for_media_type(media_type)
+    fallback_mime = _default_mime_for_media_type(media_type)
+    final_mime = fallback_mime if _is_generic_mime(mime_type) else (mime_type or "").strip()
     final_name = _infer_filename(remote_message_id, final_mime, file_name)
+    if final_name.lower().endswith(".enc") and fallback_mime != "application/octet-stream":
+        final_name = _infer_filename(remote_message_id, fallback_mime, None)
     return media_bytes, final_mime, final_name
 
 
@@ -1477,6 +1504,8 @@ async def get_message_media(
         raise HTTPException(400, "Proveedor no soportado para multimedia")
 
     if not payload_bytes:
+        if provider == "whatsapp":
+            raise HTTPException(410, "Adjunto de WhatsApp no disponible (puede haber expirado)")
         raise HTTPException(502, "No se pudo recuperar el adjunto multimedia")
 
     final_mime = (mime_type or "").strip() or _default_mime_for_media_type(media_type)
