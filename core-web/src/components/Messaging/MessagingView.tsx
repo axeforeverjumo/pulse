@@ -78,6 +78,21 @@ export default function MessagingView() {
     if (accounts.length > 0) loadChats();
   }, [accounts, activeTab]);
 
+  // Keep chat list fresh even when no conversation is selected.
+  // Without this polling, incoming webhooks can write to DB but UI stays stale.
+  useEffect(() => {
+    const isConnectedForTab = accounts.some(
+      (account) => account.provider === activeTab && account.status === "connected",
+    );
+    if (isConnectedForTab === false) return;
+
+    const chatsPoll = setInterval(() => {
+      loadChats();
+    }, 5000);
+
+    return () => clearInterval(chatsPoll);
+  }, [accounts, activeTab]);
+
   // Poll for new messages in active chat
   useEffect(() => {
     if (!activeChat) return;
