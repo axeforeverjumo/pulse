@@ -851,6 +851,23 @@ def _agent_declared_no_code_changes(response_text: str) -> bool:
     ])
 
 
+def _agent_response_signals_stall_without_new_diff(response_text: str) -> bool:
+    value = (response_text or "").lower()
+    markers = [
+        "no existe un diff incremental nuevo",
+        "sin diff incremental nuevo",
+        "no puedo adjuntar un diff",
+        "no puedo devolver un bloque diff",
+        "no tengo un bloque diff",
+        "diff ya entregado",
+        "parches ya enviados",
+        "micro-iteraciones anteriores",
+        "ya fue entregada en micro-iteraciones",
+        "sin repetir exactamente",
+    ]
+    return any(marker in value for marker in markers)
+
+
 def _run_command(
     cmd: List[str],
     *,
@@ -1562,7 +1579,8 @@ async def _execute_project_agent_job(
             "- Si estás en `Estado: EN_PROGRESO` pero ya tocaste código, debes incluir igualmente un bloque ` ```diff ` (parcial válido) para commit incremental.\n"
             "- Está prohibido responder \"ya está hecho en mi rama local\" sin adjuntar diff aplicable.\n"
             "- Para evitar corrupción, genera y pega diff literal (por ejemplo `git diff -- <ruta>`), sin reescribirlo a mano.\n"
-            "- Si NO hay cambios de código necesarios, escribe explícitamente: `Sin cambios de código`."
+            "- Si NO hay cambios de código necesarios, escribe explícitamente: `Sin cambios de código`.\n"
+            "- Si no hay diff nuevo porque el cambio YA quedó aplicado en iteraciones previas, debes responder `Estado: COMPLETADA` + `Sin cambios de código`."
         )
         if repo_full_name_for_automation:
             task_context += (
@@ -1587,7 +1605,8 @@ async def _execute_project_agent_job(
                 "- Si vuelves a marcar `Estado: COMPLETADA`, debes devolver un bloque ` ```diff ` completo y aplicable.\n"
                 "- No uses `...`, no uses `@@` incompleto, no resumas hunks.\n"
                 "- Si no tienes cambios concretos listos para patch, responde `Estado: EN_PROGRESO`.\n"
-                "- En esta respuesta debes adjuntar al menos 1 diff real y aplicable (aunque sea de un solo archivo) o declarar explícitamente `Sin cambios de código`."
+                "- En esta respuesta debes adjuntar al menos 1 diff real y aplicable (aunque sea de un solo archivo) o declarar explícitamente `Sin cambios de código`.\n"
+                "- Si el cambio ya está aplicado y no hay diff incremental nuevo, responde `Estado: COMPLETADA` + `Sin cambios de código` (no te quedes en EN_PROGRESO)."
             )
 
     task_context += (
@@ -1672,6 +1691,54 @@ async def _execute_project_agent_job(
             )
 
     declared_no_code_changes = _agent_declared_no_code_changes(agent_response)
+    response_signals_stall = _agent_response_signals_stall_without_new_diff(agent_response)
+    previous_no_progress_count = 0
+    if isinstance(previous_payload, dict):
+        try:
+            previous_no_progress_count = int(previous_payload.get("no_progress_count") or 0)
+        except Exception:
+            previous_no_progress_count = 0
+
+    no_progress_iteration = (
+        not task_marked_complete
+        and bool(board.get("is_development"))
+        and ((git_result or {}).get("status") in {"no_patch", "skipped_no_code"})
+        and (declared_no_code_changes or response_signals_stall)
+    )
+    no_progress_count = (previous_no_progress_count + 1) if no_progress_iteration else 0
+    queue_recommendation = "queued"
+    queue_block_reason = ""
+    if no_progress_count == 2:
+        await _append_agent_activity_comment(
+            supabase,
+            issue_id=issue_id,
+            comment_user_id=comment_user_id,
+            agent=agent,
+            content=(
+                "⚠️ El agente va en EN_PROGRESO sin diff nuevo por segunda vez. "
+                "Si el cambio ya quedó aplicado, debe responder `Estado: COMPLETADA` + `Sin cambios de código`."
+            ),
+            workspace_id=task.get("workspace_id"),
+            workspace_app_id=task.get("workspace_app_id"),
+        )
+    if no_progress_count >= 3:
+        queue_recommendation = "blocked"
+        queue_block_reason = (
+            "Bloqueado por estancamiento: 3 iteraciones seguidas sin diff incremental nuevo."
+        )
+        await _append_agent_activity_comment(
+            supabase,
+            issue_id=issue_id,
+            comment_user_id=comment_user_id,
+            agent=agent,
+            content=(
+                "🛑 Cola pausada automáticamente por estancamiento (3 iteraciones sin diff nuevo). "
+                "Recomendación: reactivar con instrucción concreta o cerrar con "
+                "`Estado: COMPLETADA` + `Sin cambios de código`."
+            ),
+            workspace_id=task.get("workspace_id"),
+            workspace_app_id=task.get("workspace_app_id"),
+        )
 
     # On development boards we only allow QA handoff when persistence is guaranteed:
     # either a valid git publish result exists, or the agent explicitly declared no-code work.
@@ -1746,6 +1813,9 @@ async def _execute_project_agent_job(
         "task_completed": task_marked_complete,
         "response": agent_response,
         "git_result": git_result or {},
+        "no_progress_count": no_progress_count,
+        "queue_recommendation": queue_recommendation,
+        "queue_block_reason": queue_block_reason,
     }
 
 
@@ -1784,14 +1854,33 @@ async def _process_project_agent_queue_background(
                     fallback_user_id=fallback_user_id,
                 )
                 task_completed = bool(result_payload.get("task_completed"))
+                recommended_status = str(result_payload.get("queue_recommendation") or "").strip().lower()
+                next_status = "completed" if task_completed else (
+                    recommended_status if recommended_status in {"queued", "blocked"} else "queued"
+                )
+                next_error: Optional[str]
+                if task_completed:
+                    next_error = None
+                elif next_status == "blocked":
+                    next_error = (result_payload.get("queue_block_reason") or "Queue blocked").strip()[:2000]
+                else:
+                    next_error = ""
                 await update_project_agent_job(
                     supabase,
                     job_id,
-                    status="completed" if task_completed else "queued",
-                    error="" if not task_completed else None,
+                    status=next_status,
+                    error=next_error,
                     payload_patch={**(job.get("payload") or {}), **result_payload},
                 )
                 if not task_completed:
+                    if next_status == "blocked":
+                        logger.info(
+                            "Queue job %s blocked due to stagnation (issue=%s agent=%s)",
+                            job_id,
+                            job.get("issue_id"),
+                            job.get("agent_id"),
+                        )
+                        break
                     # Enforce strict sequence: keep iterating the same issue until it reaches QA/Done
                     # before claiming any newer queued issue for this agent.
                     current_attempts = int(job.get("attempts") or 0)
