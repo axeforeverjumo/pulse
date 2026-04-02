@@ -1106,12 +1106,16 @@ async def _extract_attachment_excerpt(url: str, mime_type: str, filename: str) -
 
 
 def _is_agent_task_marked_complete(response_text: str) -> bool:
-    response_lower = (response_text or "").lower()
-    return any(phrase in response_lower for phrase in [
-        "tarea completada", "tarea finalizada", "he terminado", "trabajo completado",
-        "he completado", "tarea resuelta", "queda resuelto", "listo",
-        "task completed", "task done", "work complete",
-    ])
+    text = (response_text or "")
+    if not text.strip():
+        return False
+    if re.search(r"(?im)^\\s*estado\\s*:\\s*completada\\b", text):
+        return True
+    if re.search(r"(?im)^\\s*tarea\\s+completada\\b", text):
+        return True
+    if re.search(r"(?im)^\\s*status\\s*:\\s*completed\\b", text):
+        return True
+    return False
 
 
 async def _append_agent_activity_comment(
@@ -1302,6 +1306,12 @@ async def _execute_project_agent_job(
             )
     if attachment_context:
         task_context += f"\n\nContexto de adjuntos (si hay texto útil):\n{attachment_context}"
+    task_context += (
+        "\n\nFormato de salida obligatorio:\n"
+        "- Primera línea: `Estado: COMPLETADA` o `Estado: EN_PROGRESO`\n"
+        "- Luego: resumen breve de lo hecho y lo pendiente.\n"
+        "- Si completaste de verdad la tarea, incluye en una línea separada exacta: `Tarea completada`."
+    )
 
     if agent.get("tier") == "core":
         import anthropic
@@ -1313,8 +1323,7 @@ async def _execute_project_agent_job(
             f"{agent.get('soul_md', '')}\n\n"
             f"{agent.get('identity_md', '')}\n\n"
             "Te han asignado una tarea en un tablero Kanban.\n"
-            "Si la terminas, escribe exactamente 'Tarea completada' al final.\n"
-            "Si no está terminada, explica qué hiciste y qué falta.\n"
+            "Respeta el formato de salida obligatorio indicado por el usuario.\n"
             "Responde en español."
         )
 
@@ -1331,7 +1340,7 @@ async def _execute_project_agent_job(
                 "http://127.0.0.1:4200",
                 json={
                     "model": f"openclaw:{agent.get('openclaw_agent_id', '')}",
-                    "messages": [{"role": "user", "content": f"[Pulse Task] Tarea asignada:\n\n{task_context}\n\nTrabaja en esta tarea."}]
+                    "messages": [{"role": "user", "content": f"[Pulse Task] Tarea asignada:\n\n{task_context}\n\nTrabaja en esta tarea y respeta el formato de salida obligatorio."}]
                 }
             )
             if resp.status_code == 200:
