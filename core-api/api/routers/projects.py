@@ -646,6 +646,39 @@ def _looks_like_git_diff(text: str) -> bool:
     return ("--- " in value and "+++ " in value and "@@" in value)
 
 
+def _normalize_git_diff_text(raw_text: str) -> str:
+    """Normalize model-produced diff blocks so git apply gets cleaner input."""
+    text = (raw_text or "").replace("\r\n", "\n").replace("\r", "\n")
+    lines = text.split("\n")
+    normalized: List[str] = []
+    started = False
+
+    for line in lines:
+        value = line.strip()
+
+        # Drop markdown wrappers/noise that often leaks into model output.
+        if value.startswith("```"):
+            continue
+        if value in {"...", "…"}:
+            continue
+
+        # If the model quoted lines in markdown, keep the raw patch content.
+        if line.startswith("> "):
+            line = line[2:]
+            value = line.strip()
+
+        if not started:
+            if line.startswith("diff --git ") or line.startswith("--- "):
+                started = True
+            else:
+                continue
+
+        normalized.append(line.rstrip())
+
+    out = "\n".join(normalized).strip()
+    return (out + "\n") if out else ""
+
+
 def _extract_git_diff_from_response(response_text: str) -> Optional[str]:
     text = response_text or ""
     if not text.strip():
@@ -653,13 +686,15 @@ def _extract_git_diff_from_response(response_text: str) -> Optional[str]:
 
     # Prefer explicit diff/patch fences.
     for block in re.findall(r"```(?:diff|patch)\s*\n([\s\S]*?)```", text, flags=re.IGNORECASE):
-        if _looks_like_git_diff(block):
-            return block.strip() + "\n"
+        candidate = _normalize_git_diff_text(block)
+        if _looks_like_git_diff(candidate):
+            return candidate
 
     # Fallback: generic fences that still contain unified diff content.
     for block in re.findall(r"```\s*\n([\s\S]*?)```", text):
-        if _looks_like_git_diff(block):
-            return block.strip() + "\n"
+        candidate = _normalize_git_diff_text(block)
+        if _looks_like_git_diff(candidate):
+            return candidate
 
     # Last fallback: raw text starting at diff marker.
     diff_index = text.find("diff --git ")
@@ -668,11 +703,13 @@ def _extract_git_diff_from_response(response_text: str) -> Optional[str]:
         fence_index = candidate.find("```")
         if fence_index >= 0:
             candidate = candidate[:fence_index]
+        candidate = _normalize_git_diff_text(candidate)
         if _looks_like_git_diff(candidate):
-            return candidate.strip() + "\n"
+            return candidate
 
-    if _looks_like_git_diff(text):
-        return text.strip() + "\n"
+    candidate = _normalize_git_diff_text(text)
+    if _looks_like_git_diff(candidate):
+        return candidate
     return None
 
 
@@ -808,7 +845,11 @@ def _apply_patch_and_push_to_github(
 
         applied = False
         try:
-            _run_command(["git", "apply", "--3way", "--whitespace=fix", patch_path], cwd=repo_dir, env=env)
+            _run_command(
+                ["git", "apply", "--3way", "--recount", "--whitespace=fix", patch_path],
+                cwd=repo_dir,
+                env=env,
+            )
             applied = True
         except Exception as apply_error:
             conflict_resolved = False
@@ -831,7 +872,11 @@ def _apply_patch_and_push_to_github(
                 # Clean any partial index/worktree before alternate apply strategy.
                 _run_command(["git", "reset", "--hard", "HEAD"], cwd=repo_dir, env=env)
                 try:
-                    _run_command(["git", "apply", "--reject", "--whitespace=fix", patch_path], cwd=repo_dir, env=env)
+                    _run_command(
+                        ["git", "apply", "--reject", "--recount", "--whitespace=fix", patch_path],
+                        cwd=repo_dir,
+                        env=env,
+                    )
                     applied = True
                 except Exception:
                     # If reverse-check passes, patch is already effectively applied on target branch.
@@ -1367,6 +1412,7 @@ async def _execute_project_agent_job(
             f"- Usuario servidor: {server_user}\n"
             f"- Puerto servidor: {server_port}\n"
             "- Si haces cambios de código, devuelve el resultado con `Branch:`, `Commit message:` y un bloque ` ```diff ` aplicable.\n"
+            "- El bloque ` ```diff ` debe ser completo y exacto: NO uses `...`, NO truncar contenido, NO resumir hunks.\n"
             "- Si NO hay cambios de código necesarios, escribe explícitamente: `Sin cambios de código`."
         )
         if repo_full_name_for_automation:
