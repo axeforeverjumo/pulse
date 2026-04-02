@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, status, Depends, Query
 from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime
+import asyncio
 import html
 import io
 import mimetypes
@@ -49,11 +50,18 @@ from api.services.projects import (
 )
 from api.dependencies import get_current_user_jwt, get_current_user_id
 from api.exceptions import handle_api_exception
+from api.services.projects.agent_queue import (
+    enqueue_project_agent_job,
+    claim_next_project_agent_job,
+    update_project_agent_job,
+    list_project_agent_jobs,
+)
 from lib.image_proxy import generate_file_url
 import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/projects", tags=["projects"])
+_AGENT_QUEUE_WORKER_LOCK = asyncio.Lock()
 
 
 # ============================================================================
@@ -472,6 +480,43 @@ class CommentListResponse(BaseModel):
     total_count: int  # Total comments for this issue
 
 
+class AgentQueueJobResponse(BaseModel):
+    """Response model for a queued/running/completed agent execution job."""
+    id: str
+    workspace_id: str
+    workspace_app_id: str
+    board_id: str
+    issue_id: str
+    agent_id: str
+    requested_by: Optional[str] = None
+    source: str
+    priority: int
+    status: str
+    payload: Dict[str, Any] = Field(default_factory=dict)
+    attempts: int = 0
+    max_attempts: int = 1
+    last_error: Optional[str] = None
+    claimed_at: Optional[str] = None
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class AgentQueueJobListResponse(BaseModel):
+    """Response model for agent queue listing."""
+    jobs: List[AgentQueueJobResponse]
+    count: int
+
+
+class AgentQueueProcessResponse(BaseModel):
+    """Response model for manual queue processing."""
+    processed: int
+
+
 def _normalize_state_name(name: Optional[str]) -> str:
     return (name or "").strip().lower()
 
@@ -614,6 +659,53 @@ async def _get_agent_assignee_ids(supabase: Any, issue_id: str) -> List[str]:
     return list({row.get("agent_id") for row in rows if row.get("agent_id")})
 
 
+async def _get_issue_queue_context(supabase: Any, issue_id: str) -> Optional[Dict[str, Any]]:
+    issue_result = await supabase.table("project_issues")\
+        .select("id, workspace_id, workspace_app_id, board_id, state_id, priority")\
+        .eq("id", issue_id)\
+        .maybe_single()\
+        .execute()
+    return issue_result.data if issue_result else None
+
+
+async def _state_name_by_id(supabase: Any, state_id: Optional[str]) -> Optional[str]:
+    if not state_id:
+        return None
+    state_result = await supabase.table("project_states")\
+        .select("name")\
+        .eq("id", state_id)\
+        .maybe_single()\
+        .execute()
+    state = state_result.data or {}
+    return state.get("name")
+
+
+async def _enqueue_issue_agent_job(
+    supabase: Any,
+    issue: Dict[str, Any],
+    agent_id: str,
+    *,
+    requested_by: Optional[str],
+    source: str,
+    reason: Optional[str] = None,
+) -> str:
+    payload = {
+        "issue_id": issue.get("id"),
+        "board_id": issue.get("board_id"),
+        "queued_reason": reason or source,
+        "queued_at": datetime.utcnow().isoformat() + "Z",
+    }
+    return await enqueue_project_agent_job(
+        supabase=supabase,
+        issue=issue,
+        agent_id=agent_id,
+        requested_by=requested_by,
+        source=source,
+        payload=payload,
+        max_attempts=4,
+    )
+
+
 async def _trigger_assigned_agents_if_in_progress(
     issue_id: str,
     target_state_id: str,
@@ -621,21 +713,41 @@ async def _trigger_assigned_agents_if_in_progress(
     user_id: str,
 ) -> None:
     from lib.supabase_client import get_async_service_role_client
-    import asyncio
-
     supabase = await get_async_service_role_client()
-    state_result = await supabase.table("project_states")\
-        .select("name")\
-        .eq("id", target_state_id)\
-        .maybe_single()\
-        .execute()
-    state = state_result.data or {}
-    if not _is_in_progress_state(state.get("name")):
+    target_state_name = await _state_name_by_id(supabase, target_state_id)
+    if not _is_in_progress_state(target_state_name):
+        return
+
+    issue = await _get_issue_queue_context(supabase, issue_id)
+    if not issue:
         return
 
     agent_ids = await _get_agent_assignee_ids(supabase, issue_id)
     for agent_id in agent_ids:
-        asyncio.create_task(_trigger_agent_work_background(issue_id, agent_id, user_jwt, user_id))
+        try:
+            await _enqueue_issue_agent_job(
+                supabase,
+                issue,
+                agent_id,
+                requested_by=user_id,
+                source="state_transition",
+                reason=f"issue moved to '{target_state_name or target_state_id}'",
+            )
+        except Exception as enqueue_error:
+            logger.warning(
+                "Failed to enqueue agent job for issue %s agent %s: %s",
+                issue_id,
+                agent_id,
+                enqueue_error,
+            )
+
+    asyncio.create_task(
+        _process_project_agent_queue_background(
+            user_jwt=user_jwt,
+            fallback_user_id=user_id,
+            max_jobs=8,
+        )
+    )
 
 
 async def _extract_attachment_excerpt(url: str, mime_type: str, filename: str) -> Optional[str]:
@@ -685,6 +797,228 @@ async def _extract_attachment_excerpt(url: str, mime_type: str, filename: str) -
         return cleaned[:4000]
     except Exception:
         return None
+
+
+def _is_agent_task_marked_complete(response_text: str) -> bool:
+    response_lower = (response_text or "").lower()
+    return any(phrase in response_lower for phrase in [
+        "tarea completada", "tarea finalizada", "he terminado", "trabajo completado",
+        "he completado", "tarea resuelta", "queda resuelto", "listo",
+        "task completed", "task done", "work complete",
+    ])
+
+
+async def _execute_project_agent_job(
+    supabase: Any,
+    job: Dict[str, Any],
+    *,
+    fallback_user_id: Optional[str],
+) -> Dict[str, Any]:
+    issue_id = job.get("issue_id")
+    agent_id = job.get("agent_id")
+    if not issue_id or not agent_id:
+        raise ValueError("Queue job missing issue_id or agent_id")
+
+    # Get task details (include board_id to find states)
+    task_result = await supabase.table("project_issues")\
+        .select("id, title, description, priority, board_id, state_id, image_r2_keys, checklist_items, created_by")\
+        .eq("id", issue_id)\
+        .maybe_single()\
+        .execute()
+    if not task_result or not task_result.data:
+        raise ValueError(f"Issue not found: {issue_id}")
+    task = task_result.data
+
+    current_state_name = await _state_name_by_id(supabase, task.get("state_id"))
+    if not _is_in_progress_state(current_state_name):
+        raise RuntimeError("Issue is no longer in progress; blocking queue job")
+
+    # Get agent details
+    agent_result = await supabase.table("openclaw_agents").select("*").eq("id", agent_id).maybe_single().execute()
+    if not agent_result or not agent_result.data:
+        raise ValueError(f"Agent not found: {agent_id}")
+    agent = agent_result.data
+
+    # Find workflow states for this board
+    states_result = await supabase.table("project_states")\
+        .select("id, name, is_done")\
+        .eq("board_id", task["board_id"])\
+        .order("position")\
+        .execute()
+    states = states_result.data or []
+    qa_id = None
+    done_id = None
+    for state in states:
+        state_name = state.get("name")
+        if _is_qa_state(state_name):
+            qa_id = state["id"]
+        elif state.get("is_done") or _is_done_state(state_name):
+            done_id = state["id"]
+
+    checklist_items = task.get("checklist_items") or []
+    if not checklist_items:
+        checklist_items = _build_default_checklist(task.get("title", ""))
+        await supabase.table("project_issues")\
+            .update({"checklist_items": checklist_items})\
+            .eq("id", issue_id)\
+            .execute()
+
+    attachment_context, attachments = await _build_issue_attachment_context(supabase, task)
+    checklist_text = "\n".join(
+        f"- [{'x' if item.get('done') else ' '}] {item.get('text', '')}"
+        for item in checklist_items
+        if isinstance(item, dict)
+    ) or "- [ ] Sin checklist todavía"
+
+    task_context = (
+        f"Título: {task['title']}\n"
+        f"Descripción: {task.get('description') or 'Sin descripción'}\n"
+        f"Prioridad: {task.get('priority', 0)}\n\n"
+        f"Checklist actual:\n{checklist_text}"
+    )
+    if attachment_context:
+        task_context += f"\n\nContexto de adjuntos (si hay texto útil):\n{attachment_context}"
+
+    if agent.get("tier") == "core":
+        import anthropic
+        from api.config import settings
+
+        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        system_prompt = (
+            f"Eres {agent['name']}.\n\n"
+            f"{agent.get('soul_md', '')}\n\n"
+            f"{agent.get('identity_md', '')}\n\n"
+            "Te han asignado una tarea en un tablero Kanban.\n"
+            "Si la terminas, escribe exactamente 'Tarea completada' al final.\n"
+            "Si no está terminada, explica qué hiciste y qué falta.\n"
+            "Responde en español."
+        )
+
+        response = await client.messages.create(
+            model=agent.get("model", "claude-haiku-4-5-20251001"),
+            max_tokens=2048,
+            system=system_prompt,
+            messages=[{"role": "user", "content": f"Tarea asignada:\n\n{task_context}\n\nTrabaja en esta tarea."}],
+        )
+        agent_response = response.content[0].text
+    else:
+        async with httpx.AsyncClient(timeout=180.0) as http_client:
+            resp = await http_client.post(
+                "http://127.0.0.1:4200",
+                json={
+                    "model": f"openclaw:{agent.get('openclaw_agent_id', '')}",
+                    "messages": [{"role": "user", "content": f"[Pulse Task] Tarea asignada:\n\n{task_context}\n\nTrabaja en esta tarea."}]
+                }
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                agent_response = data.get("choices", [{}])[0].get("message", {}).get("content", "No pude procesar la tarea.")
+            else:
+                raise RuntimeError(f"OpenClaw bridge error ({resp.status_code}): {resp.text[:300]}")
+
+    comment_user_id = job.get("requested_by") or fallback_user_id or task.get("created_by")
+    if not comment_user_id:
+        raise RuntimeError("Cannot resolve comment author for agent output")
+
+    await supabase.table("project_issue_comments").insert({
+        "issue_id": issue_id,
+        "user_id": comment_user_id,
+        "blocks": [
+            {
+                "type": "agent_meta",
+                "data": {
+                    "agent_id": agent.get("id"),
+                    "name": agent.get("name"),
+                    "avatar_url": agent.get("avatar_url"),
+                },
+            },
+            {"type": "text", "data": {"content": agent_response}},
+        ],
+    }).execute()
+
+    if _is_agent_task_marked_complete(agent_response):
+        updates: Dict[str, Any] = {}
+        qa_or_done = qa_id or done_id
+        if qa_or_done:
+            updates["state_id"] = qa_or_done
+        if checklist_items:
+            updates["checklist_items"] = _mark_checklist_done(checklist_items)
+        if updates:
+            await supabase.table("project_issues").update(updates).eq("id", issue_id).execute()
+        logger.info(
+            "Agent marked issue %s as complete (moved to %s)",
+            issue_id,
+            "QA" if qa_id else "Done",
+        )
+
+    logger.info(
+        "Agent %s responded on issue %s (attachments=%s)",
+        agent.get("name"),
+        issue_id,
+        len(attachments),
+    )
+    return {"issue_id": issue_id, "agent_id": agent_id, "response": agent_response}
+
+
+async def _process_project_agent_queue_background(
+    *,
+    user_jwt: Optional[str],
+    fallback_user_id: Optional[str],
+    max_jobs: int = 8,
+) -> int:
+    from lib.supabase_client import get_async_service_role_client
+
+    if _AGENT_QUEUE_WORKER_LOCK.locked():
+        return 0
+
+    processed = 0
+    async with _AGENT_QUEUE_WORKER_LOCK:
+        supabase = await get_async_service_role_client()
+        for _ in range(max(1, min(max_jobs, 50))):
+            job = await claim_next_project_agent_job(supabase)
+            if not job:
+                break
+
+            job_id = job.get("id")
+            if not job_id:
+                continue
+
+            try:
+                result_payload = await _execute_project_agent_job(
+                    supabase,
+                    job,
+                    fallback_user_id=fallback_user_id,
+                )
+                await update_project_agent_job(
+                    supabase,
+                    job_id,
+                    status="completed",
+                    payload_patch={**(job.get("payload") or {}), **result_payload},
+                )
+                processed += 1
+            except Exception as exc:
+                message = str(exc)
+                status_for_error = "blocked" if "no longer in progress" in message.lower() else "queued"
+                attempts = int(job.get("attempts") or 0)
+                max_attempts = int(job.get("max_attempts") or 1)
+                if attempts >= max_attempts and status_for_error == "queued":
+                    status_for_error = "failed"
+                await update_project_agent_job(
+                    supabase,
+                    job_id,
+                    status=status_for_error,
+                    error=message,
+                    payload_patch=job.get("payload") or {},
+                )
+                logger.warning(
+                    "Queue job %s failed (status=%s attempts=%s/%s): %s",
+                    job_id,
+                    status_for_error,
+                    attempts,
+                    max_attempts,
+                    message,
+                )
+    return processed
 
 
 # ============================================================================
@@ -954,6 +1288,51 @@ async def create_github_repository_endpoint(
         handle_api_exception(e, "Failed to create GitHub repository", logger)
 
 
+@router.get("/agent-queue", response_model=AgentQueueJobListResponse)
+async def list_agent_queue_endpoint(
+    workspace_app_id: Optional[str] = Query(None, description="Filter by workspace app"),
+    agent_id: Optional[str] = Query(None, description="Filter by assigned agent"),
+    issue_id: Optional[str] = Query(None, description="Filter by issue"),
+    status_filter: Optional[str] = Query(None, alias="status", description="Filter by queue status"),
+    limit: int = Query(50, ge=1, le=200),
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """List project agent queue jobs."""
+    try:
+        from lib.supabase_client import get_authenticated_async_client
+
+        supabase = await get_authenticated_async_client(user_jwt)
+        jobs = await list_project_agent_jobs(
+            supabase,
+            workspace_app_id=workspace_app_id,
+            agent_id=agent_id,
+            issue_id=issue_id,
+            status=status_filter,
+            limit=limit,
+        )
+        return {"jobs": jobs, "count": len(jobs)}
+    except Exception as e:
+        handle_api_exception(e, "Failed to list agent queue jobs", logger)
+
+
+@router.post("/agent-queue/process", response_model=AgentQueueProcessResponse)
+async def process_agent_queue_endpoint(
+    max_jobs: int = Query(8, ge=1, le=50, description="Maximum queued jobs to process in this run"),
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Manually trigger project agent queue processing."""
+    try:
+        processed = await _process_project_agent_queue_background(
+            user_jwt=user_jwt,
+            fallback_user_id=user_id,
+            max_jobs=max_jobs,
+        )
+        return {"processed": processed}
+    except Exception as e:
+        handle_api_exception(e, "Failed to process agent queue", logger)
+
+
 # ============================================================================
 # State Endpoints
 # ============================================================================
@@ -1217,9 +1596,28 @@ async def add_agent_assignee_endpoint(
     try:
         assignee = await add_agent_assignee(user_jwt, issue_id, request.agent_id)
 
-        # Auto-trigger agent to work on the task in background
-        import asyncio
-        asyncio.create_task(_trigger_agent_work_background(issue_id, request.agent_id, user_jwt, user_id))
+        # If issue is already in progress, enqueue immediate agent execution.
+        from lib.supabase_client import get_async_service_role_client
+        supabase = await get_async_service_role_client()
+        issue = await _get_issue_queue_context(supabase, issue_id)
+        if issue:
+            state_name = await _state_name_by_id(supabase, issue.get("state_id"))
+            if _is_in_progress_state(state_name):
+                await _enqueue_issue_agent_job(
+                    supabase,
+                    issue,
+                    request.agent_id,
+                    requested_by=user_id,
+                    source="agent_assignment",
+                    reason="agent assigned while issue is in progress",
+                )
+                asyncio.create_task(
+                    _process_project_agent_queue_background(
+                        user_jwt=user_jwt,
+                        fallback_user_id=user_id,
+                        max_jobs=8,
+                    )
+                )
 
         return assignee
     except Exception as e:
@@ -1238,158 +1636,28 @@ async def add_agent_assignee_endpoint(
 
 
 async def _trigger_agent_work_background(issue_id: str, agent_id: str, user_jwt: str, user_id: str):
-    """Background task: make the agent work on the assigned issue."""
+    """Compatibility wrapper: enqueue issue work and run queue processor."""
     try:
-        from lib.supabase_client import get_async_service_role_client, get_authenticated_async_client
-
+        from lib.supabase_client import get_async_service_role_client
         supabase = await get_async_service_role_client()
-
-        # Get task details (include board_id to find states)
-        task_result = await supabase.table("project_issues")\
-            .select("title, description, priority, board_id, state_id, image_r2_keys, checklist_items")\
-            .eq("id", issue_id)\
-            .maybe_single()\
-            .execute()
-        if not task_result or not task_result.data:
+        issue = await _get_issue_queue_context(supabase, issue_id)
+        if not issue:
             return
-
-        task = task_result.data
-
-        # Get agent details
-        agent_result = await supabase.table("openclaw_agents").select("*").eq("id", agent_id).maybe_single().execute()
-        if not agent_result or not agent_result.data:
+        state_name = await _state_name_by_id(supabase, issue.get("state_id"))
+        if not _is_in_progress_state(state_name):
             return
-
-        agent = agent_result.data
-
-        # Find workflow states for this board
-        states_result = await supabase.table("project_states")\
-            .select("id, name, is_done")\
-            .eq("board_id", task["board_id"])\
-            .order("position")\
-            .execute()
-        states = states_result.data or []
-        in_progress_id = None
-        qa_id = None
-        done_id = None
-        for s in states:
-            state_name = s.get("name")
-            if _is_in_progress_state(state_name):
-                in_progress_id = s["id"]
-            elif _is_qa_state(state_name):
-                qa_id = s["id"]
-            elif s.get("is_done") or _is_done_state(state_name):
-                done_id = s["id"]
-
-        # Move task to "In Progress"
-        if in_progress_id and task["state_id"] != in_progress_id:
-            await supabase.table("project_issues").update({"state_id": in_progress_id}).eq("id", issue_id).execute()
-            logger.info(f"Moved issue {issue_id} to In Progress")
-
-        checklist_items = task.get("checklist_items") or []
-        if not checklist_items:
-            checklist_items = _build_default_checklist(task.get("title", ""))
-            await supabase.table("project_issues")\
-                .update({"checklist_items": checklist_items})\
-                .eq("id", issue_id)\
-                .execute()
-
-        attachment_context, attachments = await _build_issue_attachment_context(supabase, task)
-        checklist_text = "\n".join(
-            f"- [{'x' if item.get('done') else ' '}] {item.get('text', '')}"
-            for item in checklist_items
-            if isinstance(item, dict)
-        ) or "- [ ] Sin checklist todavía"
-
-        task_context = (
-            f"Título: {task['title']}\n"
-            f"Descripción: {task.get('description') or 'Sin descripción'}\n"
-            f"Prioridad: {task.get('priority', 0)}\n\n"
-            f"Checklist actual:\n{checklist_text}"
+        await _enqueue_issue_agent_job(
+            supabase,
+            issue,
+            agent_id,
+            requested_by=user_id,
+            source="manual_trigger",
+            reason="manual background trigger",
         )
-        if attachment_context:
-            task_context += f"\n\nContexto de adjuntos (si hay texto útil):\n{attachment_context}"
-
-        if agent.get("tier") == "core":
-            import anthropic
-            from api.config import settings
-
-            client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-            system_prompt = (
-                f"Eres {agent['name']}.\n\n"
-                f"{agent.get('soul_md', '')}\n\n"
-                f"{agent.get('identity_md', '')}\n\n"
-                "Te han asignado una tarea en un tablero Kanban.\n"
-                "Si la terminas, escribe exactamente 'Tarea completada' al final.\n"
-                "Si no está terminada, explica qué hiciste y qué falta.\n"
-                "Responde en español."
-            )
-
-            response = await client.messages.create(
-                model=agent.get("model", "claude-haiku-4-5-20251001"),
-                max_tokens=2048,
-                system=system_prompt,
-                messages=[{"role": "user", "content": f"Tarea asignada:\n\n{task_context}\n\nTrabaja en esta tarea."}],
-            )
-            agent_response = response.content[0].text
-        else:
-            import httpx
-            async with httpx.AsyncClient(timeout=180.0) as http_client:
-                resp = await http_client.post(
-                    "http://127.0.0.1:4200",
-                    json={
-                        "model": f"openclaw:{agent.get('openclaw_agent_id', '')}",
-                        "messages": [{"role": "user", "content": f"[Pulse Task] Tarea asignada:\n\n{task_context}\n\nTrabaja en esta tarea."}]
-                    }
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    agent_response = data.get("choices", [{}])[0].get("message", {}).get("content", "No pude procesar la tarea.")
-                else:
-                    agent_response = "Error al conectar con el agente."
-
-        # Save response as comment on the task
-        auth_supabase = await get_authenticated_async_client(user_jwt)
-        await auth_supabase.table("project_issue_comments").insert({
-            "issue_id": issue_id,
-            "user_id": user_id,
-            "blocks": [
-                {
-                    "type": "agent_meta",
-                    "data": {
-                        "agent_id": agent.get("id"),
-                        "name": agent.get("name"),
-                        "avatar_url": agent.get("avatar_url"),
-                    },
-                },
-                {"type": "text", "data": {"content": agent_response}},
-            ],
-        }).execute()
-
-        # Check if agent considers the task complete
-        response_lower = agent_response.lower()
-        task_complete = any(phrase in response_lower for phrase in [
-            "tarea completada", "tarea finalizada", "he terminado", "trabajo completado",
-            "he completado", "tarea resuelta", "queda resuelto", "listo",
-            "task completed", "task done", "work complete",
-        ])
-
-        if task_complete:
-            updates: Dict[str, Any] = {}
-            qa_or_done = qa_id or done_id
-            if qa_or_done:
-                updates["state_id"] = qa_or_done
-            if checklist_items:
-                updates["checklist_items"] = _mark_checklist_done(checklist_items)
-            if updates:
-                await supabase.table("project_issues").update(updates).eq("id", issue_id).execute()
-            logger.info("Agent marked issue %s as complete (moved to %s)", issue_id, "QA" if qa_id else "Done")
-
-        logger.info(
-            "Agent %s responded on issue %s (attachments=%s)",
-            agent.get("name"),
-            issue_id,
-            len(attachments),
+        await _process_project_agent_queue_background(
+            user_jwt=user_jwt,
+            fallback_user_id=user_id,
+            max_jobs=8,
         )
     except Exception as e:
         logger.error(f"Agent work-on-task failed for issue {issue_id}: {e}")

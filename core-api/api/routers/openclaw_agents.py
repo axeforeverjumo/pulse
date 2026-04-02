@@ -510,8 +510,8 @@ async def agent_work_on_task(
     user_jwt: str = Depends(get_current_user_jwt),
     user_id: str = Depends(get_current_user_id),
 ):
-    """Trigger an agent to analyze and work on a project task. Saves response as a comment."""
-    from api.services.projects import create_comment
+    """Trigger project task work via the unified project-agent queue."""
+    from api.routers.projects import _trigger_agent_work_background
 
     supabase = await get_async_service_role_client()
 
@@ -525,85 +525,45 @@ async def agent_work_on_task(
     if not agent_result or not agent_result.data:
         raise HTTPException(status_code=404, detail="Agente no encontrado")
 
-    agent = agent_result.data
-    task_data = task_result.data
+    await _trigger_agent_work_background(issue_id, request.agent_id, user_jwt, user_id)
 
-    task_context = f"""Titulo: {task_data['title']}
-Descripcion: {task_data.get('description') or 'Sin descripcion'}
-Prioridad: {task_data.get('priority', 0)}"""
-
-    if agent.get("tier") == "core":
-        # Core agent: call Haiku directly
-        import anthropic
-        from api.config import settings
-
-        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-
-        system_prompt = f"""Eres {agent['name']}.
-
-{agent.get('soul_md', '')}
-
-{agent.get('identity_md', '')}
-
-Te han asignado una tarea de proyecto. Analiza la tarea y proporciona tu plan de accion, observaciones o entregables. Responde de forma concreta y util. Responde siempre en espanol."""
-
-        try:
-            response = await client.messages.create(
-                model=agent.get("model", "claude-haiku-4-5-20251001"),
-                max_tokens=2048,
-                system=system_prompt,
-                messages=[{"role": "user", "content": f"Tarea asignada:\n\n{task_context}\n\nTrabaja en esta tarea."}],
-            )
-            agent_response = response.content[0].text
-        except Exception as e:
-            logger.error(f"Haiku API error on task work: {e}")
-            agent_response = "No pude procesar la tarea en este momento. Intentalo mas tarde."
-    else:
-        # Advance agent: proxy to OpenClaw bridge
-        try:
-            async with httpx.AsyncClient(timeout=180.0) as http_client:
-                resp = await http_client.post(
-                    OPENCLAW_BRIDGE_URL,
-                    json={
-                        "model": f"openclaw:{agent['openclaw_agent_id']}",
-                        "messages": [
-                            {"role": "user", "content": f"[Pulse Task Assignment] Tarea asignada:\n\n{task_context}\n\nTrabaja en esta tarea. Crea documentos, analiza, desarrolla lo que necesites."}
-                        ]
-                    }
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    agent_response = data.get("choices", [{}])[0].get("message", {}).get("content", "No pude procesar la tarea.")
-                else:
-                    logger.error(f"OpenClaw bridge error on task work: {resp.status_code} {resp.text}")
-                    agent_response = "Error al conectar con el agente."
-        except httpx.TimeoutException:
-            agent_response = "El agente tardo demasiado en responder."
-        except httpx.ConnectError:
-            agent_response = "No se pudo conectar con el agente."
-        except Exception as e:
-            logger.error(f"OpenClaw error on task work: {e}")
-            agent_response = "Error al procesar la tarea."
-
-    # Save agent's response as a comment on the task
-    blocks = [
-        {
-            "type": "agent_meta",
-            "data": {
-                "agent_id": agent.get("id"),
-                "name": agent.get("name"),
-                "avatar_url": agent.get("avatar_url"),
-            },
-        },
-        {"type": "text", "data": {"content": agent_response}},
-    ]
-
+    # Best-effort: return latest response text for this agent from comments
+    latest_comment_text = None
     try:
-        await create_comment(user_id, user_jwt, issue_id, blocks)
-    except Exception as e:
-        logger.error(f"Failed to save agent comment on task {issue_id}: {e}")
+        comments_result = await supabase.table("project_issue_comments")\
+            .select("blocks")\
+            .eq("issue_id", issue_id)\
+            .order("created_at", desc=True)\
+            .limit(8)\
+            .execute()
+        for comment in (comments_result.data or []):
+            blocks = comment.get("blocks") or []
+            if not isinstance(blocks, list):
+                continue
+            found_agent = False
+            found_text = None
+            for block in blocks:
+                if not isinstance(block, dict):
+                    continue
+                block_type = block.get("type")
+                block_data = block.get("data") if isinstance(block.get("data"), dict) else {}
+                if block_type == "agent_meta" and block_data.get("agent_id") == request.agent_id:
+                    found_agent = True
+                if block_type == "text":
+                    maybe_text = block_data.get("content")
+                    if isinstance(maybe_text, str) and maybe_text.strip():
+                        found_text = maybe_text
+            if found_agent and found_text:
+                latest_comment_text = found_text
+                break
+    except Exception:
+        latest_comment_text = None
 
-    return {"status": "ok", "response": agent_response}
+    return {
+        "status": "ok",
+        "response": latest_comment_text or "Trabajo encolado y procesado por el agente.",
+        "queued": True,
+    }
 
 
 # ── Multi-agent dispatch (sidebar chat @mentions) ──

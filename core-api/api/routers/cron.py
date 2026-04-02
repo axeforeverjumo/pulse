@@ -123,6 +123,7 @@ class AgentHealthResponse(BaseModel):
     checked: int = 0
     healthy: int = 0
     errors: int = 0
+    queue_processed: int = 0
     duration_seconds: Optional[float] = None
 
 
@@ -1152,7 +1153,14 @@ async def cron_agent_health(authorization: str = Header(None)):
 
     try:
         from api.services.agents.health import check_agent_health
+        from api.routers.projects import _process_project_agent_queue_background
+
         result = check_agent_health()
+        queue_processed = await _process_project_agent_queue_background(
+            user_jwt=None,
+            fallback_user_id=None,
+            max_jobs=20,
+        )
 
         duration = (datetime.now(timezone.utc) - start_time).total_seconds()
         logger.info(f"🤖 CRON: Agent health check completed in {duration:.2f}s")
@@ -1162,6 +1170,7 @@ async def cron_agent_health(authorization: str = Header(None)):
             checked=result.get("checked", 0),
             healthy=result.get("healthy", 0),
             errors=result.get("errors", 0),
+            queue_processed=queue_processed,
             duration_seconds=duration,
         )
     except Exception as e:
