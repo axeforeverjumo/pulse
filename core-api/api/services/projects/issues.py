@@ -89,7 +89,7 @@ async def _enrich_issues_with_attachments(
     if keys:
         try:
             files_result = await supabase.table("files")\
-                .select("r2_key, filename, content_type, file_size")\
+                .select("r2_key, filename, file_type, file_size")\
                 .in_("r2_key", keys)\
                 .execute()
             for file_row in (files_result.data or []):
@@ -108,7 +108,7 @@ async def _enrich_issues_with_attachments(
                 continue
             meta = file_meta_by_key.get(key, {})
             filename = meta.get("filename") or key.split("/")[-1]
-            mime_type = (meta.get("content_type") or _guess_mime_type(key, filename)).lower()
+            mime_type = (meta.get("file_type") or _guess_mime_type(key, filename)).lower()
             is_image = mime_type.startswith("image/")
             url = generate_file_url(
                 key,

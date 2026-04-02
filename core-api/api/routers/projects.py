@@ -921,7 +921,7 @@ async def _build_issue_attachment_context(
         return "", []
 
     files_result = await supabase.table("files")\
-        .select("r2_key, filename, content_type, file_size")\
+        .select("r2_key, filename, file_type, file_size")\
         .in_("r2_key", r2_keys)\
         .execute()
     meta_by_key = {row["r2_key"]: row for row in (files_result.data or []) if row.get("r2_key")}
@@ -932,7 +932,7 @@ async def _build_issue_attachment_context(
     for key in r2_keys[:6]:
         meta = meta_by_key.get(key, {})
         filename = meta.get("filename") or key.split("/")[-1]
-        mime_type = (meta.get("content_type") or _guess_mime_type(key, filename)).lower()
+        mime_type = (meta.get("file_type") or _guess_mime_type(key, filename)).lower()
         url = generate_file_url(key, mime_type=mime_type, variant="full")
         excerpt = await _extract_attachment_excerpt(url, mime_type, filename)
 
@@ -1121,14 +1121,33 @@ async def _append_agent_activity_comment(
     comment_user_id: Optional[str],
     agent: Dict[str, Any],
     content: str,
+    workspace_id: Optional[str] = None,
+    workspace_app_id: Optional[str] = None,
 ) -> None:
     message = (content or "").strip()
     if not issue_id or not comment_user_id or not message:
         return
     try:
+        resolved_workspace_id = workspace_id
+        resolved_workspace_app_id = workspace_app_id
+        if not resolved_workspace_id or not resolved_workspace_app_id:
+            issue_ctx_result = await supabase.table("project_issues")\
+                .select("workspace_id, workspace_app_id")\
+                .eq("id", issue_id)\
+                .maybe_single()\
+                .execute()
+            issue_ctx = issue_ctx_result.data or {}
+            resolved_workspace_id = resolved_workspace_id or issue_ctx.get("workspace_id")
+            resolved_workspace_app_id = resolved_workspace_app_id or issue_ctx.get("workspace_app_id")
+
+        if not resolved_workspace_id or not resolved_workspace_app_id:
+            raise RuntimeError("Missing workspace context for project activity comment")
+
         await supabase.table("project_issue_comments").insert({
             "issue_id": issue_id,
             "user_id": comment_user_id,
+            "workspace_id": resolved_workspace_id,
+            "workspace_app_id": resolved_workspace_app_id,
             "blocks": [
                 {
                     "type": "agent_meta",
@@ -1158,7 +1177,7 @@ async def _execute_project_agent_job(
 
     # Get task details (include board_id to find states)
     task_result = await supabase.table("project_issues")\
-        .select("id, title, description, priority, board_id, state_id, image_r2_keys, checklist_items, created_by")\
+        .select("id, title, description, priority, board_id, state_id, image_r2_keys, checklist_items, created_by, workspace_id, workspace_app_id")\
         .eq("id", issue_id)\
         .maybe_single()\
         .execute()
@@ -1220,6 +1239,8 @@ async def _execute_project_agent_job(
             comment_user_id=comment_user_id,
             agent=agent,
             content="⏳ Inicio automático: el agente tomó la tarea y la movió a In Progress.",
+            workspace_id=task.get("workspace_id"),
+            workspace_app_id=task.get("workspace_app_id"),
         )
     else:
         await _append_agent_activity_comment(
@@ -1228,6 +1249,8 @@ async def _execute_project_agent_job(
             comment_user_id=comment_user_id,
             agent=agent,
             content="⏳ El agente sigue trabajando en esta tarea.",
+            workspace_id=task.get("workspace_id"),
+            workspace_app_id=task.get("workspace_app_id"),
         )
 
     checklist_items = task.get("checklist_items") or []
@@ -1326,6 +1349,8 @@ async def _execute_project_agent_job(
         comment_user_id=comment_user_id,
         agent=agent,
         content=agent_response,
+        workspace_id=task.get("workspace_id"),
+        workspace_app_id=task.get("workspace_app_id"),
     )
 
     git_result = await _maybe_publish_agent_git_commit(
@@ -1343,6 +1368,8 @@ async def _execute_project_agent_job(
             comment_user_id=comment_user_id,
             agent=agent,
             content=git_activity_message,
+            workspace_id=task.get("workspace_id"),
+            workspace_app_id=task.get("workspace_app_id"),
         )
 
     task_marked_complete = _is_agent_task_marked_complete(agent_response)
@@ -1359,6 +1386,8 @@ async def _execute_project_agent_job(
                     "⚠️ La tarea no pasó a QA porque faltó un commit válido en GitHub. "
                     "Revisa repo/token/diff y vuelve a ejecutar."
                 ),
+                workspace_id=task.get("workspace_id"),
+                workspace_app_id=task.get("workspace_app_id"),
             )
 
     if task_marked_complete:
@@ -1376,6 +1405,8 @@ async def _execute_project_agent_job(
                 comment_user_id=comment_user_id,
                 agent=agent,
                 content=f"✅ Tarea terminada. La tarjeta se movió a {'QA' if qa_id else 'Done'}.",
+                workspace_id=task.get("workspace_id"),
+                workspace_app_id=task.get("workspace_app_id"),
             )
         logger.info(
             "Agent marked issue %s as complete (moved to %s)",
