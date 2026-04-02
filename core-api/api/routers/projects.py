@@ -9,7 +9,10 @@ import asyncio
 import html
 import io
 import mimetypes
+import os
 import re
+import subprocess
+import tempfile
 import zipfile
 import httpx
 from api.services.projects import (
@@ -607,6 +610,308 @@ def _mark_checklist_done(items: Optional[List[Dict[str, Any]]]) -> List[Dict[str
     return updated
 
 
+def _extract_repo_full_name(board: Dict[str, Any]) -> Optional[str]:
+    full_name = (board.get("repository_full_name") or "").strip().strip("/")
+    if full_name and "/" in full_name:
+        owner, repo = [part.strip() for part in full_name.split("/", 1)]
+        repo = repo.split("/", 1)[0].replace(".git", "").strip()
+        if owner and repo:
+            return f"{owner}/{repo}"
+
+    repo_url = (board.get("repository_url") or "").strip()
+    if not repo_url:
+        return None
+
+    candidate = repo_url
+    if "github.com/" in candidate:
+        candidate = candidate.split("github.com/", 1)[1]
+    elif candidate.startswith("git@github.com:"):
+        candidate = candidate.split("git@github.com:", 1)[1]
+
+    candidate = candidate.split("?", 1)[0].split("#", 1)[0].strip("/")
+    if candidate.endswith(".git"):
+        candidate = candidate[:-4]
+    parts = [part for part in candidate.split("/") if part]
+    if len(parts) < 2:
+        return None
+    return f"{parts[0]}/{parts[1]}"
+
+
+def _looks_like_git_diff(text: str) -> bool:
+    value = (text or "").strip()
+    if not value:
+        return False
+    if "diff --git " in value:
+        return True
+    return ("--- " in value and "+++ " in value and "@@" in value)
+
+
+def _extract_git_diff_from_response(response_text: str) -> Optional[str]:
+    text = response_text or ""
+    if not text.strip():
+        return None
+
+    # Prefer explicit diff/patch fences.
+    for block in re.findall(r"```(?:diff|patch)\s*\n([\s\S]*?)```", text, flags=re.IGNORECASE):
+        if _looks_like_git_diff(block):
+            return block.strip() + "\n"
+
+    # Fallback: generic fences that still contain unified diff content.
+    for block in re.findall(r"```\s*\n([\s\S]*?)```", text):
+        if _looks_like_git_diff(block):
+            return block.strip() + "\n"
+
+    # Last fallback: raw text starting at diff marker.
+    diff_index = text.find("diff --git ")
+    if diff_index >= 0:
+        candidate = text[diff_index:]
+        fence_index = candidate.find("```")
+        if fence_index >= 0:
+            candidate = candidate[:fence_index]
+        if _looks_like_git_diff(candidate):
+            return candidate.strip() + "\n"
+
+    if _looks_like_git_diff(text):
+        return text.strip() + "\n"
+    return None
+
+
+def _sanitize_branch_name(raw_value: str, *, fallback: str) -> str:
+    branch = (raw_value or "").strip().lower()
+    branch = re.sub(r"[^a-z0-9._/-]+", "-", branch)
+    branch = re.sub(r"/{2,}", "/", branch)
+    branch = branch.strip("./-")
+    if not branch:
+        branch = fallback
+    if not branch.startswith("pulse/"):
+        branch = f"pulse/{branch}"
+    return branch[:120]
+
+
+def _extract_branch_name_from_response(response_text: str, issue_id: str) -> str:
+    match = re.search(r"(?im)^\s*(?:branch|rama)\s*:\s*([a-z0-9._/-]+)\s*$", response_text or "")
+    fallback = f"issue-{(issue_id or 'task')[:8]}"
+    return _sanitize_branch_name(match.group(1) if match else "", fallback=fallback)
+
+
+def _extract_commit_message_from_response(response_text: str, task_title: str) -> str:
+    match = re.search(r"(?im)^\s*(?:commit message|mensaje de commit)\s*:\s*(.+?)\s*$", response_text or "")
+    if match:
+        commit_message = match.group(1).strip()
+    else:
+        short_title = re.sub(r"\s+", " ", (task_title or "task update")).strip()
+        commit_message = f"feat: {short_title[:80]}"
+    commit_message = re.sub(r"\s+", " ", commit_message).strip()
+    return commit_message[:120] or "feat: pulse task update"
+
+
+def _agent_declared_no_code_changes(response_text: str) -> bool:
+    value = (response_text or "").lower()
+    return any(phrase in value for phrase in [
+        "sin cambios de código",
+        "sin cambios de codigo",
+        "no requiere cambios de código",
+        "no requiere cambios de codigo",
+        "sin tocar código",
+        "sin tocar codigo",
+        "no code changes",
+        "without code changes",
+    ])
+
+
+def _run_command(
+    cmd: List[str],
+    *,
+    cwd: Optional[str] = None,
+    env: Optional[Dict[str, str]] = None,
+) -> str:
+    proc = subprocess.run(
+        cmd,
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        stderr = (proc.stderr or proc.stdout or "unknown error").strip()
+        raise RuntimeError(stderr[:800])
+    return (proc.stdout or "").strip()
+
+
+def _apply_patch_and_push_to_github(
+    *,
+    repo_full_name: str,
+    patch_text: str,
+    branch_name: str,
+    commit_message: str,
+    github_token: str,
+    author_name: str,
+    author_email: str,
+) -> Dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix="pulse-agent-git-") as tmp_dir:
+        askpass_path = os.path.join(tmp_dir, "git-askpass.sh")
+        with open(askpass_path, "w", encoding="utf-8") as askpass_file:
+            askpass_file.write(
+                "#!/bin/sh\n"
+                "case \"$1\" in\n"
+                "  *Username*) echo \"x-access-token\" ;;\n"
+                "  *Password*) echo \"$PULSE_GITHUB_TOKEN\" ;;\n"
+                "  *) echo \"\" ;;\n"
+                "esac\n"
+            )
+        os.chmod(askpass_path, 0o700)
+
+        env = os.environ.copy()
+        env["GIT_TERMINAL_PROMPT"] = "0"
+        env["GIT_ASKPASS"] = askpass_path
+        env["PULSE_GITHUB_TOKEN"] = github_token
+
+        remote_url = f"https://github.com/{repo_full_name}.git"
+        repo_dir = os.path.join(tmp_dir, "repo")
+
+        _run_command(["git", "clone", "--depth", "1", remote_url, repo_dir], env=env)
+        default_branch = _run_command(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_dir, env=env) or "main"
+
+        _run_command(["git", "config", "user.name", author_name], cwd=repo_dir, env=env)
+        _run_command(["git", "config", "user.email", author_email], cwd=repo_dir, env=env)
+        _run_command(["git", "checkout", "-b", branch_name], cwd=repo_dir, env=env)
+
+        patch_path = os.path.join(tmp_dir, "agent.patch")
+        with open(patch_path, "w", encoding="utf-8") as patch_file:
+            patch_file.write(patch_text)
+
+        try:
+            _run_command(["git", "apply", "--3way", "--whitespace=fix", patch_path], cwd=repo_dir, env=env)
+        except Exception:
+            _run_command(["git", "apply", "--reject", "--whitespace=fix", patch_path], cwd=repo_dir, env=env)
+
+        _run_command(["git", "add", "-A"], cwd=repo_dir, env=env)
+        has_changes = bool(_run_command(["git", "status", "--porcelain"], cwd=repo_dir, env=env).strip())
+        if not has_changes:
+            return {
+                "status": "no_changes",
+                "repo_full_name": repo_full_name,
+                "branch": branch_name,
+                "base_branch": default_branch,
+            }
+
+        _run_command(["git", "commit", "-m", commit_message], cwd=repo_dir, env=env)
+        commit_sha = _run_command(["git", "rev-parse", "HEAD"], cwd=repo_dir, env=env)
+        _run_command(["git", "push", "-u", "origin", branch_name], cwd=repo_dir, env=env)
+
+        return {
+            "status": "pushed",
+            "repo_full_name": repo_full_name,
+            "branch": branch_name,
+            "base_branch": default_branch,
+            "commit_sha": commit_sha,
+            "commit_url": f"https://github.com/{repo_full_name}/commit/{commit_sha}",
+            "compare_url": f"https://github.com/{repo_full_name}/compare/{default_branch}...{branch_name}?expand=1",
+            "commit_message": commit_message,
+        }
+
+
+async def _maybe_publish_agent_git_commit(
+    *,
+    issue_id: str,
+    board: Dict[str, Any],
+    task: Dict[str, Any],
+    agent: Dict[str, Any],
+    agent_response: str,
+) -> Optional[Dict[str, Any]]:
+    if not board.get("is_development"):
+        return None
+
+    repo_full_name = _extract_repo_full_name(board)
+    if not repo_full_name:
+        return {
+            "status": "missing_repo",
+            "detail": "Proyecto de desarrollo sin repositorio configurado en Board Settings.",
+        }
+
+    from api.config import settings
+
+    github_token = (settings.pulse_github_token or os.getenv("PULSE_GITHUB_TOKEN") or "").strip()
+    if not github_token:
+        return {
+            "status": "missing_token",
+            "detail": "Falta configurar PULSE_GITHUB_TOKEN en el backend.",
+        }
+
+    patch_text = _extract_git_diff_from_response(agent_response)
+    if not patch_text:
+        if _agent_declared_no_code_changes(agent_response):
+            return {
+                "status": "skipped_no_code",
+                "repo_full_name": repo_full_name,
+                "detail": "El agente indicó que no hacían falta cambios de código.",
+            }
+        return {
+            "status": "no_patch",
+            "repo_full_name": repo_full_name,
+            "detail": "El agente no devolvió un bloque diff aplicable.",
+        }
+
+    branch_name = _extract_branch_name_from_response(agent_response, issue_id)
+    commit_message = _extract_commit_message_from_response(agent_response, task.get("title") or "")
+    author_name = (settings.pulse_github_commit_user_name or agent.get("name") or "Pulse Agent").strip()
+    author_email = (settings.pulse_github_commit_user_email or "pulse-agent@factoriaia.com").strip()
+
+    try:
+        return await asyncio.to_thread(
+            _apply_patch_and_push_to_github,
+            repo_full_name=repo_full_name,
+            patch_text=patch_text,
+            branch_name=branch_name,
+            commit_message=commit_message,
+            github_token=github_token,
+            author_name=author_name,
+            author_email=author_email,
+        )
+    except Exception as git_error:
+        return {
+            "status": "error",
+            "repo_full_name": repo_full_name,
+            "branch": branch_name,
+            "detail": f"{git_error}",
+        }
+
+
+def _build_git_activity_message(git_result: Optional[Dict[str, Any]]) -> Optional[str]:
+    if not git_result:
+        return None
+    status_value = (git_result.get("status") or "").strip().lower()
+    if not status_value:
+        return None
+
+    if status_value == "pushed":
+        return (
+            "✅ Commit publicado en GitHub.\n"
+            f"- Repo: {git_result.get('repo_full_name')}\n"
+            f"- Rama: {git_result.get('branch')}\n"
+            f"- SHA: {git_result.get('commit_sha')}\n"
+            f"- Commit: {git_result.get('commit_url')}\n"
+            f"- Compare/PR: {git_result.get('compare_url')}"
+        )
+    if status_value == "no_changes":
+        return (
+            "ℹ️ Se intentó aplicar el diff pero no hubo cambios efectivos para commitear.\n"
+            f"- Repo: {git_result.get('repo_full_name')}\n"
+            f"- Rama: {git_result.get('branch')}"
+        )
+    if status_value == "skipped_no_code":
+        return "ℹ️ El agente marcó la tarea sin cambios de código, no se hizo commit."
+    if status_value == "missing_repo":
+        return "⚠️ Board de desarrollo sin repo configurado. Añade `owner/repo` o URL para habilitar commits automáticos."
+    if status_value == "missing_token":
+        return "⚠️ El servidor no tiene `PULSE_GITHUB_TOKEN` configurado, no se pudo hacer push."
+    if status_value == "no_patch":
+        return "⚠️ No encontré diff (` ```diff `) en la respuesta del agente, así que no se generó commit."
+    if status_value == "error":
+        return f"⚠️ Falló el commit automático: {git_result.get('detail')}"
+    return None
+
+
 async def _build_issue_attachment_context(
     supabase: Any,
     issue: Dict[str, Any],
@@ -867,6 +1172,7 @@ async def _execute_project_agent_job(
         .maybe_single()\
         .execute()
     board = board_result.data or {}
+    repo_full_name_for_automation = _extract_repo_full_name(board) if board.get("is_development") else None
 
     comment_user_id = job.get("requested_by") or fallback_user_id or task.get("created_by")
 
@@ -960,8 +1266,17 @@ async def _execute_project_agent_job(
             f"- IP servidor: {server_ip}\n"
             f"- Usuario servidor: {server_user}\n"
             f"- Puerto servidor: {server_port}\n"
-            "- Si la tarea requiere commit, indica exactamente rama, cambios y comando(s) usados."
+            "- Si haces cambios de código, devuelve el resultado con `Branch:`, `Commit message:` y un bloque ` ```diff ` aplicable.\n"
+            "- Si NO hay cambios de código necesarios, escribe explícitamente: `Sin cambios de código`."
         )
+        if repo_full_name_for_automation:
+            task_context += (
+                f"\n- Repositorio detectado para automatización: {repo_full_name_for_automation}"
+            )
+        else:
+            task_context += (
+                "\n- No hay repositorio válido configurado todavía (faltará commit automático)."
+            )
     if attachment_context:
         task_context += f"\n\nContexto de adjuntos (si hay texto útil):\n{attachment_context}"
 
@@ -982,7 +1297,7 @@ async def _execute_project_agent_job(
 
         response = await client.messages.create(
             model=agent.get("model", "claude-haiku-4-5-20251001"),
-            max_tokens=2048,
+            max_tokens=4096,
             system=system_prompt,
             messages=[{"role": "user", "content": f"Tarea asignada:\n\n{task_context}\n\nTrabaja en esta tarea."}],
         )
@@ -1013,7 +1328,40 @@ async def _execute_project_agent_job(
         content=agent_response,
     )
 
-    if _is_agent_task_marked_complete(agent_response):
+    git_result = await _maybe_publish_agent_git_commit(
+        issue_id=issue_id,
+        board=board,
+        task=task,
+        agent=agent,
+        agent_response=agent_response,
+    )
+    git_activity_message = _build_git_activity_message(git_result)
+    if git_activity_message:
+        await _append_agent_activity_comment(
+            supabase,
+            issue_id=issue_id,
+            comment_user_id=comment_user_id,
+            agent=agent,
+            content=git_activity_message,
+        )
+
+    task_marked_complete = _is_agent_task_marked_complete(agent_response)
+    if task_marked_complete and board.get("is_development") and repo_full_name_for_automation:
+        git_status = (git_result or {}).get("status")
+        if git_status not in {"pushed", "no_changes", "skipped_no_code"}:
+            task_marked_complete = False
+            await _append_agent_activity_comment(
+                supabase,
+                issue_id=issue_id,
+                comment_user_id=comment_user_id,
+                agent=agent,
+                content=(
+                    "⚠️ La tarea no pasó a QA porque faltó un commit válido en GitHub. "
+                    "Revisa repo/token/diff y vuelve a ejecutar."
+                ),
+            )
+
+    if task_marked_complete:
         updates: Dict[str, Any] = {}
         qa_or_done = qa_id or done_id
         if qa_or_done:
@@ -1036,12 +1384,18 @@ async def _execute_project_agent_job(
         )
 
     logger.info(
-        "Agent %s responded on issue %s (attachments=%s)",
+        "Agent %s responded on issue %s (attachments=%s git_status=%s)",
         agent.get("name"),
         issue_id,
         len(attachments),
+        (git_result or {}).get("status"),
     )
-    return {"issue_id": issue_id, "agent_id": agent_id, "response": agent_response}
+    return {
+        "issue_id": issue_id,
+        "agent_id": agent_id,
+        "response": agent_response,
+        "git_result": git_result or {},
+    }
 
 
 async def _process_project_agent_queue_background(

@@ -245,6 +245,9 @@ export default function ProjectsSettingsModal({
                         />
                       </div>
                     </div>
+                    <p className="text-[11px] text-text-tertiary -mt-1">
+                      El commit automático del agente usa credenciales seguras del servidor; aquí solo defines el repo objetivo.
+                    </p>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div>

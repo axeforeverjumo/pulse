@@ -122,6 +122,11 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_bot_username: str = ""
     telegram_webhook_secret: str = ""
+
+    # GitHub automation for project agents (commit/push from Pulse queue worker)
+    pulse_github_token: str = ""
+    pulse_github_commit_user_name: str = "Pulse Agent"
+    pulse_github_commit_user_email: str = "pulse-agent@factoriaia.com"
     
     # Cron job authentication
     cron_secret: str = ""  # Secret for authenticating cron job requests
