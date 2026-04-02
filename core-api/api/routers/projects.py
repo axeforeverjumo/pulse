@@ -817,6 +817,27 @@ def _run_command(
     return (proc.stdout or "").strip()
 
 
+def _run_command_with_input(
+    cmd: List[str],
+    *,
+    input_text: str,
+    cwd: Optional[str] = None,
+    env: Optional[Dict[str, str]] = None,
+) -> str:
+    proc = subprocess.run(
+        cmd,
+        cwd=cwd,
+        env=env,
+        input=input_text,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        stderr = (proc.stderr or proc.stdout or "unknown error").strip()
+        raise RuntimeError(stderr[:800])
+    return (proc.stdout or "").strip()
+
+
 def _apply_patch_and_push_to_github(
     *,
     repo_full_name: str,
@@ -932,7 +953,18 @@ def _apply_patch_and_push_to_github(
                             "detail": "Patch already applied on target branch",
                         }
                     except Exception:
-                        raise apply_error
+                        # Last fallback: GNU patch has fuzzy matching and can recover
+                        # when unified hunks are slightly out of sync.
+                        try:
+                            _run_command_with_input(
+                                ["patch", "-p1", "--forward", "--no-backup-if-mismatch"],
+                                input_text=patch_text,
+                                cwd=repo_dir,
+                                env=env,
+                            )
+                            applied = True
+                        except Exception:
+                            raise apply_error
 
         if not applied:
             raise RuntimeError("Patch apply failed without explicit error")
