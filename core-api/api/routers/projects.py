@@ -1558,6 +1558,10 @@ async def _execute_project_agent_job(
             f"- Puerto servidor: {server_port}\n"
             "- Si haces cambios de código, devuelve el resultado con `Branch:`, `Commit message:` y un bloque ` ```diff ` aplicable.\n"
             "- El bloque ` ```diff ` debe ser completo y exacto: NO uses `...`, NO truncar contenido, NO resumir hunks.\n"
+            "- Trabaja en micro-iteraciones: máximo 1 archivo por respuesta cuando sea posible.\n"
+            "- Si estás en `Estado: EN_PROGRESO` pero ya tocaste código, debes incluir igualmente un bloque ` ```diff ` (parcial válido) para commit incremental.\n"
+            "- Está prohibido responder \"ya está hecho en mi rama local\" sin adjuntar diff aplicable.\n"
+            "- Para evitar corrupción, genera y pega diff literal (por ejemplo `git diff -- <ruta>`), sin reescribirlo a mano.\n"
             "- Si NO hay cambios de código necesarios, escribe explícitamente: `Sin cambios de código`."
         )
         if repo_full_name_for_automation:
@@ -1582,7 +1586,8 @@ async def _execute_project_agent_job(
                 f"- Motivo: {prev_git_detail or 'sin detalle'}\n"
                 "- Si vuelves a marcar `Estado: COMPLETADA`, debes devolver un bloque ` ```diff ` completo y aplicable.\n"
                 "- No uses `...`, no uses `@@` incompleto, no resumas hunks.\n"
-                "- Si no tienes cambios concretos listos para patch, responde `Estado: EN_PROGRESO`."
+                "- Si no tienes cambios concretos listos para patch, responde `Estado: EN_PROGRESO`.\n"
+                "- En esta respuesta debes adjuntar al menos 1 diff real y aplicable (aunque sea de un solo archivo) o declarar explícitamente `Sin cambios de código`."
             )
 
     task_context += (
