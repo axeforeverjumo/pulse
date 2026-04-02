@@ -671,9 +671,12 @@ export default function MessagingView() {
   };
 
   useEffect(() => {
-    const pendingMediaIds = messages
+    const recentMediaIds = messages
       .filter((msg) => Boolean(msg.media_type))
-      .map((msg) => msg.id)
+      .slice(-8)
+      .map((msg) => msg.id);
+
+    const pendingMediaIds = recentMediaIds
       .filter(
         (id) =>
           !resolvedMediaUrls[id] &&
