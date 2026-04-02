@@ -127,9 +127,21 @@ export default function ProjectsView() {
     setIsMobileSidebarOpen(false);
   }, [navigateToProject]);
 
-  const handleSaveBoardSettings = useCallback(async (name: string, description: string) => {
+  const handleSaveBoardSettings = useCallback(async (updates: {
+    name: string;
+    description?: string;
+    is_development?: boolean;
+    project_url?: string;
+    repository_url?: string;
+    repository_full_name?: string;
+    server_host?: string;
+    server_ip?: string;
+    server_user?: string;
+    server_password?: string;
+    server_port?: number;
+  }) => {
     if (!activeProjectId) return;
-    await updateProjectBoard(activeProjectId, { name, description });
+    await updateProjectBoard(activeProjectId, updates);
     // Invalidate boards query to refresh the list
     queryClient.invalidateQueries({ queryKey: ["project-boards", workspaceAppId] });
   }, [activeProjectId, workspaceAppId, queryClient]);
@@ -263,9 +275,7 @@ export default function ProjectsView() {
       <ProjectsSettingsModal
         isOpen={showSettingsModal}
         onClose={() => setShowSettingsModal(false)}
-        boardId={activeProjectId}
-        boardName={activeBoard?.name || ""}
-        boardDescription={activeBoard?.description || ""}
+        board={activeBoard || null}
         initialTab={settingsModalTab}
         onSave={handleSaveBoardSettings}
         onDelete={handleDeleteBoard}

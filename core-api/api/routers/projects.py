@@ -861,6 +861,13 @@ async def _execute_project_agent_job(
         raise ValueError(f"Issue not found: {issue_id}")
     task = task_result.data
 
+    board_result = await supabase.table("project_boards")\
+        .select("id, is_development, project_url, repository_url, repository_full_name, server_host, server_ip, server_user, server_port")\
+        .eq("id", task["board_id"])\
+        .maybe_single()\
+        .execute()
+    board = board_result.data or {}
+
     comment_user_id = job.get("requested_by") or fallback_user_id or task.get("created_by")
 
     # Get agent details
@@ -938,6 +945,23 @@ async def _execute_project_agent_job(
         f"Prioridad: {task.get('priority', 0)}\n\n"
         f"Checklist actual:\n{checklist_text}"
     )
+    if board.get("is_development"):
+        repo_or_name = board.get("repository_url") or board.get("repository_full_name") or "No definido"
+        project_url = board.get("project_url") or "No definida"
+        server_host = board.get("server_host") or "No definido"
+        server_ip = board.get("server_ip") or "No definida"
+        server_user = board.get("server_user") or "No definido"
+        server_port = board.get("server_port") or "No definido"
+        task_context += (
+            "\n\nContexto técnico del proyecto:\n"
+            f"- URL proyecto: {project_url}\n"
+            f"- Repositorio: {repo_or_name}\n"
+            f"- Servidor: {server_host}\n"
+            f"- IP servidor: {server_ip}\n"
+            f"- Usuario servidor: {server_user}\n"
+            f"- Puerto servidor: {server_port}\n"
+            "- Si la tarea requiere commit, indica exactamente rama, cambios y comando(s) usados."
+        )
     if attachment_context:
         task_context += f"\n\nContexto de adjuntos (si hay texto útil):\n{attachment_context}"
 

@@ -2,49 +2,88 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import { XMarkIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
+import type { ProjectBoard } from "../../../api/client";
 
 interface ProjectsSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  boardId: string | null;
-  boardName: string;
-  boardDescription?: string;
+  board: ProjectBoard | null;
   initialTab?: "board" | "app";
-  onSave: (name: string, description: string) => Promise<void>;
+  onSave: (updates: {
+    name: string;
+    description?: string;
+    is_development?: boolean;
+    project_url?: string;
+    repository_url?: string;
+    repository_full_name?: string;
+    server_host?: string;
+    server_ip?: string;
+    server_user?: string;
+    server_password?: string;
+    server_port?: number;
+  }) => Promise<void>;
   onDelete?: () => void;
 }
 
 export default function ProjectsSettingsModal({
   isOpen,
   onClose,
-  boardId: _boardId,
-  boardName,
-  boardDescription = "",
+  board,
   initialTab = "board",
   onSave,
   onDelete,
 }: ProjectsSettingsModalProps) {
   const [activeTab, setActiveTab] = useState<"board" | "app">("board");
-  const [editingName, setEditingName] = useState(boardName);
-  const [editingDescription, setEditingDescription] = useState(boardDescription);
+  const [editingName, setEditingName] = useState(board?.name || "");
+  const [editingDescription, setEditingDescription] = useState(board?.description || "");
+  const [isDevelopment, setIsDevelopment] = useState(Boolean(board?.is_development));
+  const [projectUrl, setProjectUrl] = useState(board?.project_url || "");
+  const [repositoryUrl, setRepositoryUrl] = useState(board?.repository_url || "");
+  const [repositoryFullName, setRepositoryFullName] = useState(board?.repository_full_name || "");
+  const [serverHost, setServerHost] = useState(board?.server_host || "");
+  const [serverIp, setServerIp] = useState(board?.server_ip || "");
+  const [serverUser, setServerUser] = useState(board?.server_user || "");
+  const [serverPassword, setServerPassword] = useState(board?.server_password || "");
+  const [serverPort, setServerPort] = useState(board?.server_port ? String(board.server_port) : "");
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // Reset form when modal opens or board changes
   useEffect(() => {
     if (isOpen) {
-      setEditingName(boardName);
-      setEditingDescription(boardDescription);
+      setEditingName(board?.name || "");
+      setEditingDescription(board?.description || "");
+      setIsDevelopment(Boolean(board?.is_development));
+      setProjectUrl(board?.project_url || "");
+      setRepositoryUrl(board?.repository_url || "");
+      setRepositoryFullName(board?.repository_full_name || "");
+      setServerHost(board?.server_host || "");
+      setServerIp(board?.server_ip || "");
+      setServerUser(board?.server_user || "");
+      setServerPassword(board?.server_password || "");
+      setServerPort(board?.server_port ? String(board.server_port) : "");
       setShowAdvancedOptions(false);
       setActiveTab(initialTab);
     }
-  }, [isOpen, boardName, boardDescription]);
+  }, [isOpen, board, initialTab]);
 
   const handleSave = async () => {
     if (!editingName.trim() || isSaving) return;
     setIsSaving(true);
     try {
-      await onSave(editingName.trim(), editingDescription.trim());
+      await onSave({
+        name: editingName.trim(),
+        description: editingDescription.trim() || undefined,
+        is_development: isDevelopment,
+        project_url: isDevelopment ? (projectUrl.trim() || undefined) : undefined,
+        repository_url: isDevelopment ? (repositoryUrl.trim() || undefined) : undefined,
+        repository_full_name: isDevelopment ? (repositoryFullName.trim() || undefined) : undefined,
+        server_host: isDevelopment ? (serverHost.trim() || undefined) : undefined,
+        server_ip: isDevelopment ? (serverIp.trim() || undefined) : undefined,
+        server_user: isDevelopment ? (serverUser.trim() || undefined) : undefined,
+        server_password: isDevelopment ? (serverPassword.trim() || undefined) : undefined,
+        server_port: isDevelopment && serverPort.trim() ? Number(serverPort.trim()) : undefined,
+      });
       onClose();
     } catch (err) {
       console.error("Failed to save board settings:", err);
@@ -158,6 +197,115 @@ export default function ProjectsSettingsModal({
                     className="w-full px-3 py-2.5 bg-white border border-border-gray rounded-lg text-sm outline-none focus:border-text-tertiary resize-none"
                   />
                 </div>
+              </div>
+
+              <div className="border border-border-light rounded-lg p-3 bg-[#f9fbff]">
+                <label className="flex items-center gap-2 text-[13px] text-gray-700 cursor-pointer select-none mb-3">
+                  <input
+                    type="checkbox"
+                    checked={isDevelopment}
+                    onChange={(e) => setIsDevelopment(e.target.checked)}
+                    className="rounded border-gray-300 text-gray-900 focus:ring-gray-300"
+                  />
+                  Proyecto de desarrollo
+                </label>
+
+                {isDevelopment && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs text-text-secondary mb-1">URL del proyecto</label>
+                      <input
+                        type="url"
+                        value={projectUrl}
+                        onChange={(e) => setProjectUrl(e.target.value)}
+                        placeholder="https://miapp.com"
+                        className="w-full px-3 py-2 text-[13px] border border-border-gray rounded-lg bg-white outline-none focus:border-text-tertiary"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs text-text-secondary mb-1">Repositorio (URL)</label>
+                        <input
+                          type="url"
+                          value={repositoryUrl}
+                          onChange={(e) => setRepositoryUrl(e.target.value)}
+                          placeholder="https://github.com/owner/repo"
+                          className="w-full px-3 py-2 text-[13px] border border-border-gray rounded-lg bg-white outline-none focus:border-text-tertiary"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs text-text-secondary mb-1">Repositorio (owner/repo)</label>
+                        <input
+                          type="text"
+                          value={repositoryFullName}
+                          onChange={(e) => setRepositoryFullName(e.target.value)}
+                          placeholder="owner/repo"
+                          className="w-full px-3 py-2 text-[13px] border border-border-gray rounded-lg bg-white outline-none focus:border-text-tertiary"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Servidor</label>
+                        <input
+                          type="text"
+                          value={serverHost}
+                          onChange={(e) => setServerHost(e.target.value)}
+                          placeholder="Producción / Staging"
+                          className="w-full px-3 py-2 text-[13px] border border-border-gray rounded-lg bg-white outline-none focus:border-text-tertiary"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">IP del servidor</label>
+                        <input
+                          type="text"
+                          value={serverIp}
+                          onChange={(e) => setServerIp(e.target.value)}
+                          placeholder="85.215.105.45"
+                          className="w-full px-3 py-2 text-[13px] border border-border-gray rounded-lg bg-white outline-none focus:border-text-tertiary"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Usuario servidor</label>
+                        <input
+                          type="text"
+                          value={serverUser}
+                          onChange={(e) => setServerUser(e.target.value)}
+                          placeholder="root"
+                          className="w-full px-3 py-2 text-[13px] border border-border-gray rounded-lg bg-white outline-none focus:border-text-tertiary"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Puerto</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={65535}
+                          value={serverPort}
+                          onChange={(e) => setServerPort(e.target.value)}
+                          placeholder="22"
+                          className="w-full px-3 py-2 text-[13px] border border-border-gray rounded-lg bg-white outline-none focus:border-text-tertiary"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs text-text-secondary mb-1">Contraseña servidor (opcional)</label>
+                        <input
+                          type="text"
+                          value={serverPassword}
+                          onChange={(e) => setServerPassword(e.target.value)}
+                          placeholder="Solo si la necesitas para ejecución automatizada"
+                          className="w-full px-3 py-2 text-[13px] border border-border-gray rounded-lg bg-white outline-none focus:border-text-tertiary"
+                        />
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-text-tertiary">
+                      Estos datos se usan como contexto de ejecución para agentes.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Collapsible Advanced Options */}
