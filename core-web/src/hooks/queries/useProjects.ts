@@ -25,6 +25,8 @@ import {
   removeIssueAssignee,
   addAgentAssignee,
   removeAgentAssignee,
+  listProjectAgentQueue,
+  processProjectAgentQueue,
   createIssueComment,
   updateIssueComment,
   deleteIssueComment,
@@ -38,6 +40,7 @@ import {
   type ProjectLabel,
   type ProjectChecklistItem,
   type ProjectIssueAssignee,
+  type ProjectAgentQueueJob,
   type WorkspaceMember,
   type IssueComment,
   type ContentBlock,
@@ -56,6 +59,7 @@ export type {
   ProjectLabel,
   ProjectChecklistItem,
   ProjectIssueAssignee,
+  ProjectAgentQueueJob,
   WorkspaceMember,
   IssueComment,
   ContentBlock,
@@ -71,6 +75,7 @@ const STALE_TIMES = {
   boardData: 2 * 60 * 1000, // 2 min - issues change often
   comments: 30 * 1000, // 30 sec - conversations move fast
   members: 10 * 60 * 1000, // 10 min - very stable
+  queue: 5 * 1000, // 5 sec - queue needs near real-time feedback
 };
 
 const DEFAULT_TODO_COLOR = '#EF4444';
@@ -1290,6 +1295,53 @@ export function useWorkspaceAgents(workspaceId: string | null) {
     },
     enabled: !!workspaceId,
     staleTime: STALE_TIMES.members,
+  });
+}
+
+/**
+ * Fetch queue jobs for project agents (board scoped).
+ */
+export function useProjectAgentQueue(
+  workspaceAppId: string | null,
+  boardId: string | null,
+  opts?: { status?: ProjectAgentQueueJob['status']; limit?: number; enabled?: boolean }
+) {
+  const enabled = Boolean(workspaceAppId && boardId && (opts?.enabled ?? true));
+  return useQuery({
+    queryKey: projectKeys.agentQueue(workspaceAppId ?? '', boardId ?? ''),
+    queryFn: async () => {
+      if (!workspaceAppId || !boardId) throw new Error('Missing workspace app or board');
+      const result = await listProjectAgentQueue({
+        workspace_app_id: workspaceAppId,
+        board_id: boardId,
+        status: opts?.status,
+        limit: opts?.limit ?? 80,
+      });
+      return result.jobs;
+    },
+    enabled,
+    staleTime: STALE_TIMES.queue,
+    refetchInterval: enabled ? 7000 : false,
+  });
+}
+
+/**
+ * Trigger queue processing immediately (manual flush).
+ */
+export function useProcessProjectAgentQueue(
+  workspaceAppId: string | null,
+  boardId: string | null
+) {
+  const queryClient = useQueryClient();
+  const queueKey = projectKeys.agentQueue(workspaceAppId ?? '', boardId ?? '');
+  const boardDataKey = projectKeys.boardData(boardId ?? '');
+
+  return useMutation<{ processed: number }, Error, number>({
+    mutationFn: async (maxJobs) => processProjectAgentQueue(maxJobs),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queueKey });
+      queryClient.invalidateQueries({ queryKey: boardDataKey });
+    },
   });
 }
 

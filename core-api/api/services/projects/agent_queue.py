@@ -162,6 +162,7 @@ async def list_project_agent_jobs(
     supabase: Any,
     *,
     workspace_app_id: Optional[str] = None,
+    board_id: Optional[str] = None,
     agent_id: Optional[str] = None,
     issue_id: Optional[str] = None,
     status: Optional[str] = None,
@@ -170,6 +171,8 @@ async def list_project_agent_jobs(
     query = supabase.table("project_agent_queue_jobs").select("*").order("created_at", desc=True).limit(max(1, min(limit, 200)))
     if workspace_app_id:
         query = query.eq("workspace_app_id", workspace_app_id)
+    if board_id:
+        query = query.eq("board_id", board_id)
     if agent_id:
         query = query.eq("agent_id", agent_id)
     if issue_id:

@@ -982,6 +982,7 @@ async def _process_project_agent_queue_background(
             job_id = job.get("id")
             if not job_id:
                 continue
+            processed += 1
 
             try:
                 result_payload = await _execute_project_agent_job(
@@ -995,7 +996,6 @@ async def _process_project_agent_queue_background(
                     status="completed",
                     payload_patch={**(job.get("payload") or {}), **result_payload},
                 )
-                processed += 1
             except Exception as exc:
                 message = str(exc)
                 status_for_error = "blocked" if "no longer in progress" in message.lower() else "queued"
@@ -1291,6 +1291,7 @@ async def create_github_repository_endpoint(
 @router.get("/agent-queue", response_model=AgentQueueJobListResponse)
 async def list_agent_queue_endpoint(
     workspace_app_id: Optional[str] = Query(None, description="Filter by workspace app"),
+    board_id: Optional[str] = Query(None, description="Filter by board"),
     agent_id: Optional[str] = Query(None, description="Filter by assigned agent"),
     issue_id: Optional[str] = Query(None, description="Filter by issue"),
     status_filter: Optional[str] = Query(None, alias="status", description="Filter by queue status"),
@@ -1305,6 +1306,7 @@ async def list_agent_queue_endpoint(
         jobs = await list_project_agent_jobs(
             supabase,
             workspace_app_id=workspace_app_id,
+            board_id=board_id,
             agent_id=agent_id,
             issue_id=issue_id,
             status=status_filter,

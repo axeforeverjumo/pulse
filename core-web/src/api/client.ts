@@ -2523,6 +2523,28 @@ export interface ProjectIssue {
   updated_at?: string;
 }
 
+export interface ProjectAgentQueueJob {
+  id: string;
+  workspace_id: string;
+  workspace_app_id: string;
+  board_id: string;
+  issue_id: string;
+  agent_id: string;
+  requested_by?: string;
+  source: string;
+  priority: number;
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'blocked' | 'cancelled';
+  payload: Record<string, unknown>;
+  attempts: number;
+  max_attempts: number;
+  last_error?: string;
+  claimed_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface ItemPosition {
   id: string;
   position: number;
@@ -2790,6 +2812,33 @@ export async function triggerAgentWork(issueId: string, agentId: string): Promis
   return api(`/openclaw-agents/work-on-task/${issueId}`, {
     method: 'POST',
     body: JSON.stringify({ agent_id: agentId }),
+  });
+}
+
+export async function listProjectAgentQueue(options?: {
+  workspace_app_id?: string;
+  board_id?: string;
+  issue_id?: string;
+  agent_id?: string;
+  status?: 'queued' | 'running' | 'completed' | 'failed' | 'blocked' | 'cancelled';
+  limit?: number;
+}): Promise<{ jobs: ProjectAgentQueueJob[]; count: number }> {
+  const params = new URLSearchParams();
+  if (options?.workspace_app_id) params.set('workspace_app_id', options.workspace_app_id);
+  if (options?.board_id) params.set('board_id', options.board_id);
+  if (options?.issue_id) params.set('issue_id', options.issue_id);
+  if (options?.agent_id) params.set('agent_id', options.agent_id);
+  if (options?.status) params.set('status', options.status);
+  if (options?.limit) params.set('limit', String(options.limit));
+  const qs = params.toString();
+  return api(`/projects/agent-queue${qs ? `?${qs}` : ''}`);
+}
+
+export async function processProjectAgentQueue(maxJobs = 8): Promise<{ processed: number }> {
+  const params = new URLSearchParams();
+  params.set('max_jobs', String(maxJobs));
+  return api(`/projects/agent-queue/process?${params.toString()}`, {
+    method: 'POST',
   });
 }
 

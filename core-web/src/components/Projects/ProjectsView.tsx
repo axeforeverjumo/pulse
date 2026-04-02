@@ -13,6 +13,7 @@ import ProjectsFilterBar from "./components/ProjectsFilterBar";
 import ProjectsListView from "./components/ProjectsListView";
 import ProjectsSettingsModal from "./components/ProjectsSettingsModal";
 import ProjectsSettingsDropdown from "./components/ProjectsSettingsDropdown";
+import AgentQueuePanel from "./components/AgentQueuePanel";
 import { HeaderButtons } from "../MiniAppHeader";
 import { Columns3, PanelLeft, X } from "lucide-react";
 import { Icon } from "../ui/Icon";
@@ -195,10 +196,17 @@ export default function ProjectsView() {
                     {activeBoard?.name || "Project Board"}
                   </h1>
                 </div>
-                <HeaderButtons
-                  onSettingsClick={() => setShowSettingsDropdown(prev => !prev)}
-                  settingsButtonRef={settingsButtonRef}
-                />
+                <div className="flex items-center gap-2">
+                  <AgentQueuePanel
+                    workspaceId={workspaceId}
+                    workspaceAppId={workspaceAppId}
+                    boardId={activeProjectId}
+                  />
+                  <HeaderButtons
+                    onSettingsClick={() => setShowSettingsDropdown(prev => !prev)}
+                    settingsButtonRef={settingsButtonRef}
+                  />
+                </div>
               </div>
               {/* Filter bar + content area with overlay panels */}
               <div className="flex-1 flex flex-col overflow-hidden relative">
