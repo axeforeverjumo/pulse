@@ -948,7 +948,7 @@ def _apply_patch_and_push_to_github(
     github_token: str,
     author_name: str,
     author_email: str,
-    push_to_default_branch: bool = True,
+    push_to_main_branch: bool = True,
 ) -> Dict[str, Any]:
     def _list_unmerged_files(repo_path: str, env_vars: Dict[str, str]) -> List[str]:
         output = _run_command(["git", "diff", "--name-only", "--diff-filter=U"], cwd=repo_path, env=env_vars)
@@ -986,11 +986,17 @@ def _apply_patch_and_push_to_github(
 
         _run_command(["git", "clone", remote_url, repo_dir], env=env)
         default_branch = _run_command(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_dir, env=env) or "main"
-        target_branch = default_branch if push_to_default_branch else branch_name
+        target_branch = "main" if push_to_main_branch else branch_name
 
         _run_command(["git", "config", "user.name", author_name], cwd=repo_dir, env=env)
         _run_command(["git", "config", "user.email", author_email], cwd=repo_dir, env=env)
-        if not push_to_default_branch:
+        if push_to_main_branch:
+            # Force workflow to always land on main for sandbox repos.
+            if default_branch == "main":
+                _run_command(["git", "checkout", "main"], cwd=repo_dir, env=env)
+            else:
+                _run_command(["git", "checkout", "-B", "main"], cwd=repo_dir, env=env)
+        else:
             _run_command(["git", "checkout", "-b", branch_name], cwd=repo_dir, env=env)
 
         patch_path = os.path.join(tmp_dir, "agent.patch")
@@ -1093,8 +1099,8 @@ def _apply_patch_and_push_to_github(
 
         _run_command(["git", "commit", "-m", commit_message], cwd=repo_dir, env=env)
         commit_sha = _run_command(["git", "rev-parse", "HEAD"], cwd=repo_dir, env=env)
-        if push_to_default_branch:
-            _run_command(["git", "push", "origin", default_branch], cwd=repo_dir, env=env)
+        if push_to_main_branch:
+            _run_command(["git", "push", "-u", "origin", "main"], cwd=repo_dir, env=env)
         else:
             _run_command(["git", "push", "-u", "origin", branch_name], cwd=repo_dir, env=env)
 
@@ -1107,11 +1113,11 @@ def _apply_patch_and_push_to_github(
             "commit_url": f"https://github.com/{repo_full_name}/commit/{commit_sha}",
             "compare_url": (
                 None
-                if push_to_default_branch
+                if push_to_main_branch
                 else f"https://github.com/{repo_full_name}/compare/{default_branch}...{branch_name}?expand=1"
             ),
             "commit_message": commit_message,
-            "pushed_to_main": bool(push_to_default_branch),
+            "pushed_to_main": bool(push_to_main_branch),
         }
 
 
@@ -1166,7 +1172,8 @@ async def _maybe_publish_agent_git_commit(
     commit_message = _extract_commit_message_from_response(agent_response, task.get("title") or "")
     author_name = (settings.pulse_github_commit_user_name or agent.get("name") or "Pulse Agent").strip()
     author_email = (settings.pulse_github_commit_user_email or "pulse-agent@factoriaia.com").strip()
-    push_to_default_branch = bool(getattr(settings, "pulse_github_push_to_main", True))
+    # En entorno sandbox de agentes: siempre push directo a main.
+    push_to_main_branch = True
 
     try:
         return await asyncio.to_thread(
@@ -1178,7 +1185,7 @@ async def _maybe_publish_agent_git_commit(
             github_token=github_token,
             author_name=author_name,
             author_email=author_email,
-            push_to_default_branch=push_to_default_branch,
+            push_to_main_branch=push_to_main_branch,
         )
     except Exception as git_error:
         detail = f"{git_error}"
