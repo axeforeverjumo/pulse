@@ -6,7 +6,7 @@ triggered from project issues.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
 
@@ -181,3 +181,29 @@ async def list_project_agent_jobs(
         query = query.eq("status", status)
     result = await query.execute()
     return result.data or []
+
+
+async def revive_stale_running_jobs(
+    supabase: Any,
+    *,
+    stale_after_minutes: int = 15,
+) -> int:
+    """
+    Move stale running jobs back to queued so processing can resume after restarts.
+    """
+    threshold = datetime.now(timezone.utc) - timedelta(minutes=max(1, stale_after_minutes))
+    result = await (
+        supabase.table("project_agent_queue_jobs")
+        .update(
+            {
+                "status": "queued",
+                "updated_at": _utc_now_iso(),
+                "last_error": "Recovered stale running job after worker restart",
+            }
+        )
+        .eq("status", "running")
+        .lt("updated_at", threshold.isoformat())
+        .execute()
+    )
+    rows = result.data or []
+    return len(rows)

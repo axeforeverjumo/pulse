@@ -55,6 +55,7 @@ from api.services.projects.agent_queue import (
     claim_next_project_agent_job,
     update_project_agent_job,
     list_project_agent_jobs,
+    revive_stale_running_jobs,
 )
 from lib.image_proxy import generate_file_url
 import logging
@@ -808,6 +809,37 @@ def _is_agent_task_marked_complete(response_text: str) -> bool:
     ])
 
 
+async def _append_agent_activity_comment(
+    supabase: Any,
+    *,
+    issue_id: str,
+    comment_user_id: Optional[str],
+    agent: Dict[str, Any],
+    content: str,
+) -> None:
+    message = (content or "").strip()
+    if not issue_id or not comment_user_id or not message:
+        return
+    try:
+        await supabase.table("project_issue_comments").insert({
+            "issue_id": issue_id,
+            "user_id": comment_user_id,
+            "blocks": [
+                {
+                    "type": "agent_meta",
+                    "data": {
+                        "agent_id": agent.get("id"),
+                        "name": agent.get("name"),
+                        "avatar_url": agent.get("avatar_url"),
+                    },
+                },
+                {"type": "text", "data": {"content": message}},
+            ],
+        }).execute()
+    except Exception as comment_error:
+        logger.warning("Failed to append agent activity comment for issue %s: %s", issue_id, comment_error)
+
+
 async def _execute_project_agent_job(
     supabase: Any,
     job: Dict[str, Any],
@@ -829,9 +861,7 @@ async def _execute_project_agent_job(
         raise ValueError(f"Issue not found: {issue_id}")
     task = task_result.data
 
-    current_state_name = await _state_name_by_id(supabase, task.get("state_id"))
-    if not _is_in_progress_state(current_state_name):
-        raise RuntimeError("Issue is no longer in progress; blocking queue job")
+    comment_user_id = job.get("requested_by") or fallback_user_id or task.get("created_by")
 
     # Get agent details
     agent_result = await supabase.table("openclaw_agents").select("*").eq("id", agent_id).maybe_single().execute()
@@ -846,14 +876,46 @@ async def _execute_project_agent_job(
         .order("position")\
         .execute()
     states = states_result.data or []
+    in_progress_id = None
     qa_id = None
     done_id = None
+    state_name_by_id: Dict[str, Optional[str]] = {}
     for state in states:
+        state_id = state.get("id")
         state_name = state.get("name")
-        if _is_qa_state(state_name):
-            qa_id = state["id"]
-        elif state.get("is_done") or _is_done_state(state_name):
-            done_id = state["id"]
+        if state_id:
+            state_name_by_id[state_id] = state_name
+        if not in_progress_id and _is_in_progress_state(state_name):
+            in_progress_id = state_id
+        if not qa_id and _is_qa_state(state_name):
+            qa_id = state_id
+        elif not done_id and (state.get("is_done") or _is_done_state(state_name)):
+            done_id = state_id
+
+    current_state_name = state_name_by_id.get(task.get("state_id")) or await _state_name_by_id(supabase, task.get("state_id"))
+    if _is_qa_state(current_state_name) or _is_done_state(current_state_name):
+        raise RuntimeError("Issue is no longer actionable (already QA/Done); blocking queue job")
+
+    if not _is_in_progress_state(current_state_name):
+        if not in_progress_id:
+            raise RuntimeError("Board is missing an In Progress state; blocking queue job")
+        await supabase.table("project_issues").update({"state_id": in_progress_id}).eq("id", issue_id).execute()
+        task["state_id"] = in_progress_id
+        await _append_agent_activity_comment(
+            supabase,
+            issue_id=issue_id,
+            comment_user_id=comment_user_id,
+            agent=agent,
+            content="⏳ Inicio automático: el agente tomó la tarea y la movió a In Progress.",
+        )
+    else:
+        await _append_agent_activity_comment(
+            supabase,
+            issue_id=issue_id,
+            comment_user_id=comment_user_id,
+            agent=agent,
+            content="⏳ El agente sigue trabajando en esta tarea.",
+        )
 
     checklist_items = task.get("checklist_items") or []
     if not checklist_items:
@@ -916,25 +978,16 @@ async def _execute_project_agent_job(
             else:
                 raise RuntimeError(f"OpenClaw bridge error ({resp.status_code}): {resp.text[:300]}")
 
-    comment_user_id = job.get("requested_by") or fallback_user_id or task.get("created_by")
     if not comment_user_id:
         raise RuntimeError("Cannot resolve comment author for agent output")
 
-    await supabase.table("project_issue_comments").insert({
-        "issue_id": issue_id,
-        "user_id": comment_user_id,
-        "blocks": [
-            {
-                "type": "agent_meta",
-                "data": {
-                    "agent_id": agent.get("id"),
-                    "name": agent.get("name"),
-                    "avatar_url": agent.get("avatar_url"),
-                },
-            },
-            {"type": "text", "data": {"content": agent_response}},
-        ],
-    }).execute()
+    await _append_agent_activity_comment(
+        supabase,
+        issue_id=issue_id,
+        comment_user_id=comment_user_id,
+        agent=agent,
+        content=agent_response,
+    )
 
     if _is_agent_task_marked_complete(agent_response):
         updates: Dict[str, Any] = {}
@@ -945,6 +998,13 @@ async def _execute_project_agent_job(
             updates["checklist_items"] = _mark_checklist_done(checklist_items)
         if updates:
             await supabase.table("project_issues").update(updates).eq("id", issue_id).execute()
+            await _append_agent_activity_comment(
+                supabase,
+                issue_id=issue_id,
+                comment_user_id=comment_user_id,
+                agent=agent,
+                content=f"✅ Tarea terminada. La tarjeta se movió a {'QA' if qa_id else 'Done'}.",
+            )
         logger.info(
             "Agent marked issue %s as complete (moved to %s)",
             issue_id,
@@ -974,6 +1034,9 @@ async def _process_project_agent_queue_background(
     processed = 0
     async with _AGENT_QUEUE_WORKER_LOCK:
         supabase = await get_async_service_role_client()
+        revived = await revive_stale_running_jobs(supabase, stale_after_minutes=15)
+        if revived:
+            logger.info("Revived %s stale running queue job(s)", revived)
         for _ in range(max(1, min(max_jobs, 50))):
             job = await claim_next_project_agent_job(supabase)
             if not job:
@@ -998,7 +1061,16 @@ async def _process_project_agent_queue_background(
                 )
             except Exception as exc:
                 message = str(exc)
-                status_for_error = "blocked" if "no longer in progress" in message.lower() else "queued"
+                lower_message = message.lower()
+                status_for_error = (
+                    "blocked"
+                    if (
+                        "no longer in progress" in lower_message
+                        or "no longer actionable" in lower_message
+                        or "missing an in progress state" in lower_message
+                    )
+                    else "queued"
+                )
                 attempts = int(job.get("attempts") or 0)
                 max_attempts = int(job.get("max_attempts") or 1)
                 if attempts >= max_attempts and status_for_error == "queued":
@@ -1598,20 +1670,27 @@ async def add_agent_assignee_endpoint(
     try:
         assignee = await add_agent_assignee(user_jwt, issue_id, request.agent_id)
 
-        # If issue is already in progress, enqueue immediate agent execution.
+        # Enqueue immediate agent execution for actionable states.
         from lib.supabase_client import get_async_service_role_client
         supabase = await get_async_service_role_client()
         issue = await _get_issue_queue_context(supabase, issue_id)
         if issue:
             state_name = await _state_name_by_id(supabase, issue.get("state_id"))
-            if _is_in_progress_state(state_name):
+            is_terminal = _is_qa_state(state_name) or _is_done_state(state_name)
+            if not is_terminal:
+                queue_source = "agent_assignment" if _is_in_progress_state(state_name) else "agent_assignment_todo"
+                queue_reason = (
+                    "agent assigned while issue is in progress"
+                    if _is_in_progress_state(state_name)
+                    else f"agent assigned while issue is in '{state_name or issue.get('state_id')}'"
+                )
                 await _enqueue_issue_agent_job(
                     supabase,
                     issue,
                     request.agent_id,
                     requested_by=user_id,
-                    source="agent_assignment",
-                    reason="agent assigned while issue is in progress",
+                    source=queue_source,
+                    reason=queue_reason,
                 )
                 asyncio.create_task(
                     _process_project_agent_queue_background(
