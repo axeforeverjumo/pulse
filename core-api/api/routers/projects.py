@@ -769,7 +769,7 @@ def _apply_patch_and_push_to_github(
         remote_url = f"https://github.com/{repo_full_name}.git"
         repo_dir = os.path.join(tmp_dir, "repo")
 
-        _run_command(["git", "clone", "--depth", "1", remote_url, repo_dir], env=env)
+        _run_command(["git", "clone", remote_url, repo_dir], env=env)
         default_branch = _run_command(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_dir, env=env) or "main"
 
         _run_command(["git", "config", "user.name", author_name], cwd=repo_dir, env=env)
