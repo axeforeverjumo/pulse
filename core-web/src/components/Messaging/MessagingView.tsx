@@ -43,6 +43,7 @@ interface ExternalChat {
 interface ExternalMessage {
   id: string;
   chat_id: string;
+  remote_message_id?: string;
   direction: "in" | "out";
   content: string;
   media_type?: string;
@@ -145,6 +146,71 @@ function formatAudioTime(totalSeconds: number): string {
   const minutes = Math.floor(safeSeconds / 60);
   const seconds = Math.floor(safeSeconds % 60);
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function normalizeMessageTextForDedupe(value?: string): string {
+  if (!value) return "";
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function dedupeLikelyEchoMessages(input: ExternalMessage[]): ExternalMessage[] {
+  if (input.length <= 1) return input;
+
+  const byRemoteId = new Map<string, ExternalMessage>();
+  const noRemote: ExternalMessage[] = [];
+
+  // First pass: collapse duplicates that share the same provider remote id.
+  input.forEach((msg) => {
+    const remoteId = (msg.remote_message_id || "").trim();
+    if (!remoteId) {
+      noRemote.push(msg);
+      return;
+    }
+    const existing = byRemoteId.get(remoteId);
+    if (!existing) {
+      byRemoteId.set(remoteId, msg);
+      return;
+    }
+    // Prefer explicit auto-reply metadata when the same provider event appears twice.
+    if (msg.is_auto_reply && !existing.is_auto_reply) {
+      byRemoteId.set(remoteId, msg);
+    }
+  });
+
+  const merged = [...byRemoteId.values(), ...noRemote].sort(
+    (a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  );
+
+  const deduped: ExternalMessage[] = [];
+  for (const msg of merged) {
+    const prev = deduped[deduped.length - 1];
+    if (!prev) {
+      deduped.push(msg);
+      continue;
+    }
+
+    const sameDirection = prev.direction === "out" && msg.direction === "out";
+    const sameText =
+      normalizeMessageTextForDedupe(prev.content) ===
+      normalizeMessageTextForDedupe(msg.content);
+    const nearInTime =
+      Math.abs(
+        new Date(msg.created_at).getTime() - new Date(prev.created_at).getTime(),
+      ) <= 15_000;
+    const oneAutoOneManual = prev.is_auto_reply !== msg.is_auto_reply;
+
+    if (sameDirection && sameText && nearInTime && oneAutoOneManual) {
+      // Keep only one visible bubble when provider/webhook echoed the same send.
+      const preferred = prev.is_auto_reply ? prev : msg;
+      deduped[deduped.length - 1] = preferred;
+      continue;
+    }
+
+    deduped.push(msg);
+  }
+
+  return deduped;
 }
 
 function InlineAudioPlayer({
@@ -574,12 +640,18 @@ export default function MessagingView() {
       }));
       return objectUrl;
     } catch (err) {
-      console.error("Failed to fetch message media:", err);
       const rawMessage = err instanceof Error ? err.message : "";
       const normalized = rawMessage.toLowerCase();
       let userMessage = "No se pudo cargar el adjunto.";
-      if (normalized.includes("expirado") || normalized.includes("410")) {
+      const isExpired =
+        normalized.includes("expirado") ||
+        normalized.includes("410") ||
+        normalized.includes("gone") ||
+        normalized.includes("no disponible");
+      if (isExpired) {
         userMessage = "Este adjunto ya no esta disponible en WhatsApp.";
+      } else {
+        console.error("Failed to fetch message media:", err);
       }
       setMediaErrorByMessage((prev) => ({
         ...prev,
@@ -699,7 +771,7 @@ export default function MessagingView() {
       const data = await api<{ messages: ExternalMessage[] }>(
         `/messaging/chats/${chatId}/messages`,
       );
-      const incomingMessages = data.messages || [];
+      const incomingMessages = dedupeLikelyEchoMessages(data.messages || []);
       setMessages((prev) =>
         areMessagesEqual(prev, incomingMessages) ? prev : incomingMessages,
       );
@@ -1558,13 +1630,15 @@ export default function MessagingView() {
                           {mediaError && (
                             <div className="mt-1 flex items-center gap-2">
                               <p className="text-[10px] text-red-500">{mediaError}</p>
-                              <button
-                                type="button"
-                                onClick={() => fetchMediaForMessage(msg.id)}
-                                className="text-[10px] font-medium text-sky-700 underline"
-                              >
-                                Reintentar
-                              </button>
+                              {!mediaError.toLowerCase().includes("no esta disponible") && (
+                                <button
+                                  type="button"
+                                  onClick={() => fetchMediaForMessage(msg.id)}
+                                  className="text-[10px] font-medium text-sky-700 underline"
+                                >
+                                  Reintentar
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>

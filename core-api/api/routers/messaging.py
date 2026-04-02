@@ -247,6 +247,48 @@ def _extract_remote_message_id(payload: Any) -> str:
     return ""
 
 
+def _normalize_text_for_dedupe(value: Optional[str]) -> str:
+    if not isinstance(value, str):
+        return ""
+    text = value.strip().lower()
+    if not text:
+        return ""
+    text = re.sub(r"\s+", " ", text)
+    return text
+
+
+def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    candidate = value.strip()
+    if candidate.endswith("Z"):
+        candidate = candidate[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(candidate)
+    except Exception:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _is_probable_outgoing_echo(incoming_text: str, recent_out_rows: list[dict]) -> bool:
+    incoming_norm = _normalize_text_for_dedupe(incoming_text)
+    if not incoming_norm:
+        return False
+    now_utc = datetime.now(timezone.utc)
+    for row in recent_out_rows:
+        outgoing_norm = _normalize_text_for_dedupe(row.get("content"))
+        if not outgoing_norm or outgoing_norm != incoming_norm:
+            continue
+        created_at = _parse_iso_datetime(row.get("created_at"))
+        if not created_at:
+            continue
+        if (now_utc - created_at).total_seconds() <= 300:
+            return True
+    return False
+
+
 def _decode_base64_blob(raw: str) -> Optional[bytes]:
     if not isinstance(raw, str):
         return None
@@ -1886,16 +1928,16 @@ async def whatsapp_webhook(request: Request):
                     continue
 
             if text:
-                recent_threshold = (datetime.now(timezone.utc) - timedelta(minutes=2)).isoformat()
-                probable_echo = await supabase.table("external_messages")\
-                    .select("id")\
+                recent_threshold = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+                recent_out = await supabase.table("external_messages")\
+                    .select("id, content, created_at, is_auto_reply, remote_message_id")\
                     .eq("chat_id", chat_id)\
                     .eq("direction", "out")\
-                    .eq("content", text)\
                     .gte("created_at", recent_threshold)\
-                    .limit(1)\
+                    .order("created_at", desc=True)\
+                    .limit(30)\
                     .execute()
-                if probable_echo.data:
+                if _is_probable_outgoing_echo(text, recent_out.data or []):
                     logger.info("Skipping probable outgoing echo in chat %s", chat_id)
                     continue
 
@@ -2285,6 +2327,26 @@ async def _auto_reply(account, chat_id, remote_jid, instance, incoming_text, con
         if isinstance(role_hint, str) and role_hint.strip():
             role_block = f"Rol/contexto profesional del usuario:\n{role_hint.strip()}\n\n"
 
+        recent_user_lines = [
+            str(msg.get("content") or "")
+            for msg in (recent.data or [])
+            if msg.get("direction") == "out" and isinstance(msg.get("content"), str)
+        ]
+        recent_user_text = "\n".join(recent_user_lines).lower()
+        affectionate_re = re.compile(
+            r"\b(te amo|mi amor|amor|cariñ|corazón|corazon|vida m[ií]a|mi vida|guap[ao]|cielo)\b"
+        )
+        affectionate_history = bool(affectionate_re.search(recent_user_text))
+        explicit_affection = False
+        effective_directives_lower = (effective_directives or "").lower()
+        contact_name_lower = (contact_name or "").strip().lower()
+        if contact_name_lower and contact_name_lower in effective_directives_lower:
+            explicit_affection = any(
+                marker in effective_directives_lower
+                for marker in ("esposa", "pareja", "novia", "novio", "familia", "marido")
+            )
+        affection_allowed = affectionate_history or explicit_affection
+
         system_prompt = f"""Eres el asistente personal de un usuario. Estás respondiendo mensajes de WhatsApp en su nombre porque está ausente.
 
 Estilo de comunicación del usuario:
@@ -2297,13 +2359,22 @@ Estilo de comunicación del usuario:
 Directrices del usuario:
 {effective_directives}
 
+Contexto de este contacto:
+- Contacto actual: {contact_name}
+- Historial afectivo detectado en este chat: {"sí" if affectionate_history else "no"}
+- Se permiten expresiones íntimas por directrices: {"sí" if explicit_affection else "no"}
+
 REGLAS:
 - Responde como si fueras el usuario, NO como un bot
 - Usa su estilo de comunicación (tono, formalidad, emojis si los usa)
 - Si hay contexto de agente asignado, úsalo como marco para decidir qué responder
-- Si no sabes algo, di que lo consultas y responde después
 - Sé breve como en WhatsApp (no escribas párrafos largos)
-- NO digas que eres un bot o IA"""
+- NO digas que eres un bot o IA
+- Nunca pidas más contexto al remitente ni digas que no tienes contexto
+- Nunca repitas literalmente el mensaje recibido
+- Si el mensaje es vulgar o provocador, responde corto con límite cordial
+- Solo usa frases íntimas (ej. "te amo", "mi amor") cuando haya contexto afectivo real con este contacto
+- Si no aplica contexto afectivo, esquiva con una respuesta cálida pero neutra"""
 
         client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
@@ -2319,21 +2390,32 @@ REGLAS:
         reply_text = response.content[0].text
 
         # Send via Evolution API
+        reply_remote_id = ""
         async with httpx.AsyncClient(timeout=30.0) as http_client:
-            await http_client.post(
+            resp = await http_client.post(
                 f"{EVOLUTION_API_URL}/message/sendText/{instance}",
                 json={"number": remote_jid, "text": reply_text},
                 headers={"apikey": EVOLUTION_API_KEY},
             )
+            if resp.status_code not in (200, 201):
+                raise RuntimeError(f"Auto-reply send failed: {resp.status_code} {resp.text[:200]}")
+            try:
+                payload = resp.json() if resp.content else {}
+            except Exception:
+                payload = {}
+            reply_remote_id = _extract_remote_message_id(payload)
 
         # Save auto-reply message
-        await supabase.table("external_messages").insert({
+        auto_reply_payload = {
             "chat_id": chat_id,
             "direction": "out",
             "content": reply_text,
             "is_auto_reply": True,
             "status": "sent",
-        }).execute()
+        }
+        if reply_remote_id:
+            auto_reply_payload["remote_message_id"] = reply_remote_id
+        await supabase.table("external_messages").insert(auto_reply_payload).execute()
 
         # Update chat
         await supabase.table("external_chats").update({
