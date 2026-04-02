@@ -646,6 +646,35 @@ def _looks_like_git_diff(text: str) -> bool:
     return ("--- " in value and "+++ " in value and "@@" in value)
 
 
+def _is_valid_unified_diff(text: str) -> bool:
+    """
+    Guardrail against truncated/model-shortened patches that make git apply fail
+    with errors like "corrupt patch at line X".
+    """
+    value = (text or "").strip()
+    if not value:
+        return False
+
+    lines = value.splitlines()
+    has_hunk = False
+    hunk_header = re.compile(r"^@@\s-\d+(?:,\d+)?\s\+\d+(?:,\d+)?\s@@")
+    truncation_marker = re.compile(r"^[+\- ]*(?:\.\.\.|…)\s*$")
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Common LLM placeholders that invalidate the patch.
+        if stripped in {"``", "`", "...", "…"} or truncation_marker.match(line):
+            return False
+
+        if line.startswith("@@"):
+            if not hunk_header.match(line):
+                return False
+            has_hunk = True
+
+    return has_hunk
+
+
 def _normalize_git_diff_text(raw_text: str) -> str:
     """Normalize model-produced diff blocks so git apply gets cleaner input."""
     text = (raw_text or "").replace("\r\n", "\n").replace("\r", "\n")
@@ -687,13 +716,13 @@ def _extract_git_diff_from_response(response_text: str) -> Optional[str]:
     # Prefer explicit diff/patch fences.
     for block in re.findall(r"```(?:diff|patch)\s*\n([\s\S]*?)```", text, flags=re.IGNORECASE):
         candidate = _normalize_git_diff_text(block)
-        if _looks_like_git_diff(candidate):
+        if _looks_like_git_diff(candidate) and _is_valid_unified_diff(candidate):
             return candidate
 
     # Fallback: generic fences that still contain unified diff content.
     for block in re.findall(r"```\s*\n([\s\S]*?)```", text):
         candidate = _normalize_git_diff_text(block)
-        if _looks_like_git_diff(candidate):
+        if _looks_like_git_diff(candidate) and _is_valid_unified_diff(candidate):
             return candidate
 
     # Last fallback: raw text starting at diff marker.
@@ -704,13 +733,26 @@ def _extract_git_diff_from_response(response_text: str) -> Optional[str]:
         if fence_index >= 0:
             candidate = candidate[:fence_index]
         candidate = _normalize_git_diff_text(candidate)
-        if _looks_like_git_diff(candidate):
+        if _looks_like_git_diff(candidate) and _is_valid_unified_diff(candidate):
             return candidate
 
     candidate = _normalize_git_diff_text(text)
-    if _looks_like_git_diff(candidate):
+    if _looks_like_git_diff(candidate) and _is_valid_unified_diff(candidate):
         return candidate
     return None
+
+
+def _response_has_truncated_diff_markers(response_text: str) -> bool:
+    text = response_text or ""
+    if not text.strip():
+        return False
+    if re.search(r"(?m)^\s*@@\s*$", text):
+        return True
+    if re.search(r"(?m)^\s*[+\- ]*(?:\.\.\.|…)\s*$", text):
+        return True
+    if "```diff" in text.lower() and "diff --git " in text and "..." in text:
+        return True
+    return False
 
 
 def _sanitize_branch_name(raw_value: str, *, fallback: str) -> str:
@@ -963,6 +1005,12 @@ async def _maybe_publish_agent_git_commit(
                 "status": "skipped_no_code",
                 "repo_full_name": repo_full_name,
                 "detail": "El agente indicó que no hacían falta cambios de código.",
+            }
+        if _response_has_truncated_diff_markers(agent_response):
+            return {
+                "status": "no_patch",
+                "repo_full_name": repo_full_name,
+                "detail": "El agente devolvió un diff truncado o inválido (p. ej. @@ incompleto o líneas ...).",
             }
         return {
             "status": "no_patch",
@@ -1294,6 +1342,7 @@ async def _execute_project_agent_job(
 ) -> Dict[str, Any]:
     issue_id = job.get("issue_id")
     agent_id = job.get("agent_id")
+    previous_payload = job.get("payload") or {}
     if not issue_id or not agent_id:
         raise ValueError("Queue job missing issue_id or agent_id")
 
@@ -1425,6 +1474,21 @@ async def _execute_project_agent_job(
             )
     if attachment_context:
         task_context += f"\n\nContexto de adjuntos (si hay texto útil):\n{attachment_context}"
+
+    previous_git_result = previous_payload.get("git_result") if isinstance(previous_payload, dict) else None
+    if isinstance(previous_git_result, dict):
+        prev_git_status = (previous_git_result.get("status") or "").strip().lower()
+        prev_git_detail = (previous_git_result.get("detail") or "").strip()
+        if prev_git_status in {"error", "no_patch"}:
+            task_context += (
+                "\n\nContexto del intento anterior (importante para no repetir fallos):\n"
+                f"- Estado Git anterior: {prev_git_status}\n"
+                f"- Motivo: {prev_git_detail or 'sin detalle'}\n"
+                "- Si vuelves a marcar `Estado: COMPLETADA`, debes devolver un bloque ` ```diff ` completo y aplicable.\n"
+                "- No uses `...`, no uses `@@` incompleto, no resumas hunks.\n"
+                "- Si no tienes cambios concretos listos para patch, responde `Estado: EN_PROGRESO`."
+            )
+
     task_context += (
         "\n\nFormato de salida obligatorio:\n"
         "- Primera línea: `Estado: COMPLETADA` o `Estado: EN_PROGRESO`\n"
