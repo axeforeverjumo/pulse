@@ -93,7 +93,7 @@ async def enqueue_project_agent_job(
     *,
     source: str = "project_assignment",
     payload: Optional[Dict[str, Any]] = None,
-    max_attempts: int = 4,
+    max_attempts: int = 100,
 ) -> str:
     ids = _coerce_issue_row(issue)
     resolved_agent_id = _coerce_uuid(agent_id)

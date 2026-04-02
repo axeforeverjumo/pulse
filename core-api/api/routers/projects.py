@@ -1433,6 +1433,7 @@ async def _execute_project_agent_job(
     return {
         "issue_id": issue_id,
         "agent_id": agent_id,
+        "task_completed": task_marked_complete,
         "response": agent_response,
         "git_result": git_result or {},
     }
@@ -1471,12 +1472,32 @@ async def _process_project_agent_queue_background(
                     job,
                     fallback_user_id=fallback_user_id,
                 )
+                task_completed = bool(result_payload.get("task_completed"))
                 await update_project_agent_job(
                     supabase,
                     job_id,
-                    status="completed",
+                    status="completed" if task_completed else "queued",
+                    error="" if not task_completed else None,
                     payload_patch={**(job.get("payload") or {}), **result_payload},
                 )
+                if not task_completed:
+                    # Enforce strict sequence: keep iterating the same issue until it reaches QA/Done
+                    # before claiming any newer queued issue for this agent.
+                    current_attempts = int(job.get("attempts") or 0)
+                    if current_attempts > 0:
+                        try:
+                            await supabase.table("project_agent_queue_jobs").update({
+                                "attempts": current_attempts - 1,
+                            }).eq("id", job_id).execute()
+                        except Exception:
+                            logger.warning("Could not normalize attempts counter for queue job %s", job_id)
+                    logger.info(
+                        "Queue job %s re-queued for continued work (issue=%s agent=%s)",
+                        job_id,
+                        job.get("issue_id"),
+                        job.get("agent_id"),
+                    )
+                    break
             except Exception as exc:
                 message = str(exc)
                 lower_message = message.lower()
