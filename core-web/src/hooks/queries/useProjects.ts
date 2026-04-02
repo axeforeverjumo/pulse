@@ -32,8 +32,8 @@ import {
   deleteIssueComment,
   addCommentReaction,
   removeCommentReaction,
-  getWorkspaceAgents,
-  type AgentInstance,
+  getWorkspaceOpenClawAgents,
+  type OpenClawAgent,
   type ProjectBoard,
   type ProjectState,
   type ProjectIssue,
@@ -52,7 +52,7 @@ import { toast } from 'sonner';
 
 // Re-export types for convenience
 export type {
-  AgentInstance,
+  OpenClawAgent,
   ProjectBoard,
   ProjectState,
   ProjectIssue,
@@ -1287,10 +1287,10 @@ export function useRemoveAssignee(boardId: string | null) {
  */
 export function useWorkspaceAgents(workspaceId: string | null) {
   return useQuery({
-    queryKey: ["workspace-agents", workspaceId ?? ""],
+    queryKey: ["workspace-openclaw-agents", workspaceId ?? ""],
     queryFn: async () => {
       if (!workspaceId) throw new Error("No workspace ID");
-      const result = await getWorkspaceAgents(workspaceId);
+      const result = await getWorkspaceOpenClawAgents(workspaceId);
       return result.agents || [];
     },
     enabled: !!workspaceId,

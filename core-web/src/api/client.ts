@@ -2545,6 +2545,14 @@ export interface ProjectAgentQueueJob {
   updated_at?: string;
 }
 
+export interface OpenClawAgent {
+  id: string;
+  name: string;
+  tier?: 'core' | 'advance' | string;
+  avatar_url?: string;
+  openclaw_agent_id?: string;
+}
+
 export interface ItemPosition {
   id: string;
   position: number;
@@ -2813,6 +2821,12 @@ export async function triggerAgentWork(issueId: string, agentId: string): Promis
     method: 'POST',
     body: JSON.stringify({ agent_id: agentId }),
   });
+}
+
+export async function getWorkspaceOpenClawAgents(
+  workspaceId: string
+): Promise<{ agents: OpenClawAgent[] }> {
+  return api(`/openclaw-agents/?workspace_id=${encodeURIComponent(workspaceId)}`);
 }
 
 export async function listProjectAgentQueue(options?: {

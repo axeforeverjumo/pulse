@@ -15,7 +15,7 @@ import {
   useRemoveAgentAssignee,
   type ProjectIssueAssignee,
   type WorkspaceMember,
-  type AgentInstance,
+  type OpenClawAgent,
 } from '../../../hooks/queries/useProjects';
 
 interface AssigneePickerProps {
@@ -54,7 +54,7 @@ export default function AssigneePicker({ issueId, boardId, currentAssignees, but
   }, [members]);
 
   const agentsById = useMemo(() => {
-    const map = new Map<string, AgentInstance>();
+    const map = new Map<string, OpenClawAgent>();
     agents.forEach((a) => map.set(a.id, a));
     return map;
   }, [agents]);
