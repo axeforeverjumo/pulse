@@ -782,8 +782,22 @@ def _apply_patch_and_push_to_github(
 
         try:
             _run_command(["git", "apply", "--3way", "--whitespace=fix", patch_path], cwd=repo_dir, env=env)
-        except Exception:
-            _run_command(["git", "apply", "--reject", "--whitespace=fix", patch_path], cwd=repo_dir, env=env)
+        except Exception as apply_error:
+            try:
+                _run_command(["git", "apply", "--reject", "--whitespace=fix", patch_path], cwd=repo_dir, env=env)
+            except Exception:
+                # If reverse-check passes, patch is already effectively applied on target branch.
+                try:
+                    _run_command(["git", "apply", "--reverse", "--check", patch_path], cwd=repo_dir, env=env)
+                    return {
+                        "status": "no_changes",
+                        "repo_full_name": repo_full_name,
+                        "branch": branch_name,
+                        "base_branch": default_branch,
+                        "detail": "Patch already applied on target branch",
+                    }
+                except Exception:
+                    raise apply_error
 
         _run_command(["git", "add", "-A"], cwd=repo_dir, env=env)
         has_changes = bool(_run_command(["git", "status", "--porcelain"], cwd=repo_dir, env=env).strip())
