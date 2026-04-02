@@ -1442,19 +1442,24 @@ async def _execute_project_agent_job(
         agent=agent,
         agent_response=agent_response,
     )
-    git_activity_message = _build_git_activity_message(git_result)
-    if git_activity_message:
-        await _append_agent_activity_comment(
-            supabase,
-            issue_id=issue_id,
-            comment_user_id=comment_user_id,
-            agent=agent,
-            content=git_activity_message,
-            workspace_id=task.get("workspace_id"),
-            workspace_app_id=task.get("workspace_app_id"),
-        )
-
     task_marked_complete = _is_agent_task_marked_complete(agent_response)
+    git_status = ((git_result or {}).get("status") or "").strip().lower()
+    should_emit_git_activity = not (
+        git_status in {"no_patch", "skipped_no_code"} and not task_marked_complete
+    )
+    if should_emit_git_activity:
+        git_activity_message = _build_git_activity_message(git_result)
+        if git_activity_message:
+            await _append_agent_activity_comment(
+                supabase,
+                issue_id=issue_id,
+                comment_user_id=comment_user_id,
+                agent=agent,
+                content=git_activity_message,
+                workspace_id=task.get("workspace_id"),
+                workspace_app_id=task.get("workspace_app_id"),
+            )
+
     declared_no_code_changes = _agent_declared_no_code_changes(agent_response)
 
     # On development boards we only allow QA handoff when persistence is guaranteed:
