@@ -1412,15 +1412,14 @@ async def _execute_project_agent_job(
     if task_marked_complete and board.get("is_development") and repo_full_name_for_automation:
         git_status = (git_result or {}).get("status")
         if git_status not in {"pushed", "no_changes", "skipped_no_code"}:
-            task_marked_complete = False
             await _append_agent_activity_comment(
                 supabase,
                 issue_id=issue_id,
                 comment_user_id=comment_user_id,
                 agent=agent,
                 content=(
-                    "⚠️ La tarea no pasó a QA porque faltó un commit válido en GitHub. "
-                    "Revisa repo/token/diff y vuelve a ejecutar."
+                    "⚠️ El commit automático en GitHub falló, pero la tarea se marcó como completada y se envió a QA para revisión humana. "
+                    "Revisa repo/token/diff para dejar el commit limpio antes de cerrar en Done."
                 ),
                 workspace_id=task.get("workspace_id"),
                 workspace_app_id=task.get("workspace_app_id"),
