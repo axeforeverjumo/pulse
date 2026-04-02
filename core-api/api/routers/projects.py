@@ -656,7 +656,9 @@ def _is_valid_unified_diff(text: str) -> bool:
         return False
 
     lines = value.splitlines()
+    has_file_header = False
     has_hunk = False
+    in_hunk = False
     hunk_header = re.compile(r"^@@\s-\d+(?:,\d+)?\s\+\d+(?:,\d+)?\s@@")
     truncation_marker = re.compile(r"^[+\- ]*(?:\.\.\.|…)\s*$")
 
@@ -667,12 +669,63 @@ def _is_valid_unified_diff(text: str) -> bool:
         if stripped in {"``", "`", "...", "…"} or truncation_marker.match(line):
             return False
 
+        if line.startswith("diff --git "):
+            has_file_header = True
+            in_hunk = False
+            continue
+
+        if line.startswith("--- ") or line.startswith("+++ "):
+            has_file_header = True
+            in_hunk = False
+            continue
+
         if line.startswith("@@"):
             if not hunk_header.match(line):
                 return False
             has_hunk = True
+            in_hunk = True
+            continue
 
-    return has_hunk
+        # Optional diff metadata lines between file headers and hunks.
+        if line.startswith((
+            "index ",
+            "new file mode ",
+            "deleted file mode ",
+            "old mode ",
+            "new mode ",
+            "similarity index ",
+            "rename from ",
+            "rename to ",
+            "Binary files ",
+            "GIT binary patch",
+        )):
+            in_hunk = False
+            continue
+
+        if in_hunk:
+            # Inside a hunk, every line must be context/add/remove or EOF marker.
+            if line.startswith(("+", "-", " ")):
+                continue
+            if line == r"\ No newline at end of file":
+                continue
+            return False
+
+    return has_file_header and has_hunk
+
+
+def _is_patch_apply_failure(error_text: str) -> bool:
+    value = (error_text or "").lower()
+    if not value:
+        return False
+    return any(marker in value for marker in [
+        "corrupt patch",
+        "malformed patch",
+        "patch failed",
+        "patch does not apply",
+        "repository lacks the necessary blob",
+        "unrecognized input",
+        "while searching for:",
+    ])
 
 
 def _normalize_git_diff_text(raw_text: str) -> str:
@@ -1067,11 +1120,19 @@ async def _maybe_publish_agent_git_commit(
             author_email=author_email,
         )
     except Exception as git_error:
+        detail = f"{git_error}"
+        if _is_patch_apply_failure(detail):
+            return {
+                "status": "no_patch",
+                "repo_full_name": repo_full_name,
+                "branch": branch_name,
+                "detail": detail,
+            }
         return {
             "status": "error",
             "repo_full_name": repo_full_name,
             "branch": branch_name,
-            "detail": f"{git_error}",
+            "detail": detail,
         }
 
 
@@ -1104,7 +1165,10 @@ def _build_git_activity_message(git_result: Optional[Dict[str, Any]]) -> Optiona
     if status_value == "missing_token":
         return "⚠️ El servidor no tiene `PULSE_GITHUB_TOKEN` configurado, no se pudo hacer push."
     if status_value == "no_patch":
-        return "⚠️ No encontré diff (` ```diff `) en la respuesta del agente, así que no se generó commit."
+        detail = (git_result.get("detail") or "").strip()
+        if detail:
+            return f"⚠️ Diff no aplicable todavía: {detail}"
+        return "⚠️ No encontré un bloque ` ```diff ` válido y aplicable, así que no se generó commit."
     if status_value == "error":
         return f"⚠️ Falló el commit automático: {git_result.get('detail')}"
     return None
@@ -1694,7 +1758,8 @@ async def _process_project_agent_queue_background(
     processed = 0
     async with _AGENT_QUEUE_WORKER_LOCK:
         supabase = await get_async_service_role_client()
-        revived = await revive_stale_running_jobs(supabase, stale_after_minutes=15)
+        # Slightly shorter stale threshold so queue recovers faster after worker restarts.
+        revived = await revive_stale_running_jobs(supabase, stale_after_minutes=10)
         if revived:
             logger.info("Revived %s stale running queue job(s)", revived)
         for _ in range(max(1, min(max_jobs, 50))):
