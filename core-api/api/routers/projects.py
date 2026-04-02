@@ -1550,7 +1550,7 @@ async def _execute_project_agent_job(
         )
         agent_response = response.content[0].text
     else:
-        async with httpx.AsyncClient(timeout=180.0) as http_client:
+        async with httpx.AsyncClient(timeout=420.0) as http_client:
             resp = await http_client.post(
                 "http://127.0.0.1:4200",
                 json={

@@ -11,9 +11,9 @@ HOUR=$(date +%-H)
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG"; }
 
-# Every 5 minutes: agent-health
+# Every 5 minutes: agent-health (can run >30s when processing queue jobs)
 log "Running agent-health"
-curl -sf -m 30 "$API/agent-health" -H "$AUTH" >> "$LOG" 2>&1 || log "WARN: agent-health failed"
+curl -sf -m 300 "$API/agent-health" -H "$AUTH" >> "$LOG" 2>&1 || log "WARN: agent-health failed"
 
 # Every 15 minutes: incremental-sync (email sync)
 if (( MINUTE % 15 == 0 )); then
