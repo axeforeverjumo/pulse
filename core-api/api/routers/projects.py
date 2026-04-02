@@ -748,6 +748,19 @@ def _apply_patch_and_push_to_github(
     author_name: str,
     author_email: str,
 ) -> Dict[str, Any]:
+    def _list_unmerged_files(repo_path: str, env_vars: Dict[str, str]) -> List[str]:
+        output = _run_command(["git", "diff", "--name-only", "--diff-filter=U"], cwd=repo_path, env=env_vars)
+        return [line.strip() for line in output.splitlines() if line.strip()]
+
+    def _find_reject_files(repo_path: str) -> List[str]:
+        reject_files: List[str] = []
+        for root, _, files in os.walk(repo_path):
+            for filename in files:
+                if filename.endswith(".rej"):
+                    rel_path = os.path.relpath(os.path.join(root, filename), repo_path)
+                    reject_files.append(rel_path)
+        return reject_files
+
     with tempfile.TemporaryDirectory(prefix="pulse-agent-git-") as tmp_dir:
         askpass_path = os.path.join(tmp_dir, "git-askpass.sh")
         with open(askpass_path, "w", encoding="utf-8") as askpass_file:
@@ -793,24 +806,57 @@ def _apply_patch_and_push_to_github(
         except Exception:
             pass
 
+        applied = False
         try:
             _run_command(["git", "apply", "--3way", "--whitespace=fix", patch_path], cwd=repo_dir, env=env)
+            applied = True
         except Exception as apply_error:
-            try:
-                _run_command(["git", "apply", "--reject", "--whitespace=fix", patch_path], cwd=repo_dir, env=env)
-            except Exception:
-                # If reverse-check passes, patch is already effectively applied on target branch.
+            conflict_resolved = False
+            error_text = str(apply_error or "").lower()
+
+            # If 3-way apply produced merge conflicts, prefer agent patch ("theirs")
+            # for conflicted files to avoid queue deadlocks in repetitive retries.
+            if "with conflicts" in error_text or "unmerged" in error_text:
                 try:
-                    _run_command(["git", "apply", "--reverse", "--check", patch_path], cwd=repo_dir, env=env)
-                    return {
-                        "status": "no_changes",
-                        "repo_full_name": repo_full_name,
-                        "branch": branch_name,
-                        "base_branch": default_branch,
-                        "detail": "Patch already applied on target branch",
-                    }
+                    for conflicted in _list_unmerged_files(repo_dir, env):
+                        _run_command(["git", "checkout", "--theirs", "--", conflicted], cwd=repo_dir, env=env)
+                        _run_command(["git", "add", "--", conflicted], cwd=repo_dir, env=env)
+                    if not _list_unmerged_files(repo_dir, env):
+                        conflict_resolved = True
+                        applied = True
                 except Exception:
-                    raise apply_error
+                    conflict_resolved = False
+
+            if not conflict_resolved:
+                # Clean any partial index/worktree before alternate apply strategy.
+                _run_command(["git", "reset", "--hard", "HEAD"], cwd=repo_dir, env=env)
+                try:
+                    _run_command(["git", "apply", "--reject", "--whitespace=fix", patch_path], cwd=repo_dir, env=env)
+                    applied = True
+                except Exception:
+                    # If reverse-check passes, patch is already effectively applied on target branch.
+                    try:
+                        _run_command(["git", "apply", "--reverse", "--check", patch_path], cwd=repo_dir, env=env)
+                        return {
+                            "status": "no_changes",
+                            "repo_full_name": repo_full_name,
+                            "branch": branch_name,
+                            "base_branch": default_branch,
+                            "detail": "Patch already applied on target branch",
+                        }
+                    except Exception:
+                        raise apply_error
+
+        if not applied:
+            raise RuntimeError("Patch apply failed without explicit error")
+
+        unresolved_files = _list_unmerged_files(repo_dir, env)
+        if unresolved_files:
+            raise RuntimeError(f"Patch left unresolved conflicts: {', '.join(unresolved_files[:5])}")
+
+        reject_files = _find_reject_files(repo_dir)
+        if reject_files:
+            raise RuntimeError(f"Patch produced .rej files: {', '.join(reject_files[:5])}")
 
         _run_command(["git", "add", "-A"], cwd=repo_dir, env=env)
         has_changes = bool(_run_command(["git", "status", "--porcelain"], cwd=repo_dir, env=env).strip())
