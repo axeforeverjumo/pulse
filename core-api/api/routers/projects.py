@@ -3,8 +3,14 @@ Projects router - HTTP endpoints for kanban-style boards with states and issues
 """
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from pydantic import BaseModel, Field, model_validator
-from typing import Optional, List
+from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime
+import html
+import io
+import mimetypes
+import re
+import zipfile
+import httpx
 from api.services.projects import (
     get_boards,
     get_board_by_id,
@@ -43,6 +49,7 @@ from api.services.projects import (
 )
 from api.dependencies import get_current_user_jwt, get_current_user_id
 from api.exceptions import handle_api_exception
+from lib.image_proxy import generate_file_url
 import logging
 
 logger = logging.getLogger(__name__)
@@ -61,6 +68,15 @@ class CreateBoardRequest(BaseModel):
     icon: Optional[str] = None
     color: Optional[str] = None
     key: Optional[str] = Field(None, max_length=10, description="Short code e.g. CORE")
+    is_development: bool = Field(default=False, description="Whether this board is for software development")
+    project_url: Optional[str] = None
+    repository_url: Optional[str] = None
+    repository_full_name: Optional[str] = None
+    server_host: Optional[str] = None
+    server_ip: Optional[str] = None
+    server_user: Optional[str] = None
+    server_password: Optional[str] = None
+    server_port: Optional[int] = Field(default=None, ge=1, le=65535)
 
 
 class UpdateBoardRequest(BaseModel):
@@ -70,6 +86,15 @@ class UpdateBoardRequest(BaseModel):
     icon: Optional[str] = None
     color: Optional[str] = None
     key: Optional[str] = Field(None, max_length=10)
+    is_development: Optional[bool] = None
+    project_url: Optional[str] = None
+    repository_url: Optional[str] = None
+    repository_full_name: Optional[str] = None
+    server_host: Optional[str] = None
+    server_ip: Optional[str] = None
+    server_user: Optional[str] = None
+    server_password: Optional[str] = None
+    server_port: Optional[int] = Field(default=None, ge=1, le=65535)
 
 
 class CreateStateRequest(BaseModel):
@@ -95,6 +120,7 @@ class CreateIssueRequest(BaseModel):
     priority: int = Field(default=0, ge=0, le=4, description="0=none, 1=urgent, 2=high, 3=medium, 4=low")
     due_at: Optional[datetime] = None
     image_r2_keys: Optional[List[str]] = Field(None, description="List of R2 keys for issue images")
+    checklist_items: Optional[List[Dict[str, Any]]] = None
     label_ids: Optional[List[str]] = None
     assignee_ids: Optional[List[str]] = None
 
@@ -118,6 +144,7 @@ class UpdateIssueRequest(BaseModel):
     remove_image_r2_keys: Optional[List[str]] = Field(None, description="Remove specific images from array")
     image_r2_keys: Optional[List[str]] = Field(None, description="Replace all images with these R2 keys")
     clear_images: bool = False
+    checklist_items: Optional[List[Dict[str, Any]]] = None
     state_id: Optional[str] = None
     position: Optional[int] = Field(None, ge=0)
     label_ids: Optional[List[str]] = None
@@ -200,6 +227,27 @@ class AddCommentReactionRequest(BaseModel):
     emoji: str = Field(..., min_length=1, max_length=32, description="Emoji string")
 
 
+class GitHubListReposRequest(BaseModel):
+    """Request model for listing GitHub repositories using a customer token."""
+    token: str = Field(..., min_length=20, description="GitHub personal access token")
+    owner: Optional[str] = Field(
+        None,
+        description="Optional owner/org login to filter repositories",
+    )
+
+
+class GitHubCreateRepoRequest(BaseModel):
+    """Request model for creating a GitHub repository."""
+    token: str = Field(..., min_length=20, description="GitHub personal access token")
+    name: str = Field(..., min_length=1, max_length=100, description="Repository name")
+    owner: Optional[str] = Field(
+        None,
+        description="Optional org login. If omitted, creates under authenticated user",
+    )
+    private: bool = Field(default=True, description="Create as private repository")
+    description: Optional[str] = Field(None, description="Repository description")
+
+
 # ============================================================================
 # Response Models
 # ============================================================================
@@ -214,6 +262,15 @@ class BoardResponse(BaseModel):
     key: Optional[str] = None
     icon: Optional[str] = None
     color: Optional[str] = None
+    is_development: bool = False
+    project_url: Optional[str] = None
+    repository_url: Optional[str] = None
+    repository_full_name: Optional[str] = None
+    server_host: Optional[str] = None
+    server_ip: Optional[str] = None
+    server_user: Optional[str] = None
+    server_password: Optional[str] = None
+    server_port: Optional[int] = None
     position: int = 0
     next_issue_number: int = 1
     created_by: Optional[str] = None
@@ -332,6 +389,8 @@ class IssueResponse(BaseModel):
     due_at: Optional[str] = None
     image_r2_keys: Optional[List[str]] = None
     image_urls: Optional[List[str]] = None
+    attachments: Optional[List[dict]] = None
+    checklist_items: Optional[List[Dict[str, Any]]] = None
     label_objects: Optional[List[LabelResponse]] = None
     assignees: Optional[List[AssigneeResponse]] = None
     position: int = 0
@@ -413,6 +472,221 @@ class CommentListResponse(BaseModel):
     total_count: int  # Total comments for this issue
 
 
+def _normalize_state_name(name: Optional[str]) -> str:
+    return (name or "").strip().lower()
+
+
+def _is_in_progress_state(name: Optional[str]) -> bool:
+    normalized = _normalize_state_name(name)
+    return normalized in {"in progress", "en progreso", "en curso", "doing"}
+
+
+def _is_qa_state(name: Optional[str]) -> bool:
+    normalized = _normalize_state_name(name)
+    return normalized in {"qa", "q&a", "quality assurance", "quality", "validacion", "validación"}
+
+
+def _is_done_state(name: Optional[str]) -> bool:
+    normalized = _normalize_state_name(name)
+    return normalized in {"done", "hecho", "completado", "terminado", "closed", "finalizado"}
+
+
+def _guess_mime_type(r2_key: str, filename: Optional[str] = None) -> str:
+    guessed, _ = mimetypes.guess_type(filename or r2_key)
+    return (guessed or "application/octet-stream").lower()
+
+
+def _strip_html(value: str) -> str:
+    text = re.sub(r"<script[\s\S]*?</script>", " ", value, flags=re.IGNORECASE)
+    text = re.sub(r"<style[\s\S]*?</style>", " ", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", " ", text)
+    return html.unescape(re.sub(r"\s+", " ", text)).strip()
+
+
+def _extract_docx_text(blob: bytes) -> str:
+    with zipfile.ZipFile(io.BytesIO(blob)) as zf:
+        xml_content = zf.read("word/document.xml").decode("utf-8", errors="ignore")
+    text_parts = re.findall(r"<w:t[^>]*>(.*?)</w:t>", xml_content)
+    return html.unescape(" ".join(text_parts))
+
+
+def _extract_xlsx_text(blob: bytes) -> str:
+    with zipfile.ZipFile(io.BytesIO(blob)) as zf:
+        shared_strings: List[str] = []
+        if "xl/sharedStrings.xml" in zf.namelist():
+            shared_xml = zf.read("xl/sharedStrings.xml").decode("utf-8", errors="ignore")
+            shared_strings = [html.unescape(s) for s in re.findall(r"<t[^>]*>(.*?)</t>", shared_xml)]
+
+        sheet_name = next((name for name in zf.namelist() if name.startswith("xl/worksheets/sheet")), None)
+        if not sheet_name:
+            return ""
+        sheet_xml = zf.read(sheet_name).decode("utf-8", errors="ignore")
+
+    values: List[str] = []
+    for cell_type, value in re.findall(r'<c[^>]*?(?: t="([^"]+)")?[^>]*>\s*<v>(.*?)</v>', sheet_xml):
+        if cell_type == "s":
+            try:
+                idx = int(value)
+                values.append(shared_strings[idx] if idx < len(shared_strings) else value)
+            except Exception:
+                values.append(value)
+        else:
+            values.append(value)
+    return " ".join(values)
+
+
+def _build_default_checklist(title: str) -> List[Dict[str, Any]]:
+    now_iso = datetime.utcnow().isoformat()
+    safe_title = title.strip() if title else "tarea"
+    return [
+        {"id": "scope-review", "text": f"Analizar alcance y contexto de \"{safe_title}\"", "done": False, "created_at": now_iso},
+        {"id": "implementation", "text": "Implementar solución propuesta", "done": False, "created_at": now_iso},
+        {"id": "validation", "text": "Validar resultado y dejar nota en actividad", "done": False, "created_at": now_iso},
+    ]
+
+
+def _mark_checklist_done(items: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    done_at = datetime.utcnow().isoformat()
+    updated: List[Dict[str, Any]] = []
+    for item in (items or []):
+        if not isinstance(item, dict):
+            continue
+        if item.get("done"):
+            updated.append(item)
+            continue
+        next_item = dict(item)
+        next_item["done"] = True
+        next_item.setdefault("completed_at", done_at)
+        updated.append(next_item)
+    return updated
+
+
+async def _build_issue_attachment_context(
+    supabase: Any,
+    issue: Dict[str, Any],
+) -> Tuple[str, List[Dict[str, Any]]]:
+    r2_keys = [k for k in (issue.get("image_r2_keys") or []) if k]
+    if not r2_keys:
+        return "", []
+
+    files_result = await supabase.table("files")\
+        .select("r2_key, filename, content_type, file_size")\
+        .in_("r2_key", r2_keys)\
+        .execute()
+    meta_by_key = {row["r2_key"]: row for row in (files_result.data or []) if row.get("r2_key")}
+
+    attachments: List[Dict[str, Any]] = []
+    context_chunks: List[str] = []
+
+    for key in r2_keys[:6]:
+        meta = meta_by_key.get(key, {})
+        filename = meta.get("filename") or key.split("/")[-1]
+        mime_type = (meta.get("content_type") or _guess_mime_type(key, filename)).lower()
+        url = generate_file_url(key, mime_type=mime_type, variant="full")
+        excerpt = await _extract_attachment_excerpt(url, mime_type, filename)
+
+        attachments.append({
+            "r2_key": key,
+            "filename": filename,
+            "mime_type": mime_type,
+            "file_size": meta.get("file_size"),
+            "url": url,
+            "excerpt": excerpt,
+        })
+
+        if excerpt:
+            context_chunks.append(f"[{filename}] {excerpt}")
+        else:
+            context_chunks.append(
+                f"[{filename}] Archivo adjunto disponible pero no pude extraer texto (mime={mime_type})."
+            )
+
+    attachment_context = "\n\n".join(context_chunks)
+    return attachment_context, attachments
+
+
+async def _get_agent_assignee_ids(supabase: Any, issue_id: str) -> List[str]:
+    assignees_result = await supabase.table("project_issue_assignees")\
+        .select("agent_id")\
+        .eq("issue_id", issue_id)\
+        .execute()
+    rows = assignees_result.data or []
+    return list({row.get("agent_id") for row in rows if row.get("agent_id")})
+
+
+async def _trigger_assigned_agents_if_in_progress(
+    issue_id: str,
+    target_state_id: str,
+    user_jwt: str,
+    user_id: str,
+) -> None:
+    from lib.supabase_client import get_async_service_role_client
+    import asyncio
+
+    supabase = await get_async_service_role_client()
+    state_result = await supabase.table("project_states")\
+        .select("name")\
+        .eq("id", target_state_id)\
+        .maybe_single()\
+        .execute()
+    state = state_result.data or {}
+    if not _is_in_progress_state(state.get("name")):
+        return
+
+    agent_ids = await _get_agent_assignee_ids(supabase, issue_id)
+    for agent_id in agent_ids:
+        asyncio.create_task(_trigger_agent_work_background(issue_id, agent_id, user_jwt, user_id))
+
+
+async def _extract_attachment_excerpt(url: str, mime_type: str, filename: str) -> Optional[str]:
+    """Extract textual content from attachment for agent context when possible."""
+    if not url:
+        return None
+
+    lower_name = (filename or "").lower()
+    lower_mime = (mime_type or "").lower()
+
+    readable_as_text = (
+        lower_mime.startswith("text/")
+        or lower_mime in {"application/json", "application/xml", "application/javascript"}
+        or lower_name.endswith((".txt", ".md", ".html", ".htm", ".csv", ".json", ".xml"))
+    )
+    maybe_pdf = lower_mime == "application/pdf" or lower_name.endswith(".pdf")
+    maybe_docx = lower_name.endswith(".docx")
+    maybe_xlsx = lower_name.endswith((".xlsx", ".xlsm"))
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            resp = await client.get(url)
+            if resp.status_code >= 400:
+                return None
+            blob = resp.content
+
+        text_content = ""
+        if readable_as_text:
+            decoded = blob.decode("utf-8", errors="ignore")
+            text_content = _strip_html(decoded) if ("html" in lower_mime or lower_name.endswith((".html", ".htm"))) else decoded
+        elif maybe_docx:
+            text_content = _extract_docx_text(blob)
+        elif maybe_xlsx:
+            text_content = _extract_xlsx_text(blob)
+        elif maybe_pdf:
+            try:
+                from pypdf import PdfReader  # type: ignore
+
+                reader = PdfReader(io.BytesIO(blob))
+                text_content = " ".join((page.extract_text() or "") for page in reader.pages[:10])
+            except Exception:
+                text_content = ""
+
+        cleaned = re.sub(r"\s+", " ", text_content).strip()
+        if not cleaned:
+            return None
+        return cleaned[:4000]
+    except Exception:
+        return None
+
+
 # ============================================================================
 # Board Endpoints
 # ============================================================================
@@ -464,6 +738,15 @@ async def create_board_endpoint(
             icon=request.icon,
             color=request.color,
             key=request.key,
+            is_development=request.is_development,
+            project_url=request.project_url,
+            repository_url=request.repository_url,
+            repository_full_name=request.repository_full_name,
+            server_host=request.server_host,
+            server_ip=request.server_ip,
+            server_user=request.server_user,
+            server_password=request.server_password,
+            server_port=request.server_port,
         )
         return result
     except HTTPException:
@@ -500,6 +783,15 @@ async def update_board_endpoint(
             icon=request.icon,
             color=request.color,
             key=request.key,
+            is_development=request.is_development,
+            project_url=request.project_url,
+            repository_url=request.repository_url,
+            repository_full_name=request.repository_full_name,
+            server_host=request.server_host,
+            server_ip=request.server_ip,
+            server_user=request.server_user,
+            server_password=request.server_password,
+            server_port=request.server_port,
         )
         return board
     except ValueError as e:
@@ -518,6 +810,148 @@ async def delete_board_endpoint(
         return await delete_board(user_jwt, board_id)
     except Exception as e:
         handle_api_exception(e, "Failed to delete board", logger)
+
+
+# ============================================================================
+# GitHub Endpoints (project repository picker/creator)
+# ============================================================================
+
+def _github_headers(token: str) -> Dict[str, str]:
+    return {
+        "Authorization": f"Bearer {token.strip()}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+
+@router.post("/github/repos/list")
+async def list_github_repositories_endpoint(
+    request: GitHubListReposRequest,
+    user_jwt: str = Depends(get_current_user_jwt),  # noqa: ARG001 (auth gate)
+):
+    """List repositories available for a provided GitHub token."""
+    owner = (request.owner or "").strip().lower()
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            user_resp = await client.get("https://api.github.com/user", headers=_github_headers(request.token))
+            if user_resp.status_code == 401:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="GitHub token inválido")
+            if user_resp.status_code >= 400:
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="No se pudo validar GitHub")
+            current_user = user_resp.json()
+
+            repos: List[Dict[str, Any]] = []
+            if owner and owner != current_user.get("login", "").lower():
+                org_resp = await client.get(
+                    f"https://api.github.com/orgs/{owner}/repos",
+                    headers=_github_headers(request.token),
+                    params={"type": "all", "per_page": 100, "sort": "updated"},
+                )
+                if org_resp.status_code >= 400:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="No pude leer repositorios de esa organización. Revisa permisos del token.",
+                    )
+                repos = org_resp.json() or []
+            else:
+                user_repos_resp = await client.get(
+                    "https://api.github.com/user/repos",
+                    headers=_github_headers(request.token),
+                    params={"affiliation": "owner,collaborator,organization_member", "per_page": 100, "sort": "updated"},
+                )
+                if user_repos_resp.status_code >= 400:
+                    raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Error al cargar repositorios")
+                repos = user_repos_resp.json() or []
+                if owner:
+                    repos = [repo for repo in repos if (repo.get("owner") or {}).get("login", "").lower() == owner]
+
+        normalized = [
+            {
+                "id": repo.get("id"),
+                "name": repo.get("name"),
+                "full_name": repo.get("full_name"),
+                "private": repo.get("private", True),
+                "html_url": repo.get("html_url"),
+                "description": repo.get("description"),
+                "default_branch": repo.get("default_branch"),
+                "owner": {
+                    "login": (repo.get("owner") or {}).get("login"),
+                    "avatar_url": (repo.get("owner") or {}).get("avatar_url"),
+                },
+            }
+            for repo in repos
+        ]
+
+        return {"repos": normalized, "count": len(normalized), "owner": current_user.get("login")}
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to list GitHub repositories", logger)
+
+
+@router.post("/github/repos/create")
+async def create_github_repository_endpoint(
+    request: GitHubCreateRepoRequest,
+    user_jwt: str = Depends(get_current_user_jwt),  # noqa: ARG001 (auth gate)
+):
+    """Create a GitHub repository with a provided customer token."""
+    owner = (request.owner or "").strip()
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            user_resp = await client.get("https://api.github.com/user", headers=_github_headers(request.token))
+            if user_resp.status_code == 401:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="GitHub token inválido")
+            if user_resp.status_code >= 400:
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="No se pudo validar GitHub")
+            current_user = user_resp.json()
+            user_login = (current_user.get("login") or "").strip()
+
+            payload = {
+                "name": request.name.strip(),
+                "private": request.private,
+                "description": request.description or "",
+                "auto_init": True,
+            }
+
+            if owner and owner.lower() != user_login.lower():
+                create_resp = await client.post(
+                    f"https://api.github.com/orgs/{owner}/repos",
+                    headers=_github_headers(request.token),
+                    json=payload,
+                )
+            else:
+                create_resp = await client.post(
+                    "https://api.github.com/user/repos",
+                    headers=_github_headers(request.token),
+                    json=payload,
+                )
+
+            if create_resp.status_code == 422:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ese repositorio ya existe")
+            if create_resp.status_code >= 400:
+                detail = create_resp.text[:300] or "No se pudo crear el repositorio en GitHub"
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+
+            repo = create_resp.json()
+            return {
+                "repo": {
+                    "id": repo.get("id"),
+                    "name": repo.get("name"),
+                    "full_name": repo.get("full_name"),
+                    "private": repo.get("private", True),
+                    "html_url": repo.get("html_url"),
+                    "description": repo.get("description"),
+                    "default_branch": repo.get("default_branch"),
+                    "owner": {
+                        "login": (repo.get("owner") or {}).get("login"),
+                        "avatar_url": (repo.get("owner") or {}).get("avatar_url"),
+                    },
+                }
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to create GitHub repository", logger)
 
 
 # ============================================================================
@@ -811,7 +1245,11 @@ async def _trigger_agent_work_background(issue_id: str, agent_id: str, user_jwt:
         supabase = await get_async_service_role_client()
 
         # Get task details (include board_id to find states)
-        task_result = await supabase.table("project_issues").select("title, description, priority, board_id, state_id").eq("id", issue_id).maybe_single().execute()
+        task_result = await supabase.table("project_issues")\
+            .select("title, description, priority, board_id, state_id, image_r2_keys, checklist_items")\
+            .eq("id", issue_id)\
+            .maybe_single()\
+            .execute()
         if not task_result or not task_result.data:
             return
 
@@ -824,16 +1262,23 @@ async def _trigger_agent_work_background(issue_id: str, agent_id: str, user_jwt:
 
         agent = agent_result.data
 
-        # Find "In Progress" and "Done" state IDs for this board
-        states_result = await supabase.table("project_states").select("id, name").eq("board_id", task["board_id"]).order("position").execute()
+        # Find workflow states for this board
+        states_result = await supabase.table("project_states")\
+            .select("id, name, is_done")\
+            .eq("board_id", task["board_id"])\
+            .order("position")\
+            .execute()
         states = states_result.data or []
         in_progress_id = None
+        qa_id = None
         done_id = None
         for s in states:
-            name_lower = s["name"].strip().lower()
-            if name_lower in ("in progress", "en progreso", "en curso"):
+            state_name = s.get("name")
+            if _is_in_progress_state(state_name):
                 in_progress_id = s["id"]
-            elif name_lower in ("done", "hecho", "completado", "terminado"):
+            elif _is_qa_state(state_name):
+                qa_id = s["id"]
+            elif s.get("is_done") or _is_done_state(state_name):
                 done_id = s["id"]
 
         # Move task to "In Progress"
@@ -841,14 +1286,44 @@ async def _trigger_agent_work_background(issue_id: str, agent_id: str, user_jwt:
             await supabase.table("project_issues").update({"state_id": in_progress_id}).eq("id", issue_id).execute()
             logger.info(f"Moved issue {issue_id} to In Progress")
 
-        task_context = f"Título: {task['title']}\nDescripción: {task.get('description') or 'Sin descripción'}\nPrioridad: {task.get('priority', 0)}"
+        checklist_items = task.get("checklist_items") or []
+        if not checklist_items:
+            checklist_items = _build_default_checklist(task.get("title", ""))
+            await supabase.table("project_issues")\
+                .update({"checklist_items": checklist_items})\
+                .eq("id", issue_id)\
+                .execute()
+
+        attachment_context, attachments = await _build_issue_attachment_context(supabase, task)
+        checklist_text = "\n".join(
+            f"- [{'x' if item.get('done') else ' '}] {item.get('text', '')}"
+            for item in checklist_items
+            if isinstance(item, dict)
+        ) or "- [ ] Sin checklist todavía"
+
+        task_context = (
+            f"Título: {task['title']}\n"
+            f"Descripción: {task.get('description') or 'Sin descripción'}\n"
+            f"Prioridad: {task.get('priority', 0)}\n\n"
+            f"Checklist actual:\n{checklist_text}"
+        )
+        if attachment_context:
+            task_context += f"\n\nContexto de adjuntos (si hay texto útil):\n{attachment_context}"
 
         if agent.get("tier") == "core":
             import anthropic
             from api.config import settings
 
             client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-            system_prompt = f"Eres {agent['name']}.\n\n{agent.get('soul_md', '')}\n\n{agent.get('identity_md', '')}\n\nTe han asignado una tarea. Analiza y trabaja en ella. Si puedes completarla, hazlo y escribe 'Tarea completada' al final. Si necesitas más información o no puedes terminarla ahora, explica qué has hecho y qué falta. Responde en español."
+            system_prompt = (
+                f"Eres {agent['name']}.\n\n"
+                f"{agent.get('soul_md', '')}\n\n"
+                f"{agent.get('identity_md', '')}\n\n"
+                "Te han asignado una tarea en un tablero Kanban.\n"
+                "Si la terminas, escribe exactamente 'Tarea completada' al final.\n"
+                "Si no está terminada, explica qué hiciste y qué falta.\n"
+                "Responde en español."
+            )
 
             response = await client.messages.create(
                 model=agent.get("model", "claude-haiku-4-5-20251001"),
@@ -878,11 +1353,20 @@ async def _trigger_agent_work_background(issue_id: str, agent_id: str, user_jwt:
         await auth_supabase.table("project_issue_comments").insert({
             "issue_id": issue_id,
             "user_id": user_id,
-            "blocks": [{"type": "text", "data": {"content": f"🤖 **{agent['name']}**:\n\n{agent_response}"}}],
+            "blocks": [
+                {
+                    "type": "agent_meta",
+                    "data": {
+                        "agent_id": agent.get("id"),
+                        "name": agent.get("name"),
+                        "avatar_url": agent.get("avatar_url"),
+                    },
+                },
+                {"type": "text", "data": {"content": agent_response}},
+            ],
         }).execute()
 
         # Check if agent considers the task complete
-        # Only move to Done if the agent explicitly says so
         response_lower = agent_response.lower()
         task_complete = any(phrase in response_lower for phrase in [
             "tarea completada", "tarea finalizada", "he terminado", "trabajo completado",
@@ -890,11 +1374,23 @@ async def _trigger_agent_work_background(issue_id: str, agent_id: str, user_jwt:
             "task completed", "task done", "work complete",
         ])
 
-        if task_complete and done_id:
-            await supabase.table("project_issues").update({"state_id": done_id}).eq("id", issue_id).execute()
-            logger.info(f"Agent marked issue {issue_id} as Done")
+        if task_complete:
+            updates: Dict[str, Any] = {}
+            qa_or_done = qa_id or done_id
+            if qa_or_done:
+                updates["state_id"] = qa_or_done
+            if checklist_items:
+                updates["checklist_items"] = _mark_checklist_done(checklist_items)
+            if updates:
+                await supabase.table("project_issues").update(updates).eq("id", issue_id).execute()
+            logger.info("Agent marked issue %s as complete (moved to %s)", issue_id, "QA" if qa_id else "Done")
 
-        logger.info(f"Agent {agent['name']} responded on issue {issue_id}")
+        logger.info(
+            "Agent %s responded on issue %s (attachments=%s)",
+            agent.get("name"),
+            issue_id,
+            len(attachments),
+        )
     except Exception as e:
         logger.error(f"Agent work-on-task failed for issue {issue_id}: {e}")
 
@@ -972,6 +1468,7 @@ async def create_issue_endpoint(
             priority=request.priority,
             due_at=request.due_at,
             image_r2_keys=request.image_r2_keys,
+            checklist_items=request.checklist_items,
             label_ids=request.label_ids,
             assignee_ids=request.assignee_ids,
         )
@@ -987,6 +1484,7 @@ async def update_issue_endpoint(
     issue_id: str,
     request: UpdateIssueRequest,
     user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
 ):
     """Update an issue. Changing state_id triggers completion logic."""
     try:
@@ -1002,11 +1500,20 @@ async def update_issue_endpoint(
             remove_image_r2_keys=request.remove_image_r2_keys,
             image_r2_keys=request.image_r2_keys,
             clear_images=request.clear_images,
+            checklist_items=request.checklist_items,
             state_id=request.state_id,
             position=request.position,
             label_ids=request.label_ids,
             assignee_ids=request.assignee_ids,
         )
+
+        if request.state_id:
+            await _trigger_assigned_agents_if_in_progress(
+                issue_id=issue_id,
+                target_state_id=request.state_id,
+                user_jwt=user_jwt,
+                user_id=user_id,
+            )
         return issue
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -1029,6 +1536,13 @@ async def move_issue_endpoint(
             target_state_id=request.target_state_id,
             position=request.position,
             current_user_id=user_id,
+        )
+
+        await _trigger_assigned_agents_if_in_progress(
+            issue_id=issue_id,
+            target_state_id=request.target_state_id,
+            user_jwt=user_jwt,
+            user_id=user_id,
         )
         return issue
     except Exception as e:

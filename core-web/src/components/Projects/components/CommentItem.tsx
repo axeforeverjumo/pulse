@@ -93,12 +93,16 @@ export default function CommentItem({
   const [editText, setEditText] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
-  const isOwn = comment.user_id === currentUserId;
+  const blocks = (comment.blocks || []) as Array<{ type: string; data?: Record<string, unknown> }>;
+  const agentMeta = blocks.find((block) => block.type === 'agent_meta');
+  const agentData = agentMeta?.data as { agent_id?: string; name?: string; avatar_url?: string } | undefined;
+  const isAutomatedAgent = Boolean(agentData?.agent_id || agentData?.name);
+  const isOwn = comment.user_id === currentUserId && !isAutomatedAgent;
 
   // Extract text content from blocks (with fallback to content field)
   const renderContent = () => {
     // Fallback to plain content if blocks is empty
-    if (!comment.blocks || comment.blocks.length === 0) {
+    if (!blocks || blocks.length === 0) {
       return comment.content ? (
         <span className="whitespace-pre-wrap">{comment.content}</span>
       ) : (
@@ -106,9 +110,25 @@ export default function CommentItem({
       );
     }
 
-    return comment.blocks.map((block, idx) => {
+    return blocks.map((block, idx) => {
+      if (block.type === 'agent_meta') {
+        return null;
+      }
       if (block.type === 'text') {
         const content = (block.data as { content?: string }).content || '';
+        const richHtml = (block.data as { html?: string }).html;
+        if (richHtml) {
+          const safeHtml = richHtml
+            .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+            .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '');
+          return (
+            <div
+              key={idx}
+              className="whitespace-pre-wrap [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_h2]:text-[14px] [&_h2]:font-semibold [&_blockquote]:border-l-2 [&_blockquote]:pl-2 [&_blockquote]:text-gray-500"
+              dangerouslySetInnerHTML={{ __html: safeHtml }}
+            />
+          );
+        }
         return (
           <span key={idx} className="whitespace-pre-wrap">
             {renderMarkdown(content)}
@@ -187,6 +207,14 @@ export default function CommentItem({
   };
 
   const getInitials = () => {
+    if (agentData?.name) {
+      return agentData.name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
+    }
     if (comment.user?.name) {
       return comment.user.name
         .split(' ')
@@ -205,14 +233,17 @@ export default function CommentItem({
   return (
     <div className="group flex gap-3 py-3 hover:bg-gray-50/50 px-4 -mx-4 rounded-lg transition-colors">
       {/* Avatar */}
-      {comment.user?.avatar_url ? (
+      {(agentData?.avatar_url || comment.user?.avatar_url) ? (
         <img
-          src={comment.user.avatar_url}
-          alt={comment.user.name || comment.user.email || 'User'}
+          src={agentData?.avatar_url || comment.user?.avatar_url}
+          alt={agentData?.name || comment.user?.name || comment.user?.email || 'User'}
           className="w-7 h-7 rounded-full object-cover flex-shrink-0"
         />
       ) : (
-        <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: avatarGradient(comment.user?.name || comment.user?.email || '?') }}>
+        <div
+          className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+          style={{ background: avatarGradient(agentData?.name || comment.user?.name || comment.user?.email || '?') }}
+        >
           <span className="text-[10px] font-medium text-white">{getInitials()}</span>
         </div>
       )}
@@ -221,9 +252,14 @@ export default function CommentItem({
         {/* Header */}
         <div className="flex items-center gap-2 mb-1">
           <span className="text-[13px] font-medium text-gray-900">
-            {comment.user?.name || comment.user?.email || 'Unknown'}
+            {agentData?.name || comment.user?.name || comment.user?.email || 'Unknown'}
           </span>
           <span className="text-[11px] text-gray-400">{timeAgo}</span>
+          {isAutomatedAgent && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-600 font-medium">
+              Agente
+            </span>
+          )}
           {comment.is_edited && (
             <span className="text-[10px] text-gray-400 italic">(edited)</span>
           )}

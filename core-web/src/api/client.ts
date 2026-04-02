@@ -2112,7 +2112,7 @@ export interface ChannelMember {
 }
 
 export interface ContentBlock {
-  type: 'text' | 'mention' | 'file' | 'link_preview' | 'code' | 'quote' | 'embed' | 'shared_message';
+  type: 'text' | 'mention' | 'file' | 'link_preview' | 'code' | 'quote' | 'embed' | 'shared_message' | 'agent_meta';
   data: Record<string, unknown>;
 }
 
@@ -2430,6 +2430,15 @@ export interface ProjectBoard {
   key?: string;
   icon?: string;
   color?: string;
+  is_development?: boolean;
+  project_url?: string;
+  repository_url?: string;
+  repository_full_name?: string;
+  server_host?: string;
+  server_ip?: string;
+  server_user?: string;
+  server_password?: string;
+  server_port?: number;
   position: number;
   next_issue_number: number;
   created_by?: string;
@@ -2473,6 +2482,23 @@ export interface ProjectIssueAssignee {
   created_at?: string;
 }
 
+export interface ProjectAttachment {
+  r2_key: string;
+  filename: string;
+  mime_type: string;
+  file_size?: number;
+  url: string;
+  is_image: boolean;
+}
+
+export interface ProjectChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+  created_at?: string;
+  completed_at?: string;
+}
+
 export interface ProjectIssue {
   id: string;
   workspace_app_id?: string;
@@ -2486,6 +2512,8 @@ export interface ProjectIssue {
   due_at?: string;
   image_r2_keys?: string[]; // R2 keys stored in DB
   image_urls?: string[]; // Generated signed proxy URLs
+  attachments?: ProjectAttachment[];
+  checklist_items?: ProjectChecklistItem[];
   label_objects?: ProjectLabel[];
   assignees?: ProjectIssueAssignee[];
   position: number;
@@ -2549,6 +2577,15 @@ export async function createProjectBoard(data: {
   icon?: string;
   color?: string;
   key?: string;
+  is_development?: boolean;
+  project_url?: string;
+  repository_url?: string;
+  repository_full_name?: string;
+  server_host?: string;
+  server_ip?: string;
+  server_user?: string;
+  server_password?: string;
+  server_port?: number;
 }): Promise<{ board: ProjectBoard; states: ProjectState[] }> {
   return api('/projects/boards', {
     method: 'POST',
@@ -2562,6 +2599,15 @@ export async function updateProjectBoard(boardId: string, updates: {
   icon?: string;
   color?: string;
   key?: string;
+  is_development?: boolean;
+  project_url?: string;
+  repository_url?: string;
+  repository_full_name?: string;
+  server_host?: string;
+  server_ip?: string;
+  server_user?: string;
+  server_password?: string;
+  server_port?: number;
 }): Promise<ProjectBoard> {
   return api(`/projects/boards/${boardId}`, {
     method: 'PATCH',
@@ -2640,6 +2686,7 @@ export async function createProjectIssue(data: {
   description?: string;
   priority?: number;
   due_at?: string;
+  checklist_items?: ProjectChecklistItem[];
   label_ids?: string[];
   assignee_ids?: string[];
 }): Promise<ProjectIssue> {
@@ -2662,6 +2709,7 @@ export async function updateProjectIssue(issueId: string, updates: {
   remove_image_r2_keys?: string[]; // Remove specific images
   image_r2_keys?: string[]; // Replace all images
   clear_images?: boolean; // Clear all images
+  checklist_items?: ProjectChecklistItem[];
   state_id?: string;
   position?: number;
   label_ids?: string[];
@@ -2742,6 +2790,43 @@ export async function triggerAgentWork(issueId: string, agentId: string): Promis
   return api(`/openclaw-agents/work-on-task/${issueId}`, {
     method: 'POST',
     body: JSON.stringify({ agent_id: agentId }),
+  });
+}
+
+export interface GitHubRepo {
+  id: number;
+  name: string;
+  full_name: string;
+  private: boolean;
+  html_url: string;
+  description?: string;
+  default_branch?: string;
+  owner?: {
+    login?: string;
+    avatar_url?: string;
+  };
+}
+
+export async function listGitHubRepos(data: {
+  token: string;
+  owner?: string;
+}): Promise<{ repos: GitHubRepo[]; count: number; owner?: string }> {
+  return api('/projects/github/repos/list', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function createGitHubRepo(data: {
+  token: string;
+  name: string;
+  owner?: string;
+  private?: boolean;
+  description?: string;
+}): Promise<{ repo: GitHubRepo }> {
+  return api('/projects/github/repos/create', {
+    method: 'POST',
+    body: JSON.stringify(data),
   });
 }
 

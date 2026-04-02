@@ -50,19 +50,18 @@ export default function CommentComposer({
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: false,
         horizontalRule: false,
         dropcursor: false,
         gapcursor: false,
-        blockquote: false,
-        codeBlock: false,
       }),
       UniversalMentionMark,
       Placeholder.configure({ placeholder }),
     ],
     editorProps: {
       attributes: {
-        class: 'outline-none text-[13px] text-gray-700 min-h-[24px] max-h-[120px] overflow-y-auto',
+        class:
+          'outline-none text-[13px] text-gray-700 min-h-[24px] max-h-[140px] overflow-y-auto ' +
+          '[&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_h2]:text-[14px] [&_h2]:font-semibold [&_blockquote]:border-l-2 [&_blockquote]:pl-2 [&_blockquote]:text-gray-500',
       },
       handleKeyDown: (_view, event) => {
         if (event.key === 'Enter' && !event.shiftKey) {
@@ -151,8 +150,54 @@ export default function CommentComposer({
 
   return (
     <div ref={composerRef} className="py-3 flex-shrink-0">
+      {editor && (
+        <div className="flex flex-wrap items-center gap-1.5 mb-2">
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleBold().run()}
+            className={`px-2 py-1 text-[11px] border rounded-md ${editor.isActive('bold') ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 hover:bg-gray-50'}`}
+          >
+            B
+          </button>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleItalic().run()}
+            className={`px-2 py-1 text-[11px] border rounded-md italic ${editor.isActive('italic') ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 hover:bg-gray-50'}`}
+          >
+            I
+          </button>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+            className={`px-2 py-1 text-[11px] border rounded-md ${editor.isActive('heading', { level: 2 }) ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 hover:bg-gray-50'}`}
+          >
+            H2
+          </button>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleBulletList().run()}
+            className={`px-2 py-1 text-[11px] border rounded-md ${editor.isActive('bulletList') ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 hover:bg-gray-50'}`}
+          >
+            • Lista
+          </button>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+            className={`px-2 py-1 text-[11px] border rounded-md ${editor.isActive('orderedList') ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 hover:bg-gray-50'}`}
+          >
+            1. Lista
+          </button>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleBlockquote().run()}
+            className={`px-2 py-1 text-[11px] border rounded-md ${editor.isActive('blockquote') ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 hover:bg-gray-50'}`}
+          >
+            "
+          </button>
+        </div>
+      )}
       <div className="flex gap-3 items-end">
-        <div className="flex-1">
+        <div className="flex-1 border border-gray-200 rounded-lg px-3 py-2 bg-white">
           <EditorContent editor={editor} />
         </div>
         {(hasContent || disabled) && (

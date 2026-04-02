@@ -23,3 +23,4 @@ redis>=5.0.0
 cryptography==44.0.0
 numpy>=1.24.0
 mutagen>=1.47.0  # MP3 metadata extraction for sounds seed script
+pypdf>=5.4.0

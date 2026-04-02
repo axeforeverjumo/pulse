@@ -36,6 +36,7 @@ import {
   type ProjectState,
   type ProjectIssue,
   type ProjectLabel,
+  type ProjectChecklistItem,
   type ProjectIssueAssignee,
   type WorkspaceMember,
   type IssueComment,
@@ -53,6 +54,7 @@ export type {
   ProjectState,
   ProjectIssue,
   ProjectLabel,
+  ProjectChecklistItem,
   ProjectIssueAssignee,
   WorkspaceMember,
   IssueComment,
@@ -89,6 +91,7 @@ type UpdateIssueInput = {
   remove_image_r2_keys?: string[];
   image_r2_keys?: string[];
   clear_images?: boolean;
+  checklist_items?: ProjectChecklistItem[];
   state_id?: string;
   position?: number;
 };
@@ -154,6 +157,8 @@ const mergeTempIssueIntoCreatedIssue = (serverIssue: ProjectIssue, tempIssue: Pr
   priority: tempIssue.priority,
   due_at: tempIssue.due_at,
   image_r2_keys: tempIssue.image_r2_keys,
+  attachments: tempIssue.attachments,
+  checklist_items: tempIssue.checklist_items,
   image_urls: tempIssue.image_urls,
   state_id: tempIssue.state_id,
   position: tempIssue.position,
@@ -358,6 +363,15 @@ export function useCreateBoard(workspaceAppId: string | null) {
       description?: string;
       icon?: string;
       color?: string;
+      is_development?: boolean;
+      project_url?: string;
+      repository_url?: string;
+      repository_full_name?: string;
+      server_host?: string;
+      server_ip?: string;
+      server_user?: string;
+      server_password?: string;
+      server_port?: number;
     }) => {
       if (!workspaceAppId) throw new Error('No workspace app ID');
       return createProjectBoard({ workspace_app_id: workspaceAppId, ...data });
@@ -384,6 +398,15 @@ export function useCreateBoard(workspaceAppId: string | null) {
         description: newBoardData.description,
         icon: newBoardData.icon,
         color: newBoardData.color,
+        is_development: newBoardData.is_development,
+        project_url: newBoardData.project_url,
+        repository_url: newBoardData.repository_url,
+        repository_full_name: newBoardData.repository_full_name,
+        server_host: newBoardData.server_host,
+        server_ip: newBoardData.server_ip,
+        server_user: newBoardData.server_user,
+        server_password: newBoardData.server_password,
+        server_port: newBoardData.server_port,
         position: nextPosition,
         next_issue_number: nextIssueNumber,
         created_at: new Date().toISOString(),

@@ -5,9 +5,10 @@ Uses async Supabase client for non-blocking I/O.
 """
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+import mimetypes
 import logging
 from lib.supabase_client import get_authenticated_async_client
-from lib.image_proxy import generate_image_url
+from lib.image_proxy import generate_file_url
 from api.services.notifications.subscriptions import subscribe
 from api.services.notifications.create import notify_subscribers, NotificationType
 from api.services.notifications.helpers import get_actor_info
@@ -59,19 +60,77 @@ async def _enrich_issues_with_labels_and_assignees(
     return issues
 
 
-def _enrich_issues_with_image_urls(issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Generate image_urls from image_r2_keys for each issue.
+def _guess_mime_type(r2_key: str, filename: Optional[str] = None) -> str:
+    guessed, _ = mimetypes.guess_type(filename or r2_key)
+    return (guessed or "application/octet-stream").lower()
 
-    The image_r2_keys array is stored in the database, and we generate fresh
-    signed proxy URLs on each fetch to avoid expiration issues.
+
+async def _enrich_issues_with_attachments(
+    supabase: Any,
+    issues: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Generate attachment metadata and signed URLs from image_r2_keys.
+
+    Historical schema uses image_r2_keys for issue attachments. We now support
+    both images and generic files from the same key array.
     """
+    if not issues:
+        return issues
+
+    keys: List[str] = []
+    seen: set[str] = set()
     for issue in issues:
-        r2_keys = issue.get("image_r2_keys") or []
-        issue["image_urls"] = [
-            generate_image_url(key, variant="preview")
-            for key in r2_keys
-            if key
-        ]
+        for key in (issue.get("image_r2_keys") or []):
+            if key and key not in seen:
+                seen.add(key)
+                keys.append(key)
+
+    file_meta_by_key: Dict[str, Dict[str, Any]] = {}
+    if keys:
+        try:
+            files_result = await supabase.table("files")\
+                .select("r2_key, filename, content_type, file_size")\
+                .in_("r2_key", keys)\
+                .execute()
+            for file_row in (files_result.data or []):
+                key = file_row.get("r2_key")
+                if key:
+                    file_meta_by_key[key] = file_row
+        except Exception as e:
+            logger.warning("Could not enrich project issue attachment metadata: %s", e)
+
+    for issue in issues:
+        attachments: List[Dict[str, Any]] = []
+        image_urls: List[str] = []
+
+        for key in (issue.get("image_r2_keys") or []):
+            if not key:
+                continue
+            meta = file_meta_by_key.get(key, {})
+            filename = meta.get("filename") or key.split("/")[-1]
+            mime_type = (meta.get("content_type") or _guess_mime_type(key, filename)).lower()
+            is_image = mime_type.startswith("image/")
+            url = generate_file_url(
+                key,
+                mime_type=mime_type,
+                variant="preview" if is_image else "full",
+            )
+
+            attachment = {
+                "r2_key": key,
+                "filename": filename,
+                "mime_type": mime_type,
+                "file_size": meta.get("file_size"),
+                "url": url,
+                "is_image": is_image,
+            }
+            attachments.append(attachment)
+            if is_image and url:
+                image_urls.append(url)
+
+        issue["attachments"] = attachments
+        issue["image_urls"] = image_urls
+
     return issues
 
 
@@ -125,7 +184,7 @@ async def get_issues(
 
     issues = result.data or []
     issues = await _enrich_issues_with_labels_and_assignees(supabase, issues)
-    return _enrich_issues_with_image_urls(issues)
+    return await _enrich_issues_with_attachments(supabase, issues)
 
 
 async def get_issue_by_id(
@@ -154,7 +213,7 @@ async def get_issue_by_id(
         return None
 
     enriched = await _enrich_issues_with_labels_and_assignees(supabase, [result.data])
-    enriched = _enrich_issues_with_image_urls(enriched)
+    enriched = await _enrich_issues_with_attachments(supabase, enriched)
     return enriched[0]
 
 
@@ -168,6 +227,7 @@ async def create_issue(
     priority: int = 0,
     due_at: Optional[datetime] = None,
     image_r2_keys: Optional[List[str]] = None,
+    checklist_items: Optional[List[Dict[str, Any]]] = None,
     label_ids: Optional[List[str]] = None,
     assignee_ids: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
@@ -230,6 +290,8 @@ async def create_issue(
         valid_keys = [key for key in image_r2_keys if key]
         if valid_keys:
             issue_data["image_r2_keys"] = valid_keys
+    if checklist_items is not None:
+        issue_data["checklist_items"] = checklist_items
 
     result = await supabase.table("project_issues")\
         .insert(issue_data)\
@@ -300,7 +362,7 @@ async def create_issue(
 
     # Return enriched issue
     enriched = await _enrich_issues_with_labels_and_assignees(supabase, [created_issue])
-    enriched = _enrich_issues_with_image_urls(enriched)
+    enriched = await _enrich_issues_with_attachments(supabase, enriched)
     return enriched[0]
 
 
@@ -316,6 +378,7 @@ async def update_issue(
     remove_image_r2_keys: Optional[List[str]] = None,
     image_r2_keys: Optional[List[str]] = None,
     clear_images: bool = False,
+    checklist_items: Optional[List[Dict[str, Any]]] = None,
     state_id: Optional[str] = None,
     position: Optional[int] = None,
     label_ids: Optional[List[str]] = None,
@@ -360,6 +423,8 @@ async def update_issue(
         updates["due_at"] = due_at.isoformat()
     if clear_due_at:
         updates["due_at"] = None
+    if checklist_items is not None:
+        updates["checklist_items"] = checklist_items
 
     # Handle image operations (mutually exclusive, validated in router)
     if clear_images:

@@ -6,7 +6,6 @@ import { CheckIcon } from '@heroicons/react/24/outline';
 import { User } from 'lucide-react';
 import { Icon } from '../../ui/Icon';
 import { useProjectsStore } from '../../../stores/projectsStore';
-import { triggerAgentWork } from '../../../api/client';
 import {
   useProjectMembers,
   useWorkspaceAgents,
@@ -179,17 +178,7 @@ export default function AssigneePicker({ issueId, boardId, currentAssignees, but
     if (assignedAgentIds.has(agentId)) {
       removeAgentAssigneeMutation.mutate({ issueId, agentId });
     } else if (!atMax) {
-      addAgentAssigneeMutation.mutate(
-        { issueId, agentId },
-        {
-          onSuccess: () => {
-            // Trigger the agent to work on this task in the background
-            triggerAgentWork(issueId, agentId).catch((err) => {
-              console.error('Failed to trigger agent work:', err);
-            });
-          },
-        }
-      );
+      addAgentAssigneeMutation.mutate({ issueId, agentId });
     }
   };
 

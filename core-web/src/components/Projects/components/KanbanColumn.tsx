@@ -18,7 +18,7 @@ import { SwatchIcon } from "@heroicons/react/24/solid";
 import ConfirmModal from "./ConfirmModal";
 import Dropdown from "../../Dropdown/Dropdown";
 import { useProjectsStore } from "../../../stores/projectsStore";
-import { api, triggerAgentWork } from "../../../api/client";
+import { api } from "../../../api/client";
 import { useQuery } from "@tanstack/react-query";
 
 const COLUMN_COLORS = [
@@ -227,15 +227,7 @@ const KanbanColumn = memo(function KanbanColumn({
         onSuccess: (newIssue) => {
           // Assign agents after creation (API doesn't support agent_ids in create)
           for (const agent of agentAssignees) {
-            addAgentAssignee.mutate(
-              { issueId: newIssue.id, agentId: agent.id },
-              {
-                onSuccess: () => {
-                  // Trigger agent work on the task
-                  triggerAgentWork(newIssue.id, agent.id).catch(console.error);
-                },
-              }
-            );
+            addAgentAssignee.mutate({ issueId: newIssue.id, agentId: agent.id });
           }
         },
       }
@@ -514,8 +506,8 @@ const KanbanColumn = memo(function KanbanColumn({
                 </div>
               )}
 
-              <div className="flex items-center justify-between gap-2 mt-3">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-col gap-2 mt-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap items-center gap-2">
                   <select
                     value={newCardPriority}
                     onChange={(e) => setNewCardPriority(Number(e.target.value))}
@@ -625,7 +617,7 @@ const KanbanColumn = memo(function KanbanColumn({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-end gap-2">
                   <button
                     onClick={() => {
                       setIsAddingCard(false);

@@ -69,6 +69,15 @@ async def create_board(
     icon: Optional[str] = None,
     color: Optional[str] = None,
     key: Optional[str] = None,
+    is_development: Optional[bool] = None,
+    project_url: Optional[str] = None,
+    repository_url: Optional[str] = None,
+    repository_full_name: Optional[str] = None,
+    server_host: Optional[str] = None,
+    server_ip: Optional[str] = None,
+    server_user: Optional[str] = None,
+    server_password: Optional[str] = None,
+    server_port: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Create a new board with 3 default states (Backlog, In Progress, Done).
@@ -115,6 +124,24 @@ async def create_board(
         board_data["color"] = color
     if key is not None:
         board_data["key"] = key
+    if is_development is not None:
+        board_data["is_development"] = is_development
+    if project_url is not None:
+        board_data["project_url"] = project_url
+    if repository_url is not None:
+        board_data["repository_url"] = repository_url
+    if repository_full_name is not None:
+        board_data["repository_full_name"] = repository_full_name
+    if server_host is not None:
+        board_data["server_host"] = server_host
+    if server_ip is not None:
+        board_data["server_ip"] = server_ip
+    if server_user is not None:
+        board_data["server_user"] = server_user
+    if server_password is not None:
+        board_data["server_password"] = server_password
+    if server_port is not None:
+        board_data["server_port"] = server_port
 
     # Insert board
     board_result = await supabase.table("project_boards")\
@@ -126,7 +153,8 @@ async def create_board(
     default_states = [
         {"name": "To Do", "color": "#94A3B8", "position": 0, "is_done": False},
         {"name": "In Progress", "color": "#3B82F6", "position": 1, "is_done": False},
-        {"name": "Done", "color": "#10B981", "position": 2, "is_done": True},
+        {"name": "QA", "color": "#8B5CF6", "position": 2, "is_done": False},
+        {"name": "Done", "color": "#10B981", "position": 3, "is_done": True},
     ]
 
     states_data = [
@@ -162,6 +190,15 @@ async def update_board(
     icon: Optional[str] = None,
     color: Optional[str] = None,
     key: Optional[str] = None,
+    is_development: Optional[bool] = None,
+    project_url: Optional[str] = None,
+    repository_url: Optional[str] = None,
+    repository_full_name: Optional[str] = None,
+    server_host: Optional[str] = None,
+    server_ip: Optional[str] = None,
+    server_user: Optional[str] = None,
+    server_password: Optional[str] = None,
+    server_port: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Update a board's fields.
@@ -191,6 +228,24 @@ async def update_board(
         updates["color"] = color
     if key is not None:
         updates["key"] = key
+    if is_development is not None:
+        updates["is_development"] = is_development
+    if project_url is not None:
+        updates["project_url"] = project_url
+    if repository_url is not None:
+        updates["repository_url"] = repository_url
+    if repository_full_name is not None:
+        updates["repository_full_name"] = repository_full_name
+    if server_host is not None:
+        updates["server_host"] = server_host
+    if server_ip is not None:
+        updates["server_ip"] = server_ip
+    if server_user is not None:
+        updates["server_user"] = server_user
+    if server_password is not None:
+        updates["server_password"] = server_password
+    if server_port is not None:
+        updates["server_port"] = server_port
 
     if not updates:
         # Nothing to update, just return current board

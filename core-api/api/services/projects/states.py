@@ -10,6 +10,69 @@ from lib.supabase_client import get_authenticated_async_client
 logger = logging.getLogger(__name__)
 
 
+def _is_qa_state_name(name: Optional[str]) -> bool:
+    if not name:
+        return False
+    normalized = name.strip().lower()
+    return normalized in {"qa", "q&a", "quality assurance", "quality", "validacion", "validación"}
+
+
+async def _ensure_qa_state(
+    supabase: Any,
+    board_id: str,
+    states: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Ensure every board has a QA state.
+
+    If missing, insert QA before first done-state (if any), otherwise append.
+    """
+    if any(_is_qa_state_name(state.get("name")) for state in states):
+        return states
+
+    if not states:
+        return states
+
+    board_result = await supabase.table("project_boards")\
+        .select("workspace_app_id, workspace_id")\
+        .eq("id", board_id)\
+        .single()\
+        .execute()
+    board = board_result.data
+
+    done_state = next((state for state in states if state.get("is_done")), None)
+    qa_position = done_state["position"] if done_state else (max(s.get("position", 0) for s in states) + 1)
+
+    # Shift states at/after insertion point
+    for state in states:
+        if state.get("position", 0) >= qa_position:
+            await supabase.table("project_states")\
+                .update({"position": state["position"] + 1})\
+                .eq("id", state["id"])\
+                .execute()
+
+    await supabase.table("project_states")\
+        .insert({
+            "workspace_app_id": board["workspace_app_id"],
+            "workspace_id": board["workspace_id"],
+            "board_id": board_id,
+            "name": "QA",
+            "color": "#8B5CF6",
+            "position": qa_position,
+            "is_done": False,
+        })\
+        .execute()
+
+    logger.info("Added missing QA state to board %s", board_id)
+
+    refreshed = await supabase.table("project_states")\
+        .select("*")\
+        .eq("board_id", board_id)\
+        .order("position")\
+        .execute()
+
+    return refreshed.data or []
+
+
 async def get_states(
     user_jwt: str,
     board_id: str,
@@ -32,7 +95,8 @@ async def get_states(
         .order("position")\
         .execute()
 
-    return result.data or []
+    states = result.data or []
+    return await _ensure_qa_state(supabase, board_id, states)
 
 
 async def create_state(

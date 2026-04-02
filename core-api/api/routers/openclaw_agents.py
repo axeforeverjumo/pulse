@@ -586,8 +586,17 @@ Te han asignado una tarea de proyecto. Analiza la tarea y proporciona tu plan de
             agent_response = "Error al procesar la tarea."
 
     # Save agent's response as a comment on the task
-    comment_content = f"\U0001f916 **{agent['name']}** (actividad automatica):\n\n{agent_response}"
-    blocks = [{"type": "text", "data": {"content": comment_content}}]
+    blocks = [
+        {
+            "type": "agent_meta",
+            "data": {
+                "agent_id": agent.get("id"),
+                "name": agent.get("name"),
+                "avatar_url": agent.get("avatar_url"),
+            },
+        },
+        {"type": "text", "data": {"content": agent_response}},
+    ]
 
     try:
         await create_comment(user_id, user_jwt, issue_id, blocks)

@@ -1,7 +1,15 @@
 import { useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { XMarkIcon, TrashIcon, CalendarIcon, PhotoIcon, PlusIcon, EllipsisHorizontalIcon } from '@heroicons/react/24/outline';
+import {
+  XMarkIcon,
+  TrashIcon,
+  CalendarIcon,
+  PlusIcon,
+  EllipsisHorizontalIcon,
+  PaperClipIcon,
+  DocumentIcon,
+} from '@heroicons/react/24/outline';
 import { Flag } from '@phosphor-icons/react';
 import { useProjectsStore } from '../../../stores/projectsStore';
 import { useAuthStore } from '../../../stores/authStore';
@@ -87,28 +95,47 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
   const [priority, setPriority] = useState<number>(card.priority);
   const [showPriorityPicker, setShowPriorityPicker] = useState(false);
   const [dueDate, setDueDate] = useState(toDateInputValue(card.due_at));
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
 
-  // Image state - track r2_keys for saving, urls for display
-  const [imageR2Keys, setImageR2Keys] = useState<string[]>(card.image_r2_keys || []);
-  const [imageUrls, setImageUrls] = useState<string[]>(card.image_urls || []);
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const imageInputRef = useRef<HTMLInputElement>(null);
+  // Attachment state - uses existing image_r2_keys column for generic files
+  const [attachments, setAttachments] = useState(() => {
+    if (card.attachments && card.attachments.length > 0) return card.attachments;
+    const keys = card.image_r2_keys || [];
+    const urls = card.image_urls || [];
+    return keys.map((key, index) => {
+      const url = urls[index] || '';
+      const filename = key.split('/').pop() || 'archivo';
+      return {
+        r2_key: key,
+        filename,
+        mime_type: url ? 'image/*' : 'application/octet-stream',
+        file_size: undefined,
+        url,
+        is_image: !!url,
+      };
+    });
+  });
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const [checklistItems, setChecklistItems] = useState<
+    Array<{ id: string; text: string; done: boolean; created_at?: string; completed_at?: string }>
+  >(card.checklist_items || []);
+  const [newChecklistItem, setNewChecklistItem] = useState('');
 
   const column = states.find((s) => s.id === card.state_id);
   const priorityConfig = PRIORITY_OPTIONS.find((p) => p.value === priority);
 
-  // Track which images were added/removed for atomic operations
-  const [addedImageKeys, setAddedImageKeys] = useState<string[]>([]);
-  const [removedImageKeys, setRemovedImageKeys] = useState<string[]>([]);
+  // Track which attachments were added/removed for atomic operations
+  const [addedAttachmentKeys, setAddedAttachmentKeys] = useState<string[]>([]);
+  const [removedAttachmentKeys, setRemovedAttachmentKeys] = useState<string[]>([]);
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const mimeType = resolveUploadMimeType(file);
-    if (!mimeType.startsWith('image/')) return;
 
-    setIsUploadingImage(true);
+    setIsUploadingAttachment(true);
     try {
       const uploadInfo = await getPresignedUploadUrl({
         workspaceId: card.workspace_id,
@@ -129,30 +156,99 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
       });
 
       const newR2Key = confirmResult.file.r2_key || uploadInfo.r2_key;
-      const newUrl = confirmResult.file.public_url || uploadInfo.public_url;
+      const contentType = confirmResult.file.content_type || mimeType;
+      const filename = confirmResult.file.filename || file.name;
+      const newUrl = confirmResult.file.public_url || uploadInfo.public_url || '';
 
-      setImageR2Keys((prev) => [...prev, newR2Key]);
-      setImageUrls((prev) => [...prev, newUrl]);
-      setAddedImageKeys((prev) => [...prev, newR2Key]);
+      setAttachments((prev) => [
+        ...prev,
+        {
+          r2_key: newR2Key,
+          filename,
+          mime_type: contentType,
+          file_size: confirmResult.file.file_size || file.size,
+          url: newUrl,
+          is_image: contentType.startsWith('image/'),
+        },
+      ]);
+      setAddedAttachmentKeys((prev) => [...prev, newR2Key]);
     } catch (error) {
-      console.error('Failed to upload image:', error);
+      console.error('Failed to upload attachment:', error);
     } finally {
-      setIsUploadingImage(false);
-      if (imageInputRef.current) imageInputRef.current.value = '';
+      setIsUploadingAttachment(false);
+      if (attachmentInputRef.current) attachmentInputRef.current.value = '';
     }
   };
 
-  const handleRemoveImage = (index: number) => {
-    const keyToRemove = imageR2Keys[index];
-    setImageR2Keys((prev) => prev.filter((_, i) => i !== index));
-    setImageUrls((prev) => prev.filter((_, i) => i !== index));
-    // Only track removal if it was an original image (not newly added)
-    if (!addedImageKeys.includes(keyToRemove)) {
-      setRemovedImageKeys((prev) => [...prev, keyToRemove]);
+  const handleRemoveAttachment = (index: number) => {
+    const keyToRemove = attachments[index]?.r2_key;
+    if (!keyToRemove) return;
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+    if (!addedAttachmentKeys.includes(keyToRemove)) {
+      setRemovedAttachmentKeys((prev) => [...prev, keyToRemove]);
     } else {
-      // Remove from added list if it was just added
-      setAddedImageKeys((prev) => prev.filter((k) => k !== keyToRemove));
+      setAddedAttachmentKeys((prev) => prev.filter((k) => k !== keyToRemove));
     }
+  };
+
+  const addChecklistItem = () => {
+    const text = newChecklistItem.trim();
+    if (!text) return;
+    const id = (globalThis.crypto?.randomUUID?.() || `chk-${Date.now()}`).toString();
+    setChecklistItems((prev) => [
+      ...prev,
+      { id, text, done: false, created_at: new Date().toISOString() },
+    ]);
+    setNewChecklistItem('');
+  };
+
+  const toggleChecklistItem = (id: string, done: boolean) => {
+    setChecklistItems((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              done,
+              completed_at: done ? (item.completed_at || new Date().toISOString()) : undefined,
+            }
+          : item
+      )
+    );
+  };
+
+  const removeChecklistItem = (id: string) => {
+    setChecklistItems((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const applyDescriptionFormat = (kind: 'bold' | 'italic' | 'h1' | 'h2' | 'bullet') => {
+    const el = descriptionRef.current;
+    if (!el) return;
+
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    const selected = description.slice(start, end);
+
+    let replacement = selected;
+    if (kind === 'bold') replacement = `**${selected || 'texto'}**`;
+    if (kind === 'italic') replacement = `*${selected || 'texto'}*`;
+    if (kind === 'h1') replacement = `# ${selected || 'Título'}`;
+    if (kind === 'h2') replacement = `## ${selected || 'Subtítulo'}`;
+    if (kind === 'bullet') {
+      const base = selected || 'Elemento';
+      replacement = base
+        .split('\n')
+        .map((line) => `- ${line}`)
+        .join('\n');
+    }
+
+    const next = description.slice(0, start) + replacement + description.slice(end);
+    setDescription(next);
+
+    requestAnimationFrame(() => {
+      const caret = start + replacement.length;
+      el.focus();
+      el.setSelectionRange(caret, caret);
+    });
   };
 
   const handleSave = async () => {
@@ -168,18 +264,16 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
       priority,
       due_at: dueDate || undefined,
       clear_due_at: !dueDate && !!card.due_at,
+      checklist_items: checklistItems,
     };
 
-    // Handle image changes - use atomic add/remove if possible
-    if (addedImageKeys.length > 0 && removedImageKeys.length === 0) {
-      // Only additions
-      updates.add_image_r2_keys = addedImageKeys;
-    } else if (removedImageKeys.length > 0 && addedImageKeys.length === 0) {
-      // Only removals
-      updates.remove_image_r2_keys = removedImageKeys;
-    } else if (addedImageKeys.length > 0 || removedImageKeys.length > 0) {
-      // Both add and remove - send full replacement
-      updates.image_r2_keys = imageR2Keys;
+    // Handle attachment changes - stored in image_r2_keys backend column
+    if (addedAttachmentKeys.length > 0 && removedAttachmentKeys.length === 0) {
+      updates.add_image_r2_keys = addedAttachmentKeys;
+    } else if (removedAttachmentKeys.length > 0 && addedAttachmentKeys.length === 0) {
+      updates.remove_image_r2_keys = removedAttachmentKeys;
+    } else if (addedAttachmentKeys.length > 0 || removedAttachmentKeys.length > 0) {
+      updates.image_r2_keys = attachments.map((attachment) => attachment.r2_key);
     }
 
     updateIssue.mutate({ issueId: card.id, updates });
@@ -188,6 +282,13 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
   const handleDelete = () => {
     deleteIssue.mutate(card.id);
     closeModal();
+  };
+
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes || Number.isNaN(bytes)) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   return createPortal(
@@ -391,7 +492,45 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
 
               {/* Description */}
               <div className="border-t border-gray-100 pt-5">
+                <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => applyDescriptionFormat('bold')}
+                    className="px-2 py-1 text-[11px] border border-gray-200 rounded-md hover:bg-gray-50"
+                  >
+                    B
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyDescriptionFormat('italic')}
+                    className="px-2 py-1 text-[11px] border border-gray-200 rounded-md italic hover:bg-gray-50"
+                  >
+                    I
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyDescriptionFormat('h1')}
+                    className="px-2 py-1 text-[11px] border border-gray-200 rounded-md hover:bg-gray-50"
+                  >
+                    H1
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyDescriptionFormat('h2')}
+                    className="px-2 py-1 text-[11px] border border-gray-200 rounded-md hover:bg-gray-50"
+                  >
+                    H2
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyDescriptionFormat('bullet')}
+                    className="px-2 py-1 text-[11px] border border-gray-200 rounded-md hover:bg-gray-50"
+                  >
+                    • Lista
+                  </button>
+                </div>
                 <textarea
+                  ref={descriptionRef}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={6}
@@ -403,45 +542,122 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
               {/* Attachments */}
               <div className="border-t border-gray-100 pt-5">
                 <div className="flex items-center gap-2 mb-4">
-                  <PhotoIcon className="w-4 h-4 text-gray-400" />
-                  <span className="text-[12px] font-medium text-gray-500">Imágenes</span>
+                  <PaperClipIcon className="w-4 h-4 text-gray-400" />
+                  <span className="text-[12px] font-medium text-gray-500">Adjuntos</span>
                 </div>
                 <input
-                  ref={imageInputRef}
+                  ref={attachmentInputRef}
                   type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md,.html,.htm,.json,.xml"
+                  onChange={handleAttachmentUpload}
                   className="hidden"
                 />
                 <div className="flex flex-wrap gap-3">
-                  {imageUrls.map((url, index) => (
-                    <div key={index} className="relative group w-16 h-16">
-                      <img
-                        src={url}
-                        alt=""
-                        className="w-full h-full object-cover rounded-lg"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveImage(index)}
-                        className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-black/70 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <XMarkIcon className="w-3 h-3" />
-                      </button>
+                  {attachments.map((attachment, index) => (
+                    <div key={attachment.r2_key} className="relative group">
+                      {attachment.is_image ? (
+                        <div className="relative w-20 h-20">
+                          <img
+                            src={attachment.url}
+                            alt={attachment.filename}
+                            className="w-full h-full object-cover rounded-lg"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveAttachment(index)}
+                            className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-black/70 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <XMarkIcon className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="relative min-w-[170px] max-w-[220px] p-2 border border-gray-200 rounded-lg bg-white">
+                          <div className="flex items-center gap-2">
+                            <DocumentIcon className="w-4 h-4 text-gray-400 shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-[12px] text-gray-700 truncate">{attachment.filename}</p>
+                              <p className="text-[11px] text-gray-400">{formatFileSize(attachment.file_size)}</p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveAttachment(index)}
+                            className="absolute top-1 right-1 p-1 text-gray-400 hover:text-red-500"
+                          >
+                            <XMarkIcon className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                   <button
                     type="button"
-                    onClick={() => imageInputRef.current?.click()}
-                    disabled={isUploadingImage}
+                    onClick={() => attachmentInputRef.current?.click()}
+                    disabled={isUploadingAttachment}
                     className="w-16 h-16 flex items-center justify-center border border-border-gray hover:border-gray-300 rounded-lg text-gray-400 hover:text-gray-500 transition-colors disabled:opacity-50"
                   >
-                    {isUploadingImage ? (
+                    {isUploadingAttachment ? (
                       <span className="text-[10px]">...</span>
                     ) : (
                       <PlusIcon className="w-5 h-5" />
                     )}
                   </button>
+                </div>
+              </div>
+
+              {/* Checklist */}
+              <div className="border-t border-gray-100 pt-5">
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <span className="text-[12px] font-medium text-gray-500">Checklist</span>
+                  {checklistItems.length > 0 && (
+                    <span className="text-[11px] text-gray-400">
+                      {checklistItems.filter((item) => item.done).length}/{checklistItems.length}
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  {checklistItems.map((item) => (
+                    <div key={item.id} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={item.done}
+                        onChange={(e) => toggleChecklistItem(item.id, e.target.checked)}
+                        className="rounded border-gray-300 text-gray-900 focus:ring-gray-300"
+                      />
+                      <span className={`text-[13px] flex-1 ${item.done ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                        {item.text}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeChecklistItem(item.id)}
+                        className="text-[12px] text-gray-400 hover:text-red-500"
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newChecklistItem}
+                      onChange={(e) => setNewChecklistItem(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addChecklistItem();
+                        }
+                      }}
+                      placeholder="Añadir item..."
+                      className="flex-1 px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-lg focus:outline-none focus:border-gray-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={addChecklistItem}
+                      className="px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-lg hover:bg-gray-50"
+                    >
+                      Añadir
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -477,9 +693,9 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
               </div>
 
               {/* Description */}
-              {card.description ? (
+              {description ? (
                 <p className="text-[13px] text-gray-600 leading-relaxed whitespace-pre-wrap">
-                  {card.description}
+                  {description}
                 </p>
               ) : (
                 <p className="text-[13px] text-gray-400 italic">Sin descripción</p>
@@ -518,31 +734,64 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
                 </div>
               )}
 
-              {/* Comments section */}
-              <div className="border-t border-gray-100 pt-5">
-                <IssueComments issueId={card.id} />
-              </div>
-
-              {/* Attachments/Images */}
-              {card.image_urls && card.image_urls.length > 0 && (
+              {/* Checklist */}
+              {checklistItems.length > 0 && (
                 <div className="border-t border-gray-100 pt-5">
                   <div className="flex items-center gap-2 mb-4">
-                    <PhotoIcon className="w-4 h-4 text-gray-400" />
-                    <span className="text-[12px] font-medium text-gray-500">Adjuntos</span>
+                    <span className="text-[12px] font-medium text-gray-500">Checklist</span>
+                    <span className="text-[11px] text-gray-400">
+                      {checklistItems.filter((item) => item.done).length}/{checklistItems.length}
+                    </span>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    {card.image_urls.map((url, index) => (
-                      <div key={index} className="aspect-video">
-                        <img
-                          src={url}
-                          alt=""
-                          className="w-full h-full object-cover rounded-lg"
-                        />
+                  <div className="space-y-2">
+                    {checklistItems.map((item) => (
+                      <div key={item.id} className="flex items-center gap-2 text-[13px]">
+                        <input type="checkbox" checked={item.done} readOnly className="rounded border-gray-300 text-gray-900 focus:ring-0" />
+                        <span className={item.done ? 'text-gray-400 line-through' : 'text-gray-700'}>{item.text}</span>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
+
+              {/* Attachments */}
+              {attachments.length > 0 && (
+                <div className="border-t border-gray-100 pt-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <PaperClipIcon className="w-4 h-4 text-gray-400" />
+                    <span className="text-[12px] font-medium text-gray-500">Adjuntos</span>
+                  </div>
+                  <div className="space-y-2">
+                    {attachments.map((attachment) => (
+                      <div key={attachment.r2_key} className="border border-gray-100 rounded-lg p-2.5 bg-gray-50/50">
+                        {attachment.is_image ? (
+                          <a href={attachment.url} target="_blank" rel="noopener noreferrer" className="block">
+                            <img src={attachment.url} alt={attachment.filename} className="max-h-52 rounded-lg object-cover" />
+                          </a>
+                        ) : (
+                          <a
+                            href={attachment.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 hover:text-blue-600 transition-colors"
+                          >
+                            <DocumentIcon className="w-4 h-4 text-gray-400 shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-[13px] text-gray-700 truncate">{attachment.filename}</p>
+                              <p className="text-[11px] text-gray-400">{formatFileSize(attachment.file_size)}</p>
+                            </div>
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Comments section */}
+              <div className="border-t border-gray-100 pt-5">
+                <IssueComments issueId={card.id} />
+              </div>
             </div>
           )}
         </div>

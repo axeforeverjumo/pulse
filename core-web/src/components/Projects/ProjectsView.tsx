@@ -25,6 +25,7 @@ export default function ProjectsView() {
   const projectsApp = workspace?.apps.find((app) => app.type === "projects");
 
   const workspaceAppId = useProjectsStore((state) => state.workspaceAppId);
+  const projectsWorkspaceId = useProjectsStore((state) => state.workspaceId);
   const setWorkspaceAppId = useProjectsStore(
     (state) => state.setWorkspaceAppId,
   );
@@ -62,24 +63,24 @@ export default function ProjectsView() {
 
   // Initialize workspace app context
   useEffect(() => {
-    if (projectsApp?.id) {
+    if (projectsApp?.id && projectsApp.id !== workspaceAppId) {
       setWorkspaceAppId(projectsApp.id);
     }
-  }, [projectsApp?.id, setWorkspaceAppId]);
+  }, [projectsApp?.id, workspaceAppId, setWorkspaceAppId]);
 
   // Initialize workspace context for member fetching
   useEffect(() => {
-    if (workspaceId) {
+    if (workspaceId && workspaceId !== projectsWorkspaceId) {
       setWorkspaceId(workspaceId);
     }
-  }, [workspaceId, setWorkspaceId]);
+  }, [workspaceId, projectsWorkspaceId, setWorkspaceId]);
 
   // Sync URL boardId to store
   useEffect(() => {
     if (urlBoardId && urlBoardId !== activeProjectId) {
       setActiveProject(urlBoardId);
     }
-  }, [urlBoardId]);
+  }, [urlBoardId, activeProjectId, setActiveProject]);
 
   // Auto-select first board when boards are loaded and no board is selected
   useEffect(() => {
@@ -88,19 +89,12 @@ export default function ProjectsView() {
     }
   }, [urlBoardId, activeProjectId, boards, setActiveProject]);
 
-  // When landing without a boardId, silently update URL from persisted store selection
-  useEffect(() => {
-    if (!urlBoardId && activeProjectId && workspaceId) {
-      window.history.replaceState(null, '', `/workspace/${workspaceId}/projects/${activeProjectId}`);
-    }
-  }, [urlBoardId, activeProjectId, workspaceId]);
-
   // Keep URL in sync when store changes programmatically (e.g. auto-select after fetch)
   useEffect(() => {
     if (activeProjectId && activeProjectId !== urlBoardId && workspaceId) {
       window.history.replaceState(null, '', `/workspace/${workspaceId}/projects/${activeProjectId}`);
     }
-  }, [activeProjectId, workspaceId]);
+  }, [activeProjectId, workspaceId, urlBoardId]);
 
   // Set view context for sidebar chat
   useEffect(() => {
