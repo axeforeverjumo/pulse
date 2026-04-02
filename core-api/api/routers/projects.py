@@ -868,6 +868,37 @@ def _agent_response_signals_stall_without_new_diff(response_text: str) -> bool:
     return any(marker in value for marker in markers)
 
 
+def _agent_response_signals_external_dependency_blocker(response_text: str) -> bool:
+    value = (response_text or "").lower()
+    blocker_markers = [
+        "bloqueado por",
+        "sigo bloqueado",
+        "dependencia externa",
+        "sin acceso",
+        "no tengo acceso",
+        "acceso denegado",
+        "no accesible desde aquí",
+        "no accesible desde aqui",
+        "drive privado",
+        "google drive privado",
+        "private drive",
+        "mockup html",
+        "documento funcional",
+    ]
+    if not any(marker in value for marker in blocker_markers):
+        return False
+    dependency_hints = [
+        "drive",
+        "google",
+        "mockup",
+        "documento",
+        "credencial",
+        "permiso",
+        "acceso",
+    ]
+    return any(hint in value for hint in dependency_hints)
+
+
 def _run_command(
     cmd: List[str],
     *,
@@ -917,6 +948,7 @@ def _apply_patch_and_push_to_github(
     github_token: str,
     author_name: str,
     author_email: str,
+    push_to_default_branch: bool = True,
 ) -> Dict[str, Any]:
     def _list_unmerged_files(repo_path: str, env_vars: Dict[str, str]) -> List[str]:
         output = _run_command(["git", "diff", "--name-only", "--diff-filter=U"], cwd=repo_path, env=env_vars)
@@ -954,10 +986,12 @@ def _apply_patch_and_push_to_github(
 
         _run_command(["git", "clone", remote_url, repo_dir], env=env)
         default_branch = _run_command(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_dir, env=env) or "main"
+        target_branch = default_branch if push_to_default_branch else branch_name
 
         _run_command(["git", "config", "user.name", author_name], cwd=repo_dir, env=env)
         _run_command(["git", "config", "user.email", author_email], cwd=repo_dir, env=env)
-        _run_command(["git", "checkout", "-b", branch_name], cwd=repo_dir, env=env)
+        if not push_to_default_branch:
+            _run_command(["git", "checkout", "-b", branch_name], cwd=repo_dir, env=env)
 
         patch_path = os.path.join(tmp_dir, "agent.patch")
         with open(patch_path, "w", encoding="utf-8") as patch_file:
@@ -969,7 +1003,7 @@ def _apply_patch_and_push_to_github(
             return {
                 "status": "no_changes",
                 "repo_full_name": repo_full_name,
-                "branch": branch_name,
+                "branch": target_branch,
                 "base_branch": default_branch,
                 "detail": "Patch already applied on target branch",
             }
@@ -1018,7 +1052,7 @@ def _apply_patch_and_push_to_github(
                         return {
                             "status": "no_changes",
                             "repo_full_name": repo_full_name,
-                            "branch": branch_name,
+                            "branch": target_branch,
                             "base_branch": default_branch,
                             "detail": "Patch already applied on target branch",
                         }
@@ -1053,23 +1087,31 @@ def _apply_patch_and_push_to_github(
             return {
                 "status": "no_changes",
                 "repo_full_name": repo_full_name,
-                "branch": branch_name,
+                "branch": target_branch,
                 "base_branch": default_branch,
             }
 
         _run_command(["git", "commit", "-m", commit_message], cwd=repo_dir, env=env)
         commit_sha = _run_command(["git", "rev-parse", "HEAD"], cwd=repo_dir, env=env)
-        _run_command(["git", "push", "-u", "origin", branch_name], cwd=repo_dir, env=env)
+        if push_to_default_branch:
+            _run_command(["git", "push", "origin", default_branch], cwd=repo_dir, env=env)
+        else:
+            _run_command(["git", "push", "-u", "origin", branch_name], cwd=repo_dir, env=env)
 
         return {
             "status": "pushed",
             "repo_full_name": repo_full_name,
-            "branch": branch_name,
+            "branch": target_branch,
             "base_branch": default_branch,
             "commit_sha": commit_sha,
             "commit_url": f"https://github.com/{repo_full_name}/commit/{commit_sha}",
-            "compare_url": f"https://github.com/{repo_full_name}/compare/{default_branch}...{branch_name}?expand=1",
+            "compare_url": (
+                None
+                if push_to_default_branch
+                else f"https://github.com/{repo_full_name}/compare/{default_branch}...{branch_name}?expand=1"
+            ),
             "commit_message": commit_message,
+            "pushed_to_main": bool(push_to_default_branch),
         }
 
 
@@ -1124,6 +1166,7 @@ async def _maybe_publish_agent_git_commit(
     commit_message = _extract_commit_message_from_response(agent_response, task.get("title") or "")
     author_name = (settings.pulse_github_commit_user_name or agent.get("name") or "Pulse Agent").strip()
     author_email = (settings.pulse_github_commit_user_email or "pulse-agent@factoriaia.com").strip()
+    push_to_default_branch = bool(getattr(settings, "pulse_github_push_to_main", True))
 
     try:
         return await asyncio.to_thread(
@@ -1135,6 +1178,7 @@ async def _maybe_publish_agent_git_commit(
             github_token=github_token,
             author_name=author_name,
             author_email=author_email,
+            push_to_default_branch=push_to_default_branch,
         )
     except Exception as git_error:
         detail = f"{git_error}"
@@ -1161,14 +1205,19 @@ def _build_git_activity_message(git_result: Optional[Dict[str, Any]]) -> Optiona
         return None
 
     if status_value == "pushed":
-        return (
-            "✅ Commit publicado en GitHub.\n"
-            f"- Repo: {git_result.get('repo_full_name')}\n"
-            f"- Rama: {git_result.get('branch')}\n"
-            f"- SHA: {git_result.get('commit_sha')}\n"
-            f"- Commit: {git_result.get('commit_url')}\n"
-            f"- Compare/PR: {git_result.get('compare_url')}"
-        )
+        lines = [
+            "✅ Commit publicado en GitHub.",
+            f"- Repo: {git_result.get('repo_full_name')}",
+            f"- Rama: {git_result.get('branch')}",
+            f"- SHA: {git_result.get('commit_sha')}",
+            f"- Commit: {git_result.get('commit_url')}",
+        ]
+        if git_result.get("pushed_to_main"):
+            lines.append("- Modo: push directo a main")
+        compare_url = git_result.get("compare_url")
+        if compare_url:
+            lines.append(f"- Compare/PR: {compare_url}")
+        return "\n".join(lines)
     if status_value == "no_changes":
         return (
             "ℹ️ Se intentó aplicar el diff pero no hubo cambios efectivos para commitear.\n"
@@ -1580,6 +1629,7 @@ async def _execute_project_agent_job(
             "- Está prohibido responder \"ya está hecho en mi rama local\" sin adjuntar diff aplicable.\n"
             "- Para evitar corrupción, genera y pega diff literal (por ejemplo `git diff -- <ruta>`), sin reescribirlo a mano.\n"
             "- Si NO hay cambios de código necesarios, escribe explícitamente: `Sin cambios de código`.\n"
+            "- Si estás bloqueado por dependencia externa (Drive privado, credenciales, mockup, documento funcional), responde `Estado: EN_PROGRESO`, explica el bloqueo y añade `Sin cambios de código`.\n"
             "- Si no hay diff nuevo porque el cambio YA quedó aplicado en iteraciones previas, debes responder `Estado: COMPLETADA` + `Sin cambios de código`."
         )
         if repo_full_name_for_automation:
@@ -1692,6 +1742,7 @@ async def _execute_project_agent_job(
 
     declared_no_code_changes = _agent_declared_no_code_changes(agent_response)
     response_signals_stall = _agent_response_signals_stall_without_new_diff(agent_response)
+    response_signals_external_blocker = _agent_response_signals_external_dependency_blocker(agent_response)
     previous_no_progress_count = 0
     if isinstance(previous_payload, dict):
         try:
@@ -1699,32 +1750,19 @@ async def _execute_project_agent_job(
         except Exception:
             previous_no_progress_count = 0
 
-    no_progress_iteration = (
-        not task_marked_complete
-        and bool(board.get("is_development"))
-        and ((git_result or {}).get("status") in {"no_patch", "skipped_no_code"})
-        and (declared_no_code_changes or response_signals_stall)
-    )
-    no_progress_count = (previous_no_progress_count + 1) if no_progress_iteration else 0
     queue_recommendation = "queued"
     queue_block_reason = ""
-    if no_progress_count == 2:
-        await _append_agent_activity_comment(
-            supabase,
-            issue_id=issue_id,
-            comment_user_id=comment_user_id,
-            agent=agent,
-            content=(
-                "⚠️ El agente va en EN_PROGRESO sin diff nuevo por segunda vez. "
-                "Si el cambio ya quedó aplicado, debe responder `Estado: COMPLETADA` + `Sin cambios de código`."
-            ),
-            workspace_id=task.get("workspace_id"),
-            workspace_app_id=task.get("workspace_app_id"),
-        )
-    if no_progress_count >= 3:
+    no_progress_count = 0
+    external_blocker_iteration = (
+        not task_marked_complete
+        and bool(board.get("is_development"))
+        and response_signals_external_blocker
+        and (declared_no_code_changes or ((git_result or {}).get("status") in {"no_patch", "skipped_no_code"}))
+    )
+    if external_blocker_iteration:
         queue_recommendation = "blocked"
         queue_block_reason = (
-            "Bloqueado por estancamiento: 3 iteraciones seguidas sin diff incremental nuevo."
+            "Bloqueado por dependencia externa: faltan accesos/artefactos para continuar."
         )
         await _append_agent_activity_comment(
             supabase,
@@ -1732,13 +1770,51 @@ async def _execute_project_agent_job(
             comment_user_id=comment_user_id,
             agent=agent,
             content=(
-                "🛑 Cola pausada automáticamente por estancamiento (3 iteraciones sin diff nuevo). "
-                "Recomendación: reactivar con instrucción concreta o cerrar con "
-                "`Estado: COMPLETADA` + `Sin cambios de código`."
+                "🚧 Tarea bloqueada automáticamente por dependencia externa (por ejemplo, Drive privado/mockup no accesible). "
+                "La cola se pausa en esta tarjeta hasta que se adjunte el material o se den accesos, y luego se reprocesa."
             ),
             workspace_id=task.get("workspace_id"),
             workspace_app_id=task.get("workspace_app_id"),
         )
+    else:
+        no_progress_iteration = (
+            not task_marked_complete
+            and bool(board.get("is_development"))
+            and ((git_result or {}).get("status") in {"no_patch", "skipped_no_code"})
+            and (declared_no_code_changes or response_signals_stall)
+        )
+        no_progress_count = (previous_no_progress_count + 1) if no_progress_iteration else 0
+        if no_progress_count == 2:
+            await _append_agent_activity_comment(
+                supabase,
+                issue_id=issue_id,
+                comment_user_id=comment_user_id,
+                agent=agent,
+                content=(
+                    "⚠️ El agente va en EN_PROGRESO sin diff nuevo por segunda vez. "
+                    "Si el cambio ya quedó aplicado, debe responder `Estado: COMPLETADA` + `Sin cambios de código`."
+                ),
+                workspace_id=task.get("workspace_id"),
+                workspace_app_id=task.get("workspace_app_id"),
+            )
+        if no_progress_count >= 3:
+            queue_recommendation = "blocked"
+            queue_block_reason = (
+                "Bloqueado por estancamiento: 3 iteraciones seguidas sin diff incremental nuevo."
+            )
+            await _append_agent_activity_comment(
+                supabase,
+                issue_id=issue_id,
+                comment_user_id=comment_user_id,
+                agent=agent,
+                content=(
+                    "🛑 Cola pausada automáticamente por estancamiento (3 iteraciones sin diff nuevo). "
+                    "Recomendación: reactivar con instrucción concreta o cerrar con "
+                    "`Estado: COMPLETADA` + `Sin cambios de código`."
+                ),
+                workspace_id=task.get("workspace_id"),
+                workspace_app_id=task.get("workspace_app_id"),
+            )
 
     # On development boards we only allow QA handoff when persistence is guaranteed:
     # either a valid git publish result exists, or the agent explicitly declared no-code work.

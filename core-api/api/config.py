@@ -127,6 +127,7 @@ class Settings(BaseSettings):
     pulse_github_token: str = ""
     pulse_github_commit_user_name: str = "Pulse Agent"
     pulse_github_commit_user_email: str = "pulse-agent@factoriaia.com"
+    pulse_github_push_to_main: bool = True
     
     # Cron job authentication
     cron_secret: str = ""  # Secret for authenticating cron job requests
