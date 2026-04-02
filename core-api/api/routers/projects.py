@@ -780,6 +780,19 @@ def _apply_patch_and_push_to_github(
         with open(patch_path, "w", encoding="utf-8") as patch_file:
             patch_file.write(patch_text)
 
+        # Fast path: if patch is already present in target branch, skip commit attempt.
+        try:
+            _run_command(["git", "apply", "--reverse", "--check", patch_path], cwd=repo_dir, env=env)
+            return {
+                "status": "no_changes",
+                "repo_full_name": repo_full_name,
+                "branch": branch_name,
+                "base_branch": default_branch,
+                "detail": "Patch already applied on target branch",
+            }
+        except Exception:
+            pass
+
         try:
             _run_command(["git", "apply", "--3way", "--whitespace=fix", patch_path], cwd=repo_dir, env=env)
         except Exception as apply_error:
