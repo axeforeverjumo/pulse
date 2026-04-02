@@ -1136,11 +1136,11 @@ def _is_agent_task_marked_complete(response_text: str) -> bool:
     text = (response_text or "")
     if not text.strip():
         return False
-    if re.search(r"(?im)^\\s*estado\\s*:\\s*completada\\b", text):
+    if re.search(r"(?im)^\s*estado\s*:\s*completada\b", text):
         return True
-    if re.search(r"(?im)^\\s*tarea\\s+completada\\b", text):
+    if re.search(r"(?im)^\s*tarea\s+completada\b", text):
         return True
-    if re.search(r"(?im)^\\s*status\\s*:\\s*completed\\b", text):
+    if re.search(r"(?im)^\s*status\s*:\s*completed\b", text):
         return True
     return False
 
@@ -1409,21 +1409,43 @@ async def _execute_project_agent_job(
         )
 
     task_marked_complete = _is_agent_task_marked_complete(agent_response)
-    if task_marked_complete and board.get("is_development") and repo_full_name_for_automation:
-        git_status = (git_result or {}).get("status")
-        if git_status not in {"pushed", "no_changes", "skipped_no_code"}:
+    declared_no_code_changes = _agent_declared_no_code_changes(agent_response)
+
+    # On development boards we only allow QA handoff when persistence is guaranteed:
+    # either a valid git publish result exists, or the agent explicitly declared no-code work.
+    if task_marked_complete and board.get("is_development"):
+        if repo_full_name_for_automation:
+            git_status = (git_result or {}).get("status")
+            if git_status not in {"pushed", "no_changes", "skipped_no_code"}:
+                await _append_agent_activity_comment(
+                    supabase,
+                    issue_id=issue_id,
+                    comment_user_id=comment_user_id,
+                    agent=agent,
+                    content=(
+                        "⚠️ La tarea se marcó como COMPLETADA, pero falló el commit automático. "
+                        "Se mantiene en In Progress y la cola no avanzará a la siguiente tarjeta "
+                        "hasta que haya commit válido o se indique explícitamente `Sin cambios de código`."
+                    ),
+                    workspace_id=task.get("workspace_id"),
+                    workspace_app_id=task.get("workspace_app_id"),
+                )
+                task_marked_complete = False
+        elif not declared_no_code_changes:
             await _append_agent_activity_comment(
                 supabase,
                 issue_id=issue_id,
                 comment_user_id=comment_user_id,
                 agent=agent,
                 content=(
-                    "⚠️ El commit automático en GitHub falló, pero la tarea se marcó como completada y se envió a QA para revisión humana. "
-                    "Revisa repo/token/diff para dejar el commit limpio antes de cerrar en Done."
+                    "⚠️ La tarea se marcó como COMPLETADA en un proyecto de desarrollo sin repositorio configurado. "
+                    "No se puede pasar a QA sin trazabilidad de cambios. Configura el repo (owner/repo) "
+                    "o indica explícitamente `Sin cambios de código`."
                 ),
                 workspace_id=task.get("workspace_id"),
                 workspace_app_id=task.get("workspace_app_id"),
             )
+            task_marked_complete = False
 
     if task_marked_complete:
         updates: Dict[str, Any] = {}
@@ -1555,6 +1577,9 @@ async def _process_project_agent_queue_background(
                     max_attempts,
                     message,
                 )
+                # Keep strict task order per agent: do not jump to newer queued tasks
+                # after an execution error in the current one.
+                break
     return processed
 
 
