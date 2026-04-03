@@ -3324,3 +3324,52 @@ export async function syncTimezone(): Promise<void> {
     body: JSON.stringify({ timezone: browserTimezone }),
   });
 }
+
+// --- Routines (recurring tasks) ---
+
+export interface Routine {
+  id: string;
+  workspace_id: string;
+  board_id: string;
+  title: string;
+  description?: string;
+  agent_id?: string;
+  cron_expression: string;
+  timezone: string;
+  is_active: boolean;
+  last_run_at?: string;
+  next_run_at?: string;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateRoutineRequest {
+  title: string;
+  description?: string;
+  agent_id?: string;
+  cron_expression: string;
+  timezone?: string;
+}
+
+export async function getBoardRoutines(boardId: string): Promise<{ routines: Routine[]; count: number }> {
+  return api(`/projects/boards/${boardId}/routines`);
+}
+
+export async function createRoutine(boardId: string, data: CreateRoutineRequest): Promise<Routine> {
+  return api(`/projects/boards/${boardId}/routines`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateRoutine(routineId: string, data: Partial<Routine>): Promise<Routine> {
+  return api(`/projects/routines/${routineId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteRoutine(routineId: string): Promise<{ status: string }> {
+  return api(`/projects/routines/${routineId}`, { method: 'DELETE' });
+}

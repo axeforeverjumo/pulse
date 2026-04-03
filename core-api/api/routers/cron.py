@@ -1181,6 +1181,168 @@ async def cron_agent_health(authorization: str = Header(None)):
         )
 
 
+class RoutinesCronResponse(BaseModel):
+    """Response for routines cron job."""
+    status: str
+    checked: int = 0
+    executed: int = 0
+    errors: int = 0
+    duration_seconds: Optional[float] = None
+
+
+@router.get("/routines", response_model=RoutinesCronResponse)
+async def cron_process_routines(authorization: str = Header(None)):
+    """
+    CRON JOB: Process due routines and create issues
+
+    RUNS: Every 5 minutes
+
+    PURPOSE: Check active routines whose next_run_at is in the past,
+    create issues from them, and schedule the next run.
+    """
+    logger.info("=" * 80)
+    logger.info("CRON: Starting routine processing")
+
+    if not verify_cron_auth(authorization):
+        logger.warning("Unauthorized cron attempt")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+
+    start_time = datetime.now(timezone.utc)
+    checked = 0
+    executed = 0
+    errors = 0
+
+    try:
+        from lib.supabase_client import get_async_service_role_client
+        supabase = await get_async_service_role_client()
+
+        now = datetime.now(timezone.utc).isoformat()
+        routines_result = await supabase.table("project_routines")\
+            .select("*")\
+            .eq("is_active", True)\
+            .lte("next_run_at", now)\
+            .execute()
+
+        routines = routines_result.data or []
+        checked = len(routines)
+        logger.info(f"CRON: Found {checked} due routines")
+
+        for routine in routines:
+            try:
+                board_id = routine["board_id"]
+                workspace_id = routine["workspace_id"]
+
+                # Look up board context for workspace_app_id and first non-done state
+                board_result = await supabase.table("project_boards")\
+                    .select("workspace_app_id")\
+                    .eq("id", board_id)\
+                    .single()\
+                    .execute()
+                workspace_app_id = board_result.data["workspace_app_id"]
+
+                states_result = await supabase.table("project_states")\
+                    .select("id")\
+                    .eq("board_id", board_id)\
+                    .eq("is_done", False)\
+                    .order("position", desc=False)\
+                    .limit(1)\
+                    .execute()
+
+                if not states_result.data:
+                    logger.warning(f"CRON: No open state found for board {board_id}, skipping routine {routine['id']}")
+                    errors += 1
+                    continue
+
+                first_state_id = states_result.data[0]["id"]
+
+                # Allocate issue number
+                number_result = await supabase.rpc(
+                    "allocate_project_issue_number",
+                    {"p_board_id": board_id}
+                ).execute()
+                issue_number = number_result.data
+
+                # Get next position
+                pos_result = await supabase.table("project_issues")\
+                    .select("position")\
+                    .eq("state_id", first_state_id)\
+                    .order("position", desc=True)\
+                    .limit(1)\
+                    .execute()
+                next_position = (pos_result.data[0]["position"] + 1) if pos_result.data else 0
+
+                issue_data = {
+                    "workspace_app_id": workspace_app_id,
+                    "workspace_id": workspace_id,
+                    "board_id": board_id,
+                    "state_id": first_state_id,
+                    "number": issue_number,
+                    "title": routine["title"],
+                    "priority": 0,
+                    "position": next_position,
+                    "created_by": routine.get("created_by"),
+                }
+                if routine.get("description"):
+                    issue_data["description"] = routine["description"]
+
+                issue_result = await supabase.table("project_issues")\
+                    .insert(issue_data)\
+                    .execute()
+
+                issue_id = issue_result.data[0]["id"]
+
+                # Assign agent if specified
+                if routine.get("agent_id"):
+                    await supabase.table("project_issue_assignees").insert({
+                        "workspace_app_id": workspace_app_id,
+                        "workspace_id": workspace_id,
+                        "issue_id": issue_id,
+                        "agent_id": routine["agent_id"],
+                    }).execute()
+
+                # Calculate next_run_at
+                from croniter import croniter
+                from zoneinfo import ZoneInfo
+                tz_name = routine.get("timezone", "Europe/Madrid")
+                local_tz = ZoneInfo(tz_name)
+                now_local = datetime.now(timezone.utc).astimezone(local_tz)
+                cron = croniter(routine["cron_expression"], now_local)
+                next_run = cron.get_next(datetime).astimezone(timezone.utc)
+
+                await supabase.table("project_routines")\
+                    .update({
+                        "last_run_at": datetime.now(timezone.utc).isoformat(),
+                        "next_run_at": next_run.isoformat(),
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    })\
+                    .eq("id", routine["id"])\
+                    .execute()
+
+                executed += 1
+                logger.info(f"CRON: Created issue from routine '{routine['title']}' (routine {routine['id']})")
+
+            except Exception as e:
+                errors += 1
+                logger.error(f"CRON: Failed to process routine {routine.get('id')}: {e}")
+
+        duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+        logger.info(f"CRON: Routine processing completed in {duration:.2f}s - checked={checked} executed={executed} errors={errors}")
+
+        return RoutinesCronResponse(
+            status="ok",
+            checked=checked,
+            executed=executed,
+            errors=errors,
+            duration_seconds=duration,
+        )
+    except Exception as e:
+        logger.error(f"CRON: Routine processing failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Routine processing failed: {str(e)}",
+        )
+
+
 @router.get("/health", response_model=CronHealthResponse)
 async def cron_health():
     """
@@ -1231,6 +1393,11 @@ async def cron_health():
                 "name": "agent-health",
                 "schedule": "Every 5 minutes",
                 "description": "Verifies running agent E2B sandboxes are healthy"
+            },
+            {
+                "name": "routines",
+                "schedule": "Every 5 minutes",
+                "description": "Creates issues from due recurring routines"
             }
         ]
     }

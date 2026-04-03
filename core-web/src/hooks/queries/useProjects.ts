@@ -34,6 +34,12 @@ import {
   removeCommentReaction,
   getWorkspaceOpenClawAgents,
   getBoardAgentStats,
+  getBoardRoutines,
+  createRoutine,
+  updateRoutine,
+  deleteRoutine,
+  type Routine,
+  type CreateRoutineRequest,
   type OpenClawAgent,
   type ProjectBoard,
   type ProjectState,
@@ -1891,4 +1897,70 @@ export async function prefetchProjectsDataBackground(
   if (boards.length > 0) {
     await Promise.all(boards.map((board) => prefetchBoardData(board.id)));
   }
+}
+
+// ============================================================================
+// Routines (recurring tasks)
+// ============================================================================
+
+export { type Routine, type CreateRoutineRequest };
+
+export function useBoardRoutines(boardId: string | null) {
+  return useQuery({
+    queryKey: projectKeys.routines(boardId ?? ''),
+    queryFn: async () => {
+      const result = await getBoardRoutines(boardId!);
+      return result.routines;
+    },
+    enabled: !!boardId,
+    staleTime: 30_000,
+  });
+}
+
+export function useCreateRoutine(boardId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateRoutineRequest) => createRoutine(boardId!, data),
+    onSuccess: () => {
+      if (boardId) {
+        queryClient.invalidateQueries({ queryKey: projectKeys.routines(boardId) });
+      }
+      toast.success('Rutina creada');
+    },
+    onError: () => {
+      toast.error('Error al crear la rutina');
+    },
+  });
+}
+
+export function useUpdateRoutine(boardId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ routineId, data }: { routineId: string; data: Partial<Routine> }) =>
+      updateRoutine(routineId, data),
+    onSuccess: () => {
+      if (boardId) {
+        queryClient.invalidateQueries({ queryKey: projectKeys.routines(boardId) });
+      }
+    },
+    onError: () => {
+      toast.error('Error al actualizar la rutina');
+    },
+  });
+}
+
+export function useDeleteRoutine(boardId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (routineId: string) => deleteRoutine(routineId),
+    onSuccess: () => {
+      if (boardId) {
+        queryClient.invalidateQueries({ queryKey: projectKeys.routines(boardId) });
+      }
+      toast.success('Rutina eliminada');
+    },
+    onError: () => {
+      toast.error('Error al eliminar la rutina');
+    },
+  });
 }

@@ -15,6 +15,10 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG"; }
 log "Running agent-health"
 curl -sf -m 300 "$API/agent-health" -H "$AUTH" >> "$LOG" 2>&1 || log "WARN: agent-health failed"
 
+# Every 5 minutes: process due routines (recurring tasks)
+log "Running routines"
+curl -sf -m 60 "$API/routines" -H "$AUTH" >> "$LOG" 2>&1 || log "WARN: routines failed"
+
 # Every 15 minutes: incremental-sync (email sync)
 if (( MINUTE % 15 == 0 )); then
     log "Running incremental-sync"

@@ -4,12 +4,13 @@ import { motion } from "motion/react";
 import { XMarkIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import type { ProjectBoard } from "../../../api/client";
 import AgentStatsPanel from "./AgentStatsPanel";
+import RoutinesPanel from "./RoutinesPanel";
 
 interface ProjectsSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   board: ProjectBoard | null;
-  initialTab?: "board" | "app" | "agents";
+  initialTab?: "board" | "app" | "agents" | "routines";
   onSave: (updates: {
     name: string;
     description?: string;
@@ -34,7 +35,7 @@ export default function ProjectsSettingsModal({
   onSave,
   onDelete,
 }: ProjectsSettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<"board" | "app" | "agents">("board");
+  const [activeTab, setActiveTab] = useState<"board" | "app" | "agents" | "routines">("board");
   const [editingName, setEditingName] = useState(board?.name || "");
   const [editingDescription, setEditingDescription] = useState(board?.description || "");
   const [isDevelopment, setIsDevelopment] = useState(Boolean(board?.is_development));
@@ -169,6 +170,19 @@ export default function ProjectsSettingsModal({
           >
             Agentes
             {activeTab === "agents" && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-900 rounded-full" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("routines")}
+            className={`pb-2 text-sm font-medium transition-colors relative ${
+              activeTab === "routines"
+                ? "text-gray-900"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Rutinas
+            {activeTab === "routines" && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-900 rounded-full" />
             )}
           </button>
@@ -422,7 +436,7 @@ export default function ProjectsSettingsModal({
               </button>
             </div>
           </>
-        ) : (
+        ) : activeTab === "agents" ? (
           <>
             {/* Agent Stats Tab Content */}
             <div className="overflow-y-auto flex-1 px-6 py-4">
@@ -433,6 +447,29 @@ export default function ProjectsSettingsModal({
             </div>
 
             {/* Agent Stats Footer */}
+            <div className="flex justify-end gap-2 px-6 py-4 border-t border-border-light">
+              <button
+                onClick={handleClose}
+                className="px-4 py-2 text-sm text-text-secondary hover:bg-bg-gray rounded-lg"
+              >
+                Cerrar
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Routines Tab Content */}
+            <div className="overflow-y-auto flex-1 px-6 py-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-4">
+                Tareas Recurrentes
+              </h3>
+              <RoutinesPanel
+                boardId={board?.id ?? null}
+                workspaceId={board?.workspace_id ?? null}
+              />
+            </div>
+
+            {/* Routines Footer */}
             <div className="flex justify-end gap-2 px-6 py-4 border-t border-border-light">
               <button
                 onClick={handleClose}

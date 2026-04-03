@@ -3437,8 +3437,8 @@ async def create_routine_endpoint(
 
         # Calculate next_run_at
         from datetime import datetime as dt, timezone as tz
-        import pytz
-        local_tz = pytz.timezone(request.timezone)
+        from zoneinfo import ZoneInfo
+        local_tz = ZoneInfo(request.timezone)
         now_local = dt.now(tz.utc).astimezone(local_tz)
         cron = croniter(request.cron_expression, now_local)
         next_run = cron.get_next(dt).astimezone(tz.utc)
@@ -3502,7 +3502,7 @@ async def update_routine_endpoint(
         if request.cron_expression is not None or request.timezone is not None:
             from croniter import croniter as ci
             from datetime import datetime as dt, timezone as tz
-            import pytz
+            from zoneinfo import ZoneInfo
             # Fetch current routine to get existing values
             current = await supabase.table("project_routines")\
                 .select("cron_expression, timezone")\
@@ -3511,7 +3511,7 @@ async def update_routine_endpoint(
                 .execute()
             cron_expr = updates.get("cron_expression", current.data["cron_expression"])
             tz_name = updates.get("timezone", current.data["timezone"])
-            local_tz = pytz.timezone(tz_name)
+            local_tz = ZoneInfo(tz_name)
             now_local = dt.now(tz.utc).astimezone(local_tz)
             cron = ci(cron_expr, now_local)
             updates["next_run_at"] = cron.get_next(dt).astimezone(tz.utc).isoformat()
