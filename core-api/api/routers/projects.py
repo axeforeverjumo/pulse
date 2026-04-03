@@ -2692,15 +2692,18 @@ async def add_agent_assignee_endpoint(
         # Validate: dev tasks only accept claude_code agents
         from lib.supabase_client import get_async_service_role_client as _get_svc
         _svc = await _get_svc()
-        _issue_check = await _svc.table("project_issues").select("is_dev_task, board_id").eq("id", issue_id).maybe_single().execute()
-        if _issue_check and _issue_check.data:
-            _board_check = await _svc.table("project_boards").select("is_development").eq("id", _issue_check.data["board_id"]).maybe_single().execute()
-            _effective_dev = _issue_check.data.get("is_dev_task")
-            if _effective_dev is None and _board_check and _board_check.data:
-                _effective_dev = _board_check.data.get("is_development", False)
+        _issue_res = await _svc.table("project_issues").select("is_dev_task, board_id").eq("id", issue_id).limit(1).execute()
+        _issue_data = (_issue_res.data or [None])[0] if _issue_res else None
+        if _issue_data:
+            _board_res = await _svc.table("project_boards").select("is_development").eq("id", _issue_data["board_id"]).limit(1).execute()
+            _board_data = (_board_res.data or [None])[0] if _board_res else None
+            _effective_dev = _issue_data.get("is_dev_task")
+            if _effective_dev is None and _board_data:
+                _effective_dev = _board_data.get("is_development", False)
             if _effective_dev:
-                _agent_check = await _svc.table("openclaw_agents").select("tier").eq("id", request.agent_id).maybe_single().execute()
-                if _agent_check and _agent_check.data and _agent_check.data.get("tier") != "claude_code":
+                _agent_res = await _svc.table("openclaw_agents").select("tier").eq("id", request.agent_id).limit(1).execute()
+                _agent_data = (_agent_res.data or [None])[0] if _agent_res else None
+                if _agent_data and _agent_data.get("tier") != "claude_code":
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="Las tareas de desarrollo solo aceptan el agente Claude Code. Desactiva 'tarea de desarrollo' para asignar otros agentes.",
