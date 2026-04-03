@@ -1767,12 +1767,10 @@ async def _execute_project_agent_job(
                 "payload": {"claude_code_session_id": cc_session_id},
             }
 
-    # ── Core agents (Haiku text-only) ──
+    # ── Core agents (text-only via Claude Code CLI — uses subscription, $0 extra) ──
     if agent.get("tier") == "core":
-        import anthropic
-        from api.config import settings
+        import httpx
 
-        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
         system_prompt = (
             f"Eres {agent['name']}.\n\n"
             f"{agent.get('soul_md', '')}\n\n"
@@ -1781,14 +1779,27 @@ async def _execute_project_agent_job(
             "Respeta el formato de salida obligatorio indicado por el usuario.\n"
             "Responde en español."
         )
+        core_prompt = f"{system_prompt}\n\n---\n\nTarea asignada:\n\n{task_context}\n\nTrabaja en esta tarea."
 
-        response = await client.messages.create(
-            model=agent.get("model", "claude-haiku-4-5-20251001"),
-            max_tokens=4096,
-            system=system_prompt,
-            messages=[{"role": "user", "content": f"Tarea asignada:\n\n{task_context}\n\nTrabaja en esta tarea."}],
-        )
-        agent_response = response.content[0].text
+        try:
+            async with httpx.AsyncClient(timeout=300.0) as http_client:
+                resp = await http_client.post(
+                    "http://127.0.0.1:4201",
+                    json={
+                        "action": "execute",
+                        "prompt": core_prompt,
+                        "repo_dir": "/tmp",
+                        "max_budget_usd": "0.50",
+                    }
+                )
+                if resp.status_code == 200:
+                    cc_data = resp.json()
+                    agent_response = cc_data.get("result") or "Sin respuesta del agente."
+                else:
+                    agent_response = f"Error del bridge: HTTP {resp.status_code}"
+        except Exception as e:
+            logger.error("Core agent CLI bridge error: %s", e)
+            agent_response = f"Error al contactar el bridge de Claude Code: {str(e)[:200]}"
     # ── OpenClaw advance agents (bridge 4200) ──
     else:
         async with httpx.AsyncClient(timeout=420.0) as http_client:
