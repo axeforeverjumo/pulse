@@ -250,6 +250,25 @@ class AddCommentReactionRequest(BaseModel):
     emoji: str = Field(..., min_length=1, max_length=32, description="Emoji string")
 
 
+class CreateRoutineRequest(BaseModel):
+    """Request model for creating a routine (recurring task template)."""
+    title: str = Field(..., min_length=1, max_length=500)
+    description: Optional[str] = None
+    agent_id: Optional[str] = None
+    cron_expression: str = Field(..., description="Cron expression e.g. '0 10 * * 1' = every Monday 10AM")
+    timezone: str = Field(default="Europe/Madrid")
+
+
+class UpdateRoutineRequest(BaseModel):
+    """Request model for updating a routine."""
+    title: Optional[str] = Field(None, min_length=1, max_length=500)
+    description: Optional[str] = None
+    agent_id: Optional[str] = None
+    cron_expression: Optional[str] = None
+    timezone: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
 class GitHubListReposRequest(BaseModel):
     """Request model for listing GitHub repositories using a customer token."""
     token: str = Field(..., min_length=20, description="GitHub personal access token")
@@ -2145,6 +2164,134 @@ async def _execute_project_agent_job(
     }
 
 
+async def _resolve_repo_key_for_job(supabase: Any, job: Dict[str, Any]) -> str:
+    """Determine the repo key for a queue job so we can use per-repo locking.
+
+    Returns the board's repository_url when available (two jobs sharing the same
+    repo will serialise), otherwise falls back to the board_id (safe default
+    that behaves like a per-board lock).
+    """
+    issue_id = job.get("issue_id")
+    if not issue_id:
+        return f"unknown-{job.get('id', 'noid')}"
+    try:
+        task_result = await supabase.table("project_issues") \
+            .select("board_id") \
+            .eq("id", issue_id) \
+            .maybe_single() \
+            .execute()
+        board_id = (task_result.data or {}).get("board_id") if task_result else None
+        if not board_id:
+            return f"issue-{issue_id}"
+        board_result = await supabase.table("project_boards") \
+            .select("id, repository_url") \
+            .eq("id", board_id) \
+            .maybe_single() \
+            .execute()
+        board = board_result.data or {} if board_result else {}
+        repo_url = (board.get("repository_url") or "").strip()
+        return repo_url if repo_url else f"board-{board_id}"
+    except Exception as exc:
+        logger.warning("Could not resolve repo key for job %s: %s", job.get("id"), exc)
+        return f"issue-{issue_id}"
+
+
+async def _process_single_agent_job(
+    supabase: Any,
+    job: Dict[str, Any],
+    *,
+    fallback_user_id: Optional[str],
+) -> None:
+    """Execute a single agent job under its per-repo lock."""
+    job_id = job.get("id")
+    repo_key = await _resolve_repo_key_for_job(supabase, job)
+    repo_lock = await _get_repo_lock(repo_key)
+    logger.info("Job %s acquired repo_key=%s (locked=%s)", job_id, repo_key, repo_lock.locked())
+
+    async with repo_lock:
+        try:
+            result_payload = await _execute_project_agent_job(
+                supabase,
+                job,
+                fallback_user_id=fallback_user_id,
+            )
+            task_completed = bool(result_payload.get("task_completed"))
+            recommended_status = str(result_payload.get("queue_recommendation") or "").strip().lower()
+            next_status = "completed" if task_completed else (
+                recommended_status if recommended_status in {"queued", "blocked"} else "queued"
+            )
+            next_error: Optional[str]
+            if task_completed:
+                next_error = None
+            elif next_status == "blocked":
+                next_error = (result_payload.get("queue_block_reason") or "Queue blocked").strip()[:2000]
+            else:
+                next_error = ""
+            await update_project_agent_job(
+                supabase,
+                job_id,
+                status=next_status,
+                error=next_error,
+                payload_patch={**(job.get("payload") or {}), **result_payload},
+            )
+            if not task_completed:
+                if next_status == "blocked":
+                    logger.info(
+                        "Queue job %s blocked due to stagnation (issue=%s agent=%s)",
+                        job_id,
+                        job.get("issue_id"),
+                        job.get("agent_id"),
+                    )
+                    return
+                # Enforce strict sequence: keep iterating the same issue until it reaches QA/Done
+                # before claiming any newer queued issue for this agent.
+                current_attempts = int(job.get("attempts") or 0)
+                if current_attempts > 0:
+                    try:
+                        await supabase.table("project_agent_queue_jobs").update({
+                            "attempts": current_attempts - 1,
+                        }).eq("id", job_id).execute()
+                    except Exception:
+                        logger.warning("Could not normalize attempts counter for queue job %s", job_id)
+                logger.info(
+                    "Queue job %s re-queued for continued work (issue=%s agent=%s)",
+                    job_id,
+                    job.get("issue_id"),
+                    job.get("agent_id"),
+                )
+        except Exception as exc:
+            message = str(exc)
+            lower_message = message.lower()
+            status_for_error = (
+                "blocked"
+                if (
+                    "no longer in progress" in lower_message
+                    or "no longer actionable" in lower_message
+                    or "missing an in progress state" in lower_message
+                )
+                else "queued"
+            )
+            attempts = int(job.get("attempts") or 0)
+            max_attempts = int(job.get("max_attempts") or 1)
+            if attempts >= max_attempts and status_for_error == "queued":
+                status_for_error = "failed"
+            await update_project_agent_job(
+                supabase,
+                job_id,
+                status=status_for_error,
+                error=message,
+                payload_patch=job.get("payload") or {},
+            )
+            logger.warning(
+                "Queue job %s failed (status=%s attempts=%s/%s): %s",
+                job_id,
+                status_for_error,
+                attempts,
+                max_attempts,
+                message,
+            )
+
+
 async def _process_project_agent_queue_background(
     *,
     user_jwt: Optional[str],
@@ -2153,112 +2300,31 @@ async def _process_project_agent_queue_background(
 ) -> int:
     from lib.supabase_client import get_async_service_role_client
 
-    if _AGENT_QUEUE_WORKER_LOCK.locked():
+    supabase = await get_async_service_role_client()
+    # Slightly shorter stale threshold so queue recovers faster after worker restarts.
+    revived = await revive_stale_running_jobs(supabase, stale_after_minutes=10)
+    if revived:
+        logger.info("Revived %s stale running queue job(s)", revived)
+
+    # Claim up to max_jobs and dispatch them concurrently.  Per-repo locks
+    # inside _process_single_agent_job ensure same-repo serialisation while
+    # jobs targeting different repos execute in parallel.
+    jobs: list[Dict[str, Any]] = []
+    for _ in range(max(1, min(max_jobs, 50))):
+        job = await claim_next_project_agent_job(supabase)
+        if not job:
+            break
+        if job.get("id"):
+            jobs.append(job)
+
+    if not jobs:
         return 0
 
-    processed = 0
-    async with _AGENT_QUEUE_WORKER_LOCK:
-        supabase = await get_async_service_role_client()
-        # Slightly shorter stale threshold so queue recovers faster after worker restarts.
-        revived = await revive_stale_running_jobs(supabase, stale_after_minutes=10)
-        if revived:
-            logger.info("Revived %s stale running queue job(s)", revived)
-        for _ in range(max(1, min(max_jobs, 50))):
-            job = await claim_next_project_agent_job(supabase)
-            if not job:
-                break
-
-            job_id = job.get("id")
-            if not job_id:
-                continue
-            processed += 1
-
-            try:
-                result_payload = await _execute_project_agent_job(
-                    supabase,
-                    job,
-                    fallback_user_id=fallback_user_id,
-                )
-                task_completed = bool(result_payload.get("task_completed"))
-                recommended_status = str(result_payload.get("queue_recommendation") or "").strip().lower()
-                next_status = "completed" if task_completed else (
-                    recommended_status if recommended_status in {"queued", "blocked"} else "queued"
-                )
-                next_error: Optional[str]
-                if task_completed:
-                    next_error = None
-                elif next_status == "blocked":
-                    next_error = (result_payload.get("queue_block_reason") or "Queue blocked").strip()[:2000]
-                else:
-                    next_error = ""
-                await update_project_agent_job(
-                    supabase,
-                    job_id,
-                    status=next_status,
-                    error=next_error,
-                    payload_patch={**(job.get("payload") or {}), **result_payload},
-                )
-                if not task_completed:
-                    if next_status == "blocked":
-                        logger.info(
-                            "Queue job %s blocked due to stagnation (issue=%s agent=%s)",
-                            job_id,
-                            job.get("issue_id"),
-                            job.get("agent_id"),
-                        )
-                        break
-                    # Enforce strict sequence: keep iterating the same issue until it reaches QA/Done
-                    # before claiming any newer queued issue for this agent.
-                    current_attempts = int(job.get("attempts") or 0)
-                    if current_attempts > 0:
-                        try:
-                            await supabase.table("project_agent_queue_jobs").update({
-                                "attempts": current_attempts - 1,
-                            }).eq("id", job_id).execute()
-                        except Exception:
-                            logger.warning("Could not normalize attempts counter for queue job %s", job_id)
-                    logger.info(
-                        "Queue job %s re-queued for continued work (issue=%s agent=%s)",
-                        job_id,
-                        job.get("issue_id"),
-                        job.get("agent_id"),
-                    )
-                    break
-            except Exception as exc:
-                message = str(exc)
-                lower_message = message.lower()
-                status_for_error = (
-                    "blocked"
-                    if (
-                        "no longer in progress" in lower_message
-                        or "no longer actionable" in lower_message
-                        or "missing an in progress state" in lower_message
-                    )
-                    else "queued"
-                )
-                attempts = int(job.get("attempts") or 0)
-                max_attempts = int(job.get("max_attempts") or 1)
-                if attempts >= max_attempts and status_for_error == "queued":
-                    status_for_error = "failed"
-                await update_project_agent_job(
-                    supabase,
-                    job_id,
-                    status=status_for_error,
-                    error=message,
-                    payload_patch=job.get("payload") or {},
-                )
-                logger.warning(
-                    "Queue job %s failed (status=%s attempts=%s/%s): %s",
-                    job_id,
-                    status_for_error,
-                    attempts,
-                    max_attempts,
-                    message,
-                )
-                # Keep strict task order per agent: do not jump to newer queued tasks
-                # after an execution error in the current one.
-                break
-    return processed
+    await asyncio.gather(*(
+        _process_single_agent_job(supabase, job, fallback_user_id=fallback_user_id)
+        for job in jobs
+    ))
+    return len(jobs)
 
 
 # ============================================================================
@@ -3314,6 +3380,177 @@ async def remove_comment_reaction_endpoint(
         return {"status": "deleted"}
     except Exception as e:
         handle_api_exception(e, "Failed to remove reaction", logger)
+
+
+# ============================================================================
+# Routines (recurring task templates)
+# ============================================================================
+
+
+@router.get("/boards/{board_id}/routines")
+async def get_routines_endpoint(
+    board_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Get all routines for a board."""
+    try:
+        from lib.supabase_client import get_authenticated_async_client
+        supabase = await get_authenticated_async_client(user_jwt)
+        result = await supabase.table("project_routines")\
+            .select("*")\
+            .eq("board_id", board_id)\
+            .order("created_at", desc=False)\
+            .execute()
+        return {"routines": result.data or [], "count": len(result.data or [])}
+    except Exception as e:
+        handle_api_exception(e, "Failed to list routines", logger)
+
+
+@router.post("/boards/{board_id}/routines", status_code=status.HTTP_201_CREATED)
+async def create_routine_endpoint(
+    board_id: str,
+    request: CreateRoutineRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Create a new routine for a board."""
+    try:
+        from croniter import croniter
+        from lib.supabase_client import get_authenticated_async_client
+
+        # Validate cron expression
+        if not croniter.is_valid(request.cron_expression):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid cron expression: {request.cron_expression}",
+            )
+
+        supabase = await get_authenticated_async_client(user_jwt)
+
+        # Look up workspace_id from board
+        board_result = await supabase.table("project_boards")\
+            .select("workspace_id")\
+            .eq("id", board_id)\
+            .single()\
+            .execute()
+        workspace_id = board_result.data["workspace_id"]
+
+        # Calculate next_run_at
+        from datetime import datetime as dt, timezone as tz
+        import pytz
+        local_tz = pytz.timezone(request.timezone)
+        now_local = dt.now(tz.utc).astimezone(local_tz)
+        cron = croniter(request.cron_expression, now_local)
+        next_run = cron.get_next(dt).astimezone(tz.utc)
+
+        routine_data = {
+            "workspace_id": workspace_id,
+            "board_id": board_id,
+            "title": request.title,
+            "cron_expression": request.cron_expression,
+            "timezone": request.timezone,
+            "next_run_at": next_run.isoformat(),
+            "created_by": user_id,
+        }
+        if request.description:
+            routine_data["description"] = request.description
+        if request.agent_id:
+            routine_data["agent_id"] = request.agent_id
+
+        result = await supabase.table("project_routines")\
+            .insert(routine_data)\
+            .execute()
+        return result.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to create routine", logger)
+
+
+@router.patch("/routines/{routine_id}")
+async def update_routine_endpoint(
+    routine_id: str,
+    request: UpdateRoutineRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Update a routine."""
+    try:
+        from lib.supabase_client import get_authenticated_async_client
+        supabase = await get_authenticated_async_client(user_jwt)
+
+        updates = {}
+        if request.title is not None:
+            updates["title"] = request.title
+        if request.description is not None:
+            updates["description"] = request.description
+        if request.agent_id is not None:
+            updates["agent_id"] = request.agent_id if request.agent_id else None
+        if request.cron_expression is not None:
+            from croniter import croniter
+            if not croniter.is_valid(request.cron_expression):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid cron expression: {request.cron_expression}",
+                )
+            updates["cron_expression"] = request.cron_expression
+        if request.timezone is not None:
+            updates["timezone"] = request.timezone
+        if request.is_active is not None:
+            updates["is_active"] = request.is_active
+
+        # Recalculate next_run_at if cron or timezone changed
+        if request.cron_expression is not None or request.timezone is not None:
+            from croniter import croniter as ci
+            from datetime import datetime as dt, timezone as tz
+            import pytz
+            # Fetch current routine to get existing values
+            current = await supabase.table("project_routines")\
+                .select("cron_expression, timezone")\
+                .eq("id", routine_id)\
+                .single()\
+                .execute()
+            cron_expr = updates.get("cron_expression", current.data["cron_expression"])
+            tz_name = updates.get("timezone", current.data["timezone"])
+            local_tz = pytz.timezone(tz_name)
+            now_local = dt.now(tz.utc).astimezone(local_tz)
+            cron = ci(cron_expr, now_local)
+            updates["next_run_at"] = cron.get_next(dt).astimezone(tz.utc).isoformat()
+
+        if not updates:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
+
+        updates["updated_at"] = datetime.utcnow().isoformat()
+
+        result = await supabase.table("project_routines")\
+            .update(updates)\
+            .eq("id", routine_id)\
+            .execute()
+
+        if not result.data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Routine not found")
+        return result.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to update routine", logger)
+
+
+@router.delete("/routines/{routine_id}")
+async def delete_routine_endpoint(
+    routine_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Delete a routine."""
+    try:
+        from lib.supabase_client import get_authenticated_async_client
+        supabase = await get_authenticated_async_client(user_jwt)
+        await supabase.table("project_routines")\
+            .delete()\
+            .eq("id", routine_id)\
+            .execute()
+        return {"status": "deleted"}
+    except Exception as e:
+        handle_api_exception(e, "Failed to delete routine", logger)
 
 
 # ── Internal: Agent progress callback (called by dev bridge, no auth) ──
