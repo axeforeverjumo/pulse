@@ -3784,3 +3784,139 @@ async def agent_progress_callback(request: Request):
     except Exception as e:
         logger.exception("agent-progress callback failed")
         raise HTTPException(status_code=500, detail=str(e)[:500])
+
+
+# ============================================================================
+# Workspace Templates
+# ============================================================================
+
+
+@router.get("/workspace-templates")
+async def list_workspace_templates(
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """List all available workspace templates."""
+    from api.services.workspace_templates import get_all_templates
+    return {"templates": get_all_templates()}
+
+
+@router.post("/workspace-templates/{template_id}/apply")
+async def apply_workspace_template(
+    template_id: str,
+    workspace_id: str = Query(..., description="Workspace ID to apply the template to"),
+    workspace_app_id: str = Query(..., description="Workspace app ID (projects app)"),
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Apply a workspace template: create boards, assign agents, create routines.
+    """
+    from api.services.workspace_templates import get_template_by_id
+    from lib.supabase_client import get_async_service_role_client, get_authenticated_async_client
+
+    template = get_template_by_id(template_id)
+    if not template:
+        raise HTTPException(status_code=404, detail=f"Template '{template_id}' not found")
+
+    supabase_auth = await get_authenticated_async_client(user_jwt)
+    supabase_admin = await get_async_service_role_client()
+
+    created_boards = []
+    assigned_agents = []
+    created_routines = []
+
+    # 1. Create boards
+    for board_def in template.get("boards", []):
+        try:
+            result = await create_board(
+                user_id=user_id,
+                user_jwt=user_jwt,
+                workspace_app_id=workspace_app_id,
+                name=board_def["name"],
+                is_development=board_def.get("is_development", False),
+            )
+            created_boards.append(result)
+        except Exception as e:
+            logger.warning(f"Template apply: failed to create board '{board_def['name']}': {e}")
+
+    # 2. Resolve and assign agents by openclaw_agent_id slug
+    agent_slug_to_uuid: dict[str, str] = {}
+    for agent_slug in template.get("agents", []):
+        try:
+            agent_result = await supabase_admin.table("openclaw_agents")\
+                .select("id")\
+                .eq("openclaw_agent_id", agent_slug)\
+                .eq("is_active", True)\
+                .maybe_single()\
+                .execute()
+            if not agent_result or not agent_result.data:
+                logger.warning(f"Template apply: agent '{agent_slug}' not found, skipping")
+                continue
+            agent_uuid = agent_result.data["id"]
+            agent_slug_to_uuid[agent_slug] = agent_uuid
+            # Insert assignment (ignore duplicates)
+            try:
+                await supabase_admin.table("workspace_agent_assignments").insert({
+                    "workspace_id": workspace_id,
+                    "agent_id": agent_uuid,
+                    "assigned_by": user_id,
+                }).execute()
+                assigned_agents.append(agent_slug)
+            except Exception as dup_err:
+                if "duplicate" in str(dup_err).lower():
+                    assigned_agents.append(agent_slug)  # already assigned, count it
+                else:
+                    logger.warning(f"Template apply: failed to assign agent '{agent_slug}': {dup_err}")
+        except Exception as e:
+            logger.warning(f"Template apply: error resolving agent '{agent_slug}': {e}")
+
+    # 3. Create routines on the first created board (if any routines + boards exist)
+    if created_boards and template.get("routines"):
+        first_board_id = created_boards[0].get("board", {}).get("id") or created_boards[0].get("id")
+        if first_board_id:
+            for routine_def in template["routines"]:
+                try:
+                    from croniter import croniter
+                    from datetime import datetime as dt, timezone as tz
+                    from zoneinfo import ZoneInfo
+
+                    cron_expr = routine_def["cron"]
+                    if not croniter.is_valid(cron_expr):
+                        logger.warning(f"Template apply: invalid cron '{cron_expr}', skipping")
+                        continue
+
+                    timezone = "Europe/Madrid"
+                    local_tz = ZoneInfo(timezone)
+                    now_local = dt.now(tz.utc).astimezone(local_tz)
+                    cron = croniter(cron_expr, now_local)
+                    next_run = cron.get_next(dt).astimezone(tz.utc)
+
+                    routine_data = {
+                        "workspace_id": workspace_id,
+                        "board_id": first_board_id,
+                        "title": routine_def["title"],
+                        "cron_expression": cron_expr,
+                        "timezone": timezone,
+                        "next_run_at": next_run.isoformat(),
+                        "created_by": user_id,
+                    }
+                    # Resolve agent UUID for the routine
+                    routine_agent_slug = routine_def.get("agent")
+                    if routine_agent_slug and routine_agent_slug in agent_slug_to_uuid:
+                        routine_data["agent_id"] = agent_slug_to_uuid[routine_agent_slug]
+
+                    result = await supabase_auth.table("project_routines")\
+                        .insert(routine_data)\
+                        .execute()
+                    if result.data:
+                        created_routines.append(result.data[0])
+                except Exception as e:
+                    logger.warning(f"Template apply: failed to create routine '{routine_def['title']}': {e}")
+
+    return {
+        "status": "ok",
+        "template": template_id,
+        "created_boards": len(created_boards),
+        "assigned_agents": assigned_agents,
+        "created_routines": len(created_routines),
+    }

@@ -14,6 +14,7 @@ import ProjectsListView from "./components/ProjectsListView";
 import ProjectsSettingsModal from "./components/ProjectsSettingsModal";
 import ProjectsSettingsDropdown from "./components/ProjectsSettingsDropdown";
 import AgentQueuePanel from "./components/AgentQueuePanel";
+import WorkspaceTemplatesModal from "./components/WorkspaceTemplatesModal";
 import { HeaderButtons } from "../MiniAppHeader";
 import { Columns3, PanelLeft, X } from "lucide-react";
 import { Icon } from "../ui/Icon";
@@ -40,6 +41,7 @@ export default function ProjectsView() {
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [showTemplatesModal, setShowTemplatesModal] = useState(false);
   const queryClient = useQueryClient();
 
   // React Query: fetch boards for auto-select
@@ -168,7 +170,7 @@ export default function ProjectsView() {
       <div className="relative flex-1 flex min-w-0 overflow-hidden rounded-[20px] bg-gradient-to-b from-[#f6fbff] to-[#edf4fb]">
         {/* Desktop Sidebar */}
         <div className="hidden md:flex md:w-[232px] md:shrink-0 md:flex-col md:overflow-hidden">
-          <ProjectSidebar onCreateClick={() => setShowCreateModal(true)} onSelectProject={handleSelectProject} />
+          <ProjectSidebar onCreateClick={() => setShowCreateModal(true)} onSelectProject={handleSelectProject} onTemplatesClick={() => setShowTemplatesModal(true)} />
         </div>
 
         {/* Mobile Sidebar Overlay */}
@@ -184,7 +186,7 @@ export default function ProjectsView() {
           }`}
         >
           <div className="h-full overflow-hidden border-r border-[#d2deec] shadow-2xl">
-            <ProjectSidebar onCreateClick={() => setShowCreateModal(true)} onSelectProject={handleSelectProject} />
+            <ProjectSidebar onCreateClick={() => setShowCreateModal(true)} onSelectProject={handleSelectProject} onTemplatesClick={() => setShowTemplatesModal(true)} />
           </div>
         </div>
 
@@ -280,6 +282,19 @@ export default function ProjectsView() {
         onSave={handleSaveBoardSettings}
         onDelete={handleDeleteBoard}
       />
+
+      {/* Workspace Templates Modal */}
+      {showTemplatesModal && workspaceId && workspaceAppId && (
+        <WorkspaceTemplatesModal
+          isOpen={showTemplatesModal}
+          onClose={() => setShowTemplatesModal(false)}
+          workspaceId={workspaceId}
+          workspaceAppId={workspaceAppId}
+          onApplied={() => {
+            queryClient.invalidateQueries({ queryKey: ["project-boards", workspaceAppId] });
+          }}
+        />
+      )}
     </div>
   );
 }

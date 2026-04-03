@@ -15,6 +15,7 @@ import Dropdown from '../../Dropdown/Dropdown';
 interface ProjectSidebarProps {
   onCreateClick: () => void;
   onSelectProject: (boardId: string) => void;
+  onTemplatesClick?: () => void;
 }
 
 interface ProjectBoardRowProps {
@@ -128,7 +129,7 @@ function ProjectBoardRow({
   );
 }
 
-export default function ProjectSidebar({ onCreateClick, onSelectProject }: ProjectSidebarProps) {
+export default function ProjectSidebar({ onCreateClick, onSelectProject, onTemplatesClick }: ProjectSidebarProps) {
   // UI state from store
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
   const workspaceAppId = useProjectsStore((state) => state.workspaceAppId);
@@ -239,6 +240,19 @@ export default function ProjectSidebar({ onCreateClick, onSelectProject }: Proje
           </div>
         )}
       </div>
+
+      {/* Templates button */}
+      {onTemplatesClick && (
+        <div className="shrink-0 border-t border-[#dce8f6] px-3 py-2.5">
+          <button
+            onClick={onTemplatesClick}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:bg-white hover:text-slate-900"
+          >
+            <span className="text-base leading-none">&#x1F4CB;</span>
+            Aplicar plantilla
+          </button>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       <ConfirmModal
