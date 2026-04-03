@@ -1700,7 +1700,7 @@ async def _execute_project_agent_job(
             repo_url=repo_url,
             github_token=settings.pulse_github_token,
             session_id=previous_session_id,
-            max_budget_usd="2.0",
+            max_budget_usd="0",  # 0 = no limit (subscription, not API billing)
         )
 
         agent_response = cc_result.get("result") or "Sin respuesta del agente."
@@ -1800,7 +1800,7 @@ async def _execute_project_agent_job(
                         "action": "execute",
                         "prompt": core_prompt,
                         "repo_dir": "/tmp",
-                        "max_budget_usd": "0.50",
+                        "max_budget_usd": "0",  # 0 = no limit (subscription)
                     }
                 )
                 if resp.status_code == 200:
