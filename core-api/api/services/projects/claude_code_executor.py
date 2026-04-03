@@ -115,7 +115,7 @@ async def execute_claude_code_task(
         }
 
 
-def build_dev_task_prompt(task: Dict[str, Any], board: Dict[str, Any], *, recent_done_titles: list[str] | None = None) -> str:
+def build_dev_task_prompt(task: Dict[str, Any], board: Dict[str, Any], *, recent_done_titles: list[str] | None = None, previous_context: Optional[Dict[str, Any]] = None) -> str:
     """Build the prompt sent to Claude Code for a dev task."""
     title = task.get("title", "")
     description = task.get("description") or ""
@@ -166,5 +166,18 @@ IMPORTANTE:
 - NO crees branches ni pull requests.
 - Haz commit y push cuando termines.
 - Si no puedes completar la tarea en una sola iteración, describe lo que falta."""
+
+    if previous_context:
+        iteration = previous_context.get("iteration_count", 1) + 1
+        prev_result = previous_context.get("previous_result", "No disponible")
+        prev_git_log = previous_context.get("previous_git_log", "Ninguno")
+        prompt += f"""
+
+CONTEXTO DE ITERACIÓN ANTERIOR:
+Esta tarea ya fue trabajada anteriormente (iteración #{iteration}). Esto es lo que se hizo:
+- Resultado previo: {prev_result}
+- Commits previos: {prev_git_log}
+
+CONTINÚA donde lo dejaste. No repitas trabajo ya hecho. Revisa el estado actual del repositorio (git log, git status) antes de hacer cambios."""
 
     return prompt

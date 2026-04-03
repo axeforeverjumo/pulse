@@ -65,7 +65,16 @@ import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/projects", tags=["projects"])
-_AGENT_QUEUE_WORKER_LOCK = asyncio.Lock()
+_REPO_LOCKS: Dict[str, asyncio.Lock] = {}
+_REPO_LOCKS_GUARD = asyncio.Lock()  # protects _REPO_LOCKS dict creation
+
+
+async def _get_repo_lock(repo_key: str) -> asyncio.Lock:
+    """Return a per-repo asyncio.Lock, creating one if needed."""
+    async with _REPO_LOCKS_GUARD:
+        if repo_key not in _REPO_LOCKS:
+            _REPO_LOCKS[repo_key] = asyncio.Lock()
+        return _REPO_LOCKS[repo_key]
 
 
 # ============================================================================
@@ -1751,7 +1760,11 @@ async def _execute_project_agent_job(
         previous_session_id = previous_payload.get("claude_code_session_id") if isinstance(previous_payload, dict) else None
         # Pass recently completed task titles for Goal Ancestry (PAPER-01)
         _recent_titles = [rd.get("title", "???") for rd in recent_done] if recent_done else []
-        dev_prompt = build_dev_task_prompt(task, board, recent_done_titles=_recent_titles)
+        dev_prompt = build_dev_task_prompt(
+            task, board,
+            recent_done_titles=_recent_titles,
+            previous_context=previous_payload if isinstance(previous_payload, dict) and previous_payload.get("iteration_count") else None,
+        )
 
         cc_result = await execute_claude_code_task(
             prompt=dev_prompt,
@@ -1850,7 +1863,14 @@ async def _execute_project_agent_job(
             return {
                 "task_completed": True,
                 "queue_recommendation": "completed",
-                "payload": {"claude_code_session_id": cc_session_id, "git_log": cc_git_log},
+                "payload": {
+                    "claude_code_session_id": cc_session_id,
+                    "git_log": cc_git_log,
+                    "files_changed": cc_result.get("git_diff", ""),
+                    "result_summary": cc_result.get("result", "")[:1000],
+                    "total_turns": cc_result.get("num_turns", 0),
+                    "duration_ms": cc_result.get("duration_ms", 0),
+                },
             }
         elif cc_status == "needs_continuation" or cc_status == "timeout":
             # Timeout or incomplete → re-enqueue to continue, NOT block
@@ -1866,7 +1886,13 @@ async def _execute_project_agent_job(
             return {
                 "task_completed": False,
                 "queue_recommendation": "queued",
-                "payload": {"claude_code_session_id": cc_session_id, "no_progress_count": 0},
+                "payload": {
+                    "claude_code_session_id": cc_session_id,
+                    "previous_result": cc_result.get("result", "")[:1000],
+                    "previous_git_log": cc_git_log,
+                    "iteration_count": (previous_payload.get("iteration_count", 0) + 1) if isinstance(previous_payload, dict) else 1,
+                    "no_progress_count": 0,
+                },
             }
         else:
             # Real error → block
