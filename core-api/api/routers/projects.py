@@ -1771,12 +1771,22 @@ async def _execute_project_agent_job(
         cc_git_log = cc_result.get("git_log", "")
 
         # Post the agent's response as a comment
+        if cc_status == "completed" and not cc_result.get("is_error"):
+            duration_s = (cc_result.get("duration_ms") or 0) / 1000
+            num_turns = cc_result.get("num_turns", 0)
+            completion_content = (
+                f"✅ **Tarea completada**\n\n"
+                f"{agent_response}\n\n"
+                f"📊 Duración: {duration_s:.0f}s | Turnos: {num_turns}"
+            )
+        else:
+            completion_content = agent_response
         await _append_agent_activity_comment(
             supabase,
             issue_id=issue_id,
             comment_user_id=comment_user_id,
             agent=agent,
-            content=agent_response,
+            content=completion_content,
             workspace_id=task.get("workspace_id"),
             workspace_app_id=task.get("workspace_app_id"),
         )
@@ -1792,6 +1802,33 @@ async def _execute_project_agent_job(
                 comment_user_id=comment_user_id,
                 agent=agent,
                 content=git_comment,
+                workspace_id=task.get("workspace_id"),
+                workspace_app_id=task.get("workspace_app_id"),
+            )
+
+        # Post rebuild status if triggered
+        cc_rebuild = cc_result.get("rebuild", {})
+        if cc_rebuild.get("triggered"):
+            if cc_rebuild.get("success"):
+                rebuild_comment = (
+                    f"🚀 **Rebuild automático completado**\n\n"
+                    f"Método: {cc_rebuild.get('method', 'desconocido')}\n"
+                    f"Los cambios ya están visibles en producción."
+                )
+                if board.get("project_url"):
+                    rebuild_comment += f"\n\n🔗 Ver en: {board['project_url']}"
+            else:
+                rebuild_comment = (
+                    f"⚠️ **Rebuild falló**\n\n"
+                    f"Método: {cc_rebuild.get('method', 'desconocido')}\n"
+                    f"```\n{cc_rebuild.get('output', 'Sin detalles')[-500:]}\n```"
+                )
+            await _append_agent_activity_comment(
+                supabase,
+                issue_id=issue_id,
+                comment_user_id=comment_user_id,
+                agent=agent,
+                content=rebuild_comment,
                 workspace_id=task.get("workspace_id"),
                 workspace_app_id=task.get("workspace_app_id"),
             )
