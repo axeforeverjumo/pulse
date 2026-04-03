@@ -61,6 +61,8 @@ export const projectKeys = {
     [...projectKeys.all, 'members', workspaceId] as const,
   agentQueue: (workspaceAppId: string, boardId: string) =>
     [...projectKeys.all, 'agentQueue', workspaceAppId, boardId] as const,
+  agentStats: (boardId: string) =>
+    [...projectKeys.all, 'agentStats', boardId] as const,
 };
 
 // Files

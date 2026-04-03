@@ -33,6 +33,7 @@ import {
   addCommentReaction,
   removeCommentReaction,
   getWorkspaceOpenClawAgents,
+  getBoardAgentStats,
   type OpenClawAgent,
   type ProjectBoard,
   type ProjectState,
@@ -1450,6 +1451,18 @@ export function useRemoveAgentAssignee(boardId: string | null) {
         queryClient.setQueryData(boardDataKey, context.previousBoardData);
       }
     },
+  });
+}
+
+/**
+ * Fetch agent usage stats for a board
+ */
+export function useBoardAgentStats(boardId: string | null) {
+  return useQuery({
+    queryKey: projectKeys.agentStats(boardId ?? ''),
+    queryFn: () => getBoardAgentStats(boardId!),
+    enabled: !!boardId,
+    staleTime: 30_000,
   });
 }
 

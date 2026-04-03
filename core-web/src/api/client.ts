@@ -3294,6 +3294,29 @@ export async function deployBuilderProject(projectId: string): Promise<BuilderDe
 // Preferences
 // ============================================================================
 
+// ============================================================================
+// Agent Stats
+// ============================================================================
+
+export interface AgentStatsJob {
+  issue_title?: string;
+  status: string;
+  payload?: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface AgentStats {
+  total_tasks: number;
+  total_turns: number;
+  total_cost_usd: number;
+  total_duration_ms: number;
+  jobs: AgentStatsJob[];
+}
+
+export async function getBoardAgentStats(boardId: string, limit = 50): Promise<AgentStats> {
+  return api<AgentStats>(`/projects/boards/${boardId}/agent-stats?limit=${limit}`);
+}
+
 export async function syncTimezone(): Promise<void> {
   const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   await api('/preferences', {

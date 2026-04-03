@@ -3,12 +3,13 @@ import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import { XMarkIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import type { ProjectBoard } from "../../../api/client";
+import AgentStatsPanel from "./AgentStatsPanel";
 
 interface ProjectsSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   board: ProjectBoard | null;
-  initialTab?: "board" | "app";
+  initialTab?: "board" | "app" | "agents";
   onSave: (updates: {
     name: string;
     description?: string;
@@ -33,7 +34,7 @@ export default function ProjectsSettingsModal({
   onSave,
   onDelete,
 }: ProjectsSettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<"board" | "app">("board");
+  const [activeTab, setActiveTab] = useState<"board" | "app" | "agents">("board");
   const [editingName, setEditingName] = useState(board?.name || "");
   const [editingDescription, setEditingDescription] = useState(board?.description || "");
   const [isDevelopment, setIsDevelopment] = useState(Boolean(board?.is_development));
@@ -155,6 +156,19 @@ export default function ProjectsSettingsModal({
           >
             App Settings
             {activeTab === "app" && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-900 rounded-full" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("agents")}
+            className={`pb-2 text-sm font-medium transition-colors relative ${
+              activeTab === "agents"
+                ? "text-gray-900"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Agentes
+            {activeTab === "agents" && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-900 rounded-full" />
             )}
           </button>
@@ -364,7 +378,7 @@ export default function ProjectsSettingsModal({
               </button>
             </div>
           </>
-        ) : (
+        ) : activeTab === "app" ? (
           <>
             {/* App Settings Tab Content */}
             <div className="overflow-y-auto flex-1 px-6 py-4">
@@ -405,6 +419,26 @@ export default function ProjectsSettingsModal({
                 className="px-4 py-2 text-sm bg-black text-white rounded-lg disabled:opacity-50"
               >
                 Save
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Agent Stats Tab Content */}
+            <div className="overflow-y-auto flex-1 px-6 py-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-4">
+                Estadísticas de Agentes
+              </h3>
+              <AgentStatsPanel boardId={board?.id ?? null} />
+            </div>
+
+            {/* Agent Stats Footer */}
+            <div className="flex justify-end gap-2 px-6 py-4 border-t border-border-light">
+              <button
+                onClick={handleClose}
+                className="px-4 py-2 text-sm text-text-secondary hover:bg-bg-gray rounded-lg"
+              >
+                Cerrar
               </button>
             </div>
           </>
