@@ -1,7 +1,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useState, useRef, useEffect, memo, useMemo } from 'react';
-import { Flag } from '@phosphor-icons/react';
+import { Flag, Terminal } from '@phosphor-icons/react';
 import { differenceInCalendarDays } from 'date-fns';
 import { useProjectsStore } from '../../../stores/projectsStore';
 import { useUpdateIssue, useDeleteIssue, type ProjectIssue } from '../../../hooks/queries/useProjects';
@@ -16,6 +16,7 @@ interface KanbanCardProps {
   isOverlay?: boolean;
   onCardClick?: (cardId: string) => void;
   isDragActive?: boolean;
+  isDevelopmentBoard?: boolean;
 }
 
 // Priority: 4=highest, 3=high, 2=medium, 1=low, 0=none
@@ -51,6 +52,7 @@ const KanbanCard = memo(function KanbanCard({
   isDragging = false,
   isOverlay = false,
   onCardClick,
+  isDevelopmentBoard = false,
 }: KanbanCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({
@@ -123,6 +125,11 @@ const KanbanCard = memo(function KanbanCard({
 
   const priorityConfig = card.priority ? PRIORITY_CONFIG[card.priority] : null;
 
+  // Determine if this is a dev task (explicit override or inherited from board)
+  const effectiveIsDevTask = card.is_dev_task !== null && card.is_dev_task !== undefined
+    ? card.is_dev_task
+    : isDevelopmentBoard;
+
   const cardClasses = [
     'group relative bg-white px-4 py-3 rounded-lg mb-2 cursor-default active:cursor-grabbing',
     'hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)]',
@@ -143,10 +150,18 @@ const KanbanCard = memo(function KanbanCard({
       onClick={handleCardClick}
       className={cardClasses}
     >
-      {/* Title */}
-      <h4 className="font-medium text-[13px] text-gray-900 leading-snug line-clamp-2 mb-3">
-        {card.title}
-      </h4>
+      {/* Title + Dev badge */}
+      <div className="flex items-start gap-1.5 mb-3">
+        <h4 className="font-medium text-[13px] text-gray-900 leading-snug line-clamp-2 flex-1">
+          {card.title}
+        </h4>
+        {effectiveIsDevTask && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-violet-50 text-violet-600 border border-violet-100 shrink-0 mt-0.5">
+            <Terminal size={10} weight="bold" />
+            Dev
+          </span>
+        )}
+      </div>
 
       {/* Labels */}
       {card.label_objects && card.label_objects.length > 0 && (
@@ -235,6 +250,8 @@ const KanbanCard = memo(function KanbanCard({
           buttonClassName="!min-h-[28px] !min-w-[28px] !px-1.5 !py-0 !text-[11px] !gap-1 hover:bg-gray-50 !rounded-md !justify-center"
           emptyState="icon-only"
           compact
+          isDevTask={card.is_dev_task}
+          isDevelopmentBoard={isDevelopmentBoard}
         />
 
         {/* Days since created */}

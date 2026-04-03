@@ -3,6 +3,8 @@ import { EllipsisHorizontalIcon, PencilIcon, TrashIcon } from '@heroicons/react/
 import { avatarGradient } from '../../../utils/avatarGradient';
 import type { IssueComment, ContentBlock } from '../../../api/client';
 import { formatDistanceToNow } from 'date-fns';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 /** Parse simple markdown: **bold**, *italic*, `code`, [text](url), <url>, and newlines */
 function renderMarkdown(text: string): React.ReactNode[] {
@@ -127,6 +129,17 @@ export default function CommentItem({
               className="whitespace-pre-wrap [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_h2]:text-[14px] [&_h2]:font-semibold [&_blockquote]:border-l-2 [&_blockquote]:pl-2 [&_blockquote]:text-gray-500"
               dangerouslySetInnerHTML={{ __html: safeHtml }}
             />
+          );
+        }
+        // Use full markdown rendering for agent comments (supports code blocks, <details>, etc.)
+        if (isAutomatedAgent) {
+          return (
+            <div
+              key={idx}
+              className="prose prose-sm max-w-none prose-pre:bg-gray-50 prose-pre:border prose-pre:border-gray-200 prose-pre:rounded-lg prose-pre:text-[12px] prose-code:text-[12px] prose-code:before:content-none prose-code:after:content-none prose-p:my-1.5 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 [&_details]:my-2 [&_details]:border [&_details]:border-gray-200 [&_details]:rounded-lg [&_details]:p-2 [&_details>summary]:cursor-pointer [&_details>summary]:font-medium [&_details>summary]:text-[12px] [&_details>summary]:text-gray-600"
+            >
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+            </div>
           );
         }
         return (

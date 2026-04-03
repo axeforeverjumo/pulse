@@ -2521,6 +2521,7 @@ export interface ProjectIssue {
   completed_at?: string;
   created_at?: string;
   updated_at?: string;
+  is_dev_task?: boolean | null;
 }
 
 export interface ProjectAgentQueueJob {
@@ -2548,7 +2549,7 @@ export interface ProjectAgentQueueJob {
 export interface OpenClawAgent {
   id: string;
   name: string;
-  tier?: 'core' | 'advance' | string;
+  tier?: 'core' | 'advance' | 'claude_code' | string;
   avatar_url?: string;
   openclaw_agent_id?: string;
 }

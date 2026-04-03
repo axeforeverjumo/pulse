@@ -33,6 +33,7 @@ interface CardDetailModalProps {
   card: ProjectIssue;
   onClose: () => void;
   initialEdit?: boolean;
+  isDevelopmentBoard?: boolean;
 }
 
 // Priority: 4=highest, 3=high, 2=medium, 1=low,image.png 0=none
@@ -44,7 +45,7 @@ const PRIORITY_OPTIONS = [
   { value: 4, label: '4', color: 'text-rose-500', bg: 'bg-rose-50' },
 ] as const;
 
-export default function CardDetailModal({ card, onClose, initialEdit = false }: CardDetailModalProps) {
+export default function CardDetailModal({ card, onClose, initialEdit = false, isDevelopmentBoard = false }: CardDetailModalProps) {
   const [isEditing, setIsEditing] = useState(initialEdit);
   const [isVisible, setIsVisible] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
@@ -486,6 +487,8 @@ export default function CardDetailModal({ card, onClose, initialEdit = false }: 
                     boardId={card.board_id}
                     currentAssignees={card.assignees || []}
                     buttonClassName="!px-3 !py-2 hover:bg-gray-50/60"
+                    isDevTask={card.is_dev_task}
+                    isDevelopmentBoard={isDevelopmentBoard}
                   />
                 </div>
               </div>

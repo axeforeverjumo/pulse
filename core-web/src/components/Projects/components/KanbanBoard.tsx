@@ -532,6 +532,7 @@ export default function KanbanBoard() {
                         activeCardId={activeCard?.id}
                         isDragActive={!!activeCard}
                         isCollapsed={filters.showActiveOnly && isDoneColumn(column)}
+                        isDevelopmentBoard={Boolean(project.is_development)}
                       />
                     </SortableColumn>
                   ))}
@@ -552,13 +553,14 @@ export default function KanbanBoard() {
           easing: "cubic-bezier(0.18, 0.67, 0.6, 1.22)",
         }}
       >
-        {activeCard && <KanbanCard card={activeCard} isOverlay />}
+        {activeCard && <KanbanCard card={activeCard} isOverlay isDevelopmentBoard={Boolean(project?.is_development)} />}
         {activeColumn && (
           <div className="opacity-90">
             <KanbanColumn
               column={activeColumn}
               boardId={project?.id ?? ""}
               cardsOverride={columnCardsMap.get(activeColumn.id) ?? []}
+              isDevelopmentBoard={Boolean(project?.is_development)}
             />
           </div>
         )}
@@ -569,6 +571,7 @@ export default function KanbanBoard() {
         <CardDetailModal
           card={selectedCard}
           initialEdit={true}
+          isDevelopmentBoard={Boolean(project?.is_development)}
           onClose={() => {
             setSelectedCard(null);
           }}

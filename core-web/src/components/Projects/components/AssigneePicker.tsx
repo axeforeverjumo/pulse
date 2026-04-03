@@ -25,6 +25,8 @@ interface AssigneePickerProps {
   buttonClassName?: string;
   emptyState?: 'default' | 'icon-dash' | 'icon-only';
   compact?: boolean;
+  isDevTask?: boolean | null;
+  isDevelopmentBoard?: boolean;
 }
 
 const MAX_ASSIGNEES = 10;
@@ -33,7 +35,7 @@ type AssigneeEntry =
   | { type: 'user'; id: string; userId: string; name?: string; email?: string; avatarUrl?: string }
   | { type: 'agent'; id: string; agentId: string; name: string; avatarUrl?: string };
 
-export default function AssigneePicker({ issueId, boardId, currentAssignees, buttonClassName = '', emptyState = 'default', compact = false }: AssigneePickerProps) {
+export default function AssigneePicker({ issueId, boardId, currentAssignees, buttonClassName = '', emptyState = 'default', compact = false, isDevTask, isDevelopmentBoard = false }: AssigneePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'members' | 'agents'>('members');
@@ -143,13 +145,23 @@ export default function AssigneePicker({ issueId, boardId, currentAssignees, but
   );
   const atMax = currentAssignees.length >= MAX_ASSIGNEES;
 
+  // Determine if this is effectively a dev task
+  const effectiveIsDevTask = isDevTask !== null && isDevTask !== undefined
+    ? isDevTask
+    : isDevelopmentBoard;
+
   const filteredMembers = members.filter((m) => {
     if (!search) return true;
     const s = search.toLowerCase();
     return (m.name?.toLowerCase().includes(s) || m.email?.toLowerCase().includes(s));
   });
 
-  const filteredAgents = agents.filter((a) => {
+  // For dev tasks, only show claude_code tier agents (Pulse Agent)
+  const availableAgents = effectiveIsDevTask
+    ? agents.filter((a) => a.tier === 'claude_code')
+    : agents;
+
+  const filteredAgents = availableAgents.filter((a) => {
     if (!search) return true;
     const s = search.toLowerCase();
     return a.name?.toLowerCase().includes(s);
@@ -442,7 +454,11 @@ export default function AssigneePicker({ issueId, boardId, currentAssignees, but
             <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' as any }}>
               {/* Info banner */}
               <div className="px-3 py-2 bg-gray-50 text-[11px] text-gray-500 border-b border-gray-100 shrink-0">
-                <span className="font-medium text-blue-600">Core</span>: analizan y responden · <span className="font-medium text-purple-600">Advance</span>: ejecutan trabajo real
+                {effectiveIsDevTask ? (
+                  <span className="text-violet-600 font-medium">Tarea de desarrollo — solo Pulse Agent disponible</span>
+                ) : (
+                  <><span className="font-medium text-blue-600">Core</span>: analizan y responden · <span className="font-medium text-purple-600">Advance</span>: ejecutan trabajo real</>
+                )}
               </div>
               <div className="p-1.5 flex flex-col gap-0.5">
               {filteredAgents.map((agent) => {

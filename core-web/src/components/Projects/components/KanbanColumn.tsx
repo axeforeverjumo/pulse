@@ -60,6 +60,7 @@ interface KanbanColumnProps {
   activeCardId?: string | null;
   isDragActive?: boolean;
   isCollapsed?: boolean;
+  isDevelopmentBoard?: boolean;
 }
 
 const KanbanColumn = memo(function KanbanColumn({
@@ -71,6 +72,7 @@ const KanbanColumn = memo(function KanbanColumn({
   activeCardId,
   isDragActive = false,
   isCollapsed = false,
+  isDevelopmentBoard = false,
 }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: column.id,
@@ -441,6 +443,7 @@ const KanbanColumn = memo(function KanbanColumn({
                   onCardClick={onCardClick}
                   isDragging={activeCardId === card.id}
                   isDragActive={isDragActive}
+                  isDevelopmentBoard={isDevelopmentBoard}
                 />
               </div>
             ))}

@@ -7,6 +7,7 @@ import { useProjectsStore } from "../../../stores/projectsStore";
 import { useViewContextStore } from "../../../stores/viewContextStore";
 import {
   useProjectBoard,
+  useProjectBoards,
   useCreateIssue,
   useUpdateIssue,
 } from "../../../hooks/queries/useProjects";
@@ -20,12 +21,16 @@ import LabelPicker from "./LabelPicker";
 export default function ProjectsListView() {
   // UI state from store
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
+  const workspaceAppId = useProjectsStore((state) => state.workspaceAppId);
   const filters = useProjectsStore((state) => state.filters);
   const selectedCardId = useProjectsStore((state) => state.selectedCardId);
   const setSelectedCard = useProjectsStore((state) => state.setSelectedCard);
 
   // React Query data
+  const { data: boards = [] } = useProjectBoards(workspaceAppId);
   const { data: boardData } = useProjectBoard(activeProjectId);
+  const currentBoard = boards.find((b) => b.id === activeProjectId);
+  const isDevelopmentBoard = Boolean(currentBoard?.is_development);
   const issues = boardData?.issues ?? [];
   const columns = useMemo(() => {
     if (!boardData?.states) return [];
@@ -347,6 +352,8 @@ export default function ProjectsListView() {
                     currentAssignees={issue.assignees || []}
                     buttonClassName="hover:bg-gray-100 -ml-2 w-full text-gray-500 hover:text-gray-700"
                     emptyState="icon-dash"
+                    isDevTask={issue.is_dev_task}
+                    isDevelopmentBoard={isDevelopmentBoard}
                   />
                 </td>
                 <td
@@ -411,6 +418,7 @@ export default function ProjectsListView() {
         <CardDetailModal
           card={selectedCard}
           initialEdit={true}
+          isDevelopmentBoard={isDevelopmentBoard}
           onClose={() => setSelectedCard(null)}
         />
       )}
