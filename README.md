@@ -2,9 +2,9 @@
 
 # Pulse
 
-### The productivity platform where humans and AI agents work together.
+### La plataforma de productividad donde humanos y agentes IA trabajan juntos.
 
-**Email. Calendar. Chat. Projects. Agents. One platform.**
+**Email. Calendario. Chat. Proyectos. Agentes. Una sola plataforma.**
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React_19-61DAFB?style=flat&logo=react&logoColor=black)](https://react.dev/)
@@ -13,129 +13,130 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_4-06B6D4?style=flat&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)](https://docker.com/)
 
-[Live at pulse.factoriaia.com](https://pulse.factoriaia.com) &middot; Built by [Factoria IA](https://factoriaia.com)
+[En produccion en pulse.factoriaia.com](https://pulse.factoriaia.com) &middot; Desarrollado por [Factoria IA](https://factoriaia.com)
 
 </div>
 
 ---
 
-Most productivity tools give you boards, channels, and calendars. Pulse gives you all of that **plus a team of AI agents** that actually do the work — writing code, running SEO audits, drafting proposals, managing projects. They operate inside your workspace alongside your human team, visible in the same channels, boards, and threads.
+La mayoria de las herramientas de productividad te dan tableros, canales y calendarios. Pulse te da todo eso **mas un equipo de agentes IA** que realmente hacen el trabajo: escriben codigo, ejecutan auditorias SEO, redactan propuestas, gestionan proyectos. Operan dentro de tu espacio de trabajo junto a tu equipo humano, visibles en los mismos canales, tableros e hilos.
 
 <!-- Screenshot: Pulse dashboard overview showing boards, channels, and agents -->
 
-## What's Inside
+## Que incluye
 
-### Full Productivity Suite
+### Suite de Productividad Completa
 
-| Module | What it does |
-|--------|-------------|
-| **Email** | Gmail + Outlook with bidirectional sync and OAuth |
-| **Calendar** | Google Calendar + Microsoft 365, events and invitations |
-| **Messaging** | Real-time channels with threads, reactions, mentions, file attachments |
-| **Documents** | Built-in note and document editor |
-| **Files** | Cloud storage with PDF, DOCX, XLSX, PPTX preview |
-| **Projects** | Kanban boards with drag-and-drop, labels, priorities, deadlines, checklists |
+| Modulo | Que hace |
+|--------|----------|
+| **Email** | Gmail + Outlook con sincronizacion bidireccional y OAuth |
+| **Calendario** | Google Calendar + Microsoft 365, eventos e invitaciones |
+| **Mensajeria** | Canales en tiempo real con hilos, reacciones, menciones y archivos adjuntos |
+| **Documentos** | Editor de notas y documentos integrado |
+| **Archivos** | Almacenamiento en la nube con previsualizacion de PDF, DOCX, XLSX, PPTX |
+| **Proyectos** | Tableros Kanban con drag-and-drop, etiquetas, prioridades, fechas limite y checklists |
 
 <!-- Screenshot: Messaging view with threads and agent mention -->
 
-### AI Agents That Ship Real Work
+### Agentes IA que ejecutan trabajo real
 
-Pulse agents aren't chatbots. They execute tasks, produce deliverables, and report back in your channels.
+Los agentes de Pulse no son chatbots. Ejecutan tareas, producen entregables y reportan en tus canales.
 
-#### Pulse Agent (Development)
+#### Pulse Agent (Desarrollo)
 
-Your autonomous developer. Powered by Claude Code CLI.
+Tu desarrollador autonomo. Impulsado por Claude Code CLI.
 
-- Reads your actual codebase, edits files, implements features, fixes bugs
-- Commits and pushes directly to main
-- Auto-rebuilds the stack (Docker Compose / npm) after every push
-- Auto-rollback if the build fails
-- Streaming logs — watch the agent work in real time
-- Progress updates every 5 minutes
-- Automatic resume with persistent session state for long-running tasks
-- **$0 extra** — runs on your existing Claude subscription
+- Lee tu codigo real, edita archivos, implementa funcionalidades, corrige bugs
+- Hace commit y push directamente a main
+- Reconstruye automaticamente el stack (Docker Compose / npm) despues de cada push
+- Auto-rollback si el build falla
+- Logs en streaming: observa al agente trabajar en tiempo real
+- Actualizaciones de progreso cada 5 minutos
+- Reanudacion automatica con estado de sesion persistente para tareas de larga duracion
+- **$0 extra** — funciona con tu suscripcion existente de Claude
 
 <!-- Screenshot: Pulse Agent streaming logs while implementing a feature -->
 
-#### Specialist Agents (OpenClaw)
+#### Agentes Especialistas (OpenClaw)
 
-A roster of AI specialists, each with their own personality and expertise:
+Un equipo de especialistas IA, cada uno con su propia personalidad y area de expertise:
 
-| Agent | Specialty |
-|-------|-----------|
-| **Marta Bolt** | SEO audits, optimized content, web analysis |
-| **Claudia Torres** | Proposals, financial analysis, business management |
-| **Jarvis** | Advanced general-purpose assistant |
-| **Donna Sullivan** | Project management and coordination |
-| **Lexy Dev** | Software development |
-| **Odoo Developer** | ERP specialist |
-| **Desk Trading** | Trading and financial markets |
+| Agente | Especialidad |
+|--------|-------------|
+| **Marta Bolt** | Auditorias SEO, contenido optimizado, analisis web |
+| **Claudia Torres** | Propuestas, analisis financiero, gestion empresarial |
+| **Jarvis** | Asistente avanzado de proposito general |
+| **Donna Sullivan** | Gestion de proyectos y coordinacion |
+| **Lexy Dev** | Desarrollo de software |
+| **Odoo Developer** | Especialista en ERP |
+| **Desk Trading** | Trading y mercados financieros |
 
-Each agent has a distinct identity (soul + personality files) and connects via HTTP bridge to the OpenClaw gateway. Runs on GPT Pro flat-rate subscription.
+Cada agente tiene una identidad propia (archivos de alma + personalidad) y se conecta via HTTP bridge al gateway de OpenClaw. Funciona con la suscripcion flat-rate de GPT Pro.
 
 #### Core Agents
 
-Lightweight text agents for quick responses via Claude Code CLI. Create one in seconds — just provide a name and area of expertise, and everything else is generated automatically. **$0 extra** with your subscription.
+Agentes de texto ligeros para respuestas rapidas via Claude Code CLI. Crea uno en segundos: solo indica un nombre y area de expertise, y todo lo demas se genera automaticamente. **$0 extra** con tu suscripcion.
 
-### How Agents Work in Practice
+### Como funcionan los agentes en la practica
 
-**@mention in any channel** — tag an agent in a messaging channel and it responds in the thread, just like a teammate.
+**@mencion en cualquier canal** — etiqueta a un agente en un canal de mensajeria y responde en el hilo, como un companero mas.
 
-**Goal Ancestry** — before executing a task, the agent sees the full context: project name, URL, recently completed tasks. It understands the *why* before the *what*.
+**Goal Ancestry** — antes de ejecutar una tarea, el agente ve el contexto completo: nombre del proyecto, URL, tareas completadas recientemente. Entiende el *por que* antes del *que*.
 
-**Atomic Checkout** — two tasks targeting the same repo? They serialize automatically. Zero git conflicts.
+**Atomic Checkout** — dos tareas apuntando al mismo repo? Se serializan automaticamente. Cero conflictos de git.
 
-**Parallel Execution** — tasks for different repos run simultaneously, no queuing.
+**Ejecucion Paralela** — tareas para distintos repos se ejecutan simultaneamente, sin cola de espera.
 
-**Auto-Discovery** — the bridge scans local directories and maps repository URLs to local paths automatically.
+**Auto-Discovery** — el bridge escanea directorios locales y mapea URLs de repositorios a rutas locales automaticamente.
 
-**Approval Gates** — high-impact tasks require human approval before execution.
+**Puertas de Aprobacion** — las tareas de alto impacto requieren aprobacion humana antes de ejecutarse.
 
 <!-- Screenshot: Approval gate dialog for a production deployment task -->
 
-### Routines (Scheduled Tasks)
+### Rutinas (Tareas Programadas)
 
-Set up recurring work: *"SEO audit every Monday"*, *"Daily activity summary"*, *"Weekly financial report"*.
+Configura trabajo recurrente: *"Auditoria SEO cada lunes"*, *"Resumen diario de actividad"*, *"Informe financiero semanal"*.
 
-- Cron expressions with timezone support
-- Presets: hourly, daily, weekly, monthly, or custom
-- Automatic agent assignment
-- Health checks every 5 minutes
+- Expresiones cron con soporte de zona horaria
+- Presets: cada hora, diario, semanal, mensual o personalizado
+- Asignacion automatica de agentes
+- Health checks cada 5 minutos
 
-### Workspace Templates
+### Plantillas de Workspace
 
-Pre-configured team setups to get started fast:
+Configuraciones de equipo predefinidas para arrancar rapido:
 
-- **Marketing Team** — SEO agent, content specialist, analytics
-- **Dev Team** — Pulse Agent, code reviewer, project tracker
-- **Business Team** — Financial analyst, project manager, assistant
-- **Full Team** — Everything, all agents, all modules
+- **Equipo de Marketing** — Agente SEO, especialista en contenido, analitica
+- **Equipo de Desarrollo** — Pulse Agent, revisor de codigo, seguimiento de proyectos
+- **Equipo de Negocio** — Analista financiero, project manager, asistente
+- **Equipo Completo** — Todo incluido, todos los agentes, todos los modulos
 
-### Agent Dashboard
+### Panel de Agentes
 
-- Org chart visualization of your agent team by category
-- Per-board statistics: tasks completed, agent shifts, average duration
-- Real-time status of all running agents
+- Visualizacion tipo organigrama de tu equipo de agentes por categoria
+- Estadisticas por tablero: tareas completadas, turnos de agente, duracion media
+- Estado en tiempo real de todos los agentes en ejecucion
 
 <!-- Screenshot: Org chart view of the agent team -->
 
 ---
 
-## Architecture
+## Arquitectura
 
 ```
 ┌──────────────────────────────────────────────────────────┐
 │                        PULSE                              │
 │                                                           │
-│   Productivity Suite          Agent Engine                 │
+│   Suite de Productividad     Motor de Agentes             │
 │   ┌────────────────┐         ┌─────────────────┐         │
-│   │ Email          │         │ Specialist       │         │
-│   │ Calendar       │         │ Agents (OpenClaw)│         │
-│   │ Messaging      │         │ Bridge :4200     │         │
-│   │ Documents      │         │ GPT Pro          │         │
-│   │ Files          │         └─────────────────┘         │
-│   │ Projects       │                                      │
-│   └────────────────┘         ┌─────────────────┐         │
+│   │ Email          │         │ Agentes          │         │
+│   │ Calendario     │         │ Especialistas    │         │
+│   │ Mensajeria     │         │ (OpenClaw)       │         │
+│   │ Documentos     │         │ Bridge :4200     │         │
+│   │ Archivos       │         │ GPT Pro          │         │
+│   │ Proyectos      │         └─────────────────┘         │
+│   └────────────────┘                                      │
+│                               ┌─────────────────┐         │
 │                               │ Pulse Agent      │         │
 │                               │ (Claude Code)    │         │
 │                               │ Bridge :4201     │         │
@@ -149,71 +150,71 @@ Pre-configured team setups to get started fast:
 │                              auto-rebuild                 │
 │                              auto-rollback                │
 │                                        │                  │
-│                              Live in production           │
+│                              En produccion                │
 └──────────────────────────────────────────────────────────┘
 ```
 
-## Tech Stack
+## Stack Tecnologico
 
-| Layer | Technology |
-|-------|-----------|
+| Capa | Tecnologia |
+|------|-----------|
 | Backend | Python 3.12, FastAPI, Pydantic |
 | Frontend | React 19, Vite 7, TypeScript, Tailwind 4 |
-| Database | Supabase (PostgreSQL + RLS + Realtime) |
-| Auth | Supabase Auth (JWT), Google/Microsoft OAuth |
-| Realtime | Supabase Realtime for live updates |
-| State | Zustand with persistence |
-| Rich Text | TipTap (ProseMirror) |
-| File Storage | Cloudflare R2 + MinIO (S3-compatible) |
-| Security | JWT, RBAC, Fernet token encryption at rest, Turnstile bot protection |
-| Deployment | Docker Compose, systemd, nginx, Let's Encrypt SSL |
+| Base de datos | Supabase (PostgreSQL + RLS + Realtime) |
+| Autenticacion | Supabase Auth (JWT), Google/Microsoft OAuth |
+| Tiempo real | Supabase Realtime para actualizaciones en vivo |
+| Estado | Zustand con persistencia |
+| Texto enriquecido | TipTap (ProseMirror) |
+| Almacenamiento | Cloudflare R2 + MinIO (compatible con S3) |
+| Seguridad | JWT, RBAC, cifrado Fernet en reposo, proteccion anti-bots con Turnstile |
+| Despliegue | Docker Compose, systemd, nginx, SSL con Let's Encrypt |
 
-## Integrations
+## Integraciones
 
-| Service | Protocol | Direction |
-|---------|----------|-----------|
-| **Gmail** | OAuth + REST API | Bidirectional sync |
-| **Outlook** | Microsoft Graph API | Bidirectional sync |
-| **Google Calendar** | OAuth + REST API | Bidirectional sync |
-| **Microsoft 365 Calendar** | Microsoft Graph API | Bidirectional sync |
-| **GitHub** | Git CLI | Commit, push, auto-rebuild from agents |
-| **Telegram** | Bot API | Notifications and messaging |
-| **WhatsApp** | Evolution API | Integrated messaging |
-| **Google Chat** | Bridge | Communication |
-| **Cloudflare R2** | S3-compatible | File storage and avatars |
-| **MinIO** | S3-compatible | Local-compatible storage |
-| **Supabase** | Native SDK | Auth, database, realtime, storage |
-| **E2B** | REST API | Secure code execution sandboxes (ready) |
+| Servicio | Protocolo | Direccion |
+|----------|----------|-----------|
+| **Gmail** | OAuth + REST API | Sincronizacion bidireccional |
+| **Outlook** | Microsoft Graph API | Sincronizacion bidireccional |
+| **Google Calendar** | OAuth + REST API | Sincronizacion bidireccional |
+| **Microsoft 365 Calendar** | Microsoft Graph API | Sincronizacion bidireccional |
+| **GitHub** | Git CLI | Commit, push, auto-rebuild desde agentes |
+| **Telegram** | Bot API | Notificaciones y mensajeria |
+| **WhatsApp** | Evolution API | Mensajeria integrada |
+| **Google Chat** | Bridge | Comunicacion |
+| **Cloudflare R2** | Compatible con S3 | Almacenamiento de archivos y avatares |
+| **MinIO** | Compatible con S3 | Almacenamiento local compatible |
+| **Supabase** | SDK nativo | Auth, base de datos, realtime, almacenamiento |
+| **E2B** | REST API | Sandboxes de ejecucion segura de codigo (listo) |
 
-## Project Structure
+## Estructura del Proyecto
 
 ```
 factoriaCore/
-├── core-api/                  # FastAPI backend
+├── core-api/                  # Backend FastAPI
 │   ├── api/
-│   │   ├── routers/           # HTTP endpoints
-│   │   └── services/          # Business logic + agent orchestration
-│   ├── lib/                   # Shared clients (Supabase, R2, bridges)
-│   └── supabase/migrations/   # SQL migrations
-├── core-web/                  # React SPA
+│   │   ├── routers/           # Endpoints HTTP
+│   │   └── services/          # Logica de negocio + orquestacion de agentes
+│   ├── lib/                   # Clientes compartidos (Supabase, R2, bridges)
+│   └── supabase/migrations/   # Migraciones SQL
+├── core-web/                  # SPA React
 │   ├── src/
-│   │   ├── components/        # Feature modules (34+)
-│   │   ├── stores/            # Zustand stores
-│   │   └── hooks/             # Custom hooks
+│   │   ├── components/        # Modulos funcionales (34+)
+│   │   ├── stores/            # Stores Zustand
+│   │   └── hooks/             # Hooks personalizados
 │   └── public/
-└── core-image-proxy/          # Cloudflare Worker (HMAC-signed image proxy)
+└── core-image-proxy/          # Cloudflare Worker (proxy de imagenes con firma HMAC)
 ```
 
-## Getting Started
+## Primeros Pasos
 
-### Prerequisites
+### Requisitos previos
 
 - [Node.js](https://nodejs.org/) >= 18
-- [uv](https://docs.astral.sh/uv/) (Python package manager)
-- A [Supabase](https://supabase.com) project
-- Docker and Docker Compose (for full deployment)
+- [uv](https://docs.astral.sh/uv/) (gestor de paquetes Python)
+- Un proyecto en [Supabase](https://supabase.com)
+- Docker y Docker Compose (para despliegue completo)
 
-### 1. Clone and configure
+### 1. Clonar y configurar
 
 ```bash
 git clone https://github.com/axeforeverjumo/pulse.git
@@ -221,77 +222,77 @@ cd pulse
 
 cp core-api/.env.example core-api/.env
 cp core-web/.env.example core-web/.env
-# Edit both .env files with your credentials
+# Edita ambos archivos .env con tus credenciales
 ```
 
-### 2. Set up the database
+### 2. Configurar la base de datos
 
 ```bash
 cd core-api
-supabase link --project-ref YOUR_PROJECT_REF
+supabase link --project-ref TU_PROJECT_REF
 supabase db push
 ```
 
-### 3. Start the backend
+### 3. Iniciar el backend
 
 ```bash
 cd core-api
 uv pip install -r requirements.txt
 make start
-# API at http://localhost:8000
+# API en http://localhost:8000
 ```
 
-### 4. Start the frontend
+### 4. Iniciar el frontend
 
 ```bash
 cd core-web
 npm install
 npm run dev
-# App at http://localhost:5173
+# App en http://localhost:5173
 ```
 
-## Deployment
+## Despliegue
 
-Pulse runs in production with the following setup:
+Pulse corre en produccion con la siguiente configuracion:
 
-| Component | Method |
-|-----------|--------|
-| **Backend (FastAPI)** | systemd service with uvicorn |
-| **Frontend (React)** | Static build served by nginx |
+| Componente | Metodo |
+|------------|--------|
+| **Backend (FastAPI)** | Servicio systemd con uvicorn |
+| **Frontend (React)** | Build estatico servido por nginx |
 | **Supabase** | Docker Compose (self-hosted) |
-| **MinIO** | Docker container (S3 storage) |
-| **Agent Bridges** | systemd services (ports 4200, 4201) |
+| **MinIO** | Contenedor Docker (almacenamiento S3) |
+| **Bridges de Agentes** | Servicios systemd (puertos 4200, 4201) |
 | **SSL** | Let's Encrypt via nginx |
-| **Cron** | Built-in scheduler with health checks every 5 min |
+| **Cron** | Scheduler integrado con health checks cada 5 min |
 
-All services are managed via systemd with automatic restart policies. Agent bridges auto-discover local repositories and handle the full commit-build-deploy cycle autonomously.
+Todos los servicios se gestionan via systemd con politicas de reinicio automatico. Los bridges de agentes auto-descubren repositorios locales y manejan el ciclo completo de commit-build-deploy de forma autonoma.
 
-## Development
+## Desarrollo
 
 ```bash
 # Backend
 cd core-api
-make check        # lint + type check
-make test         # pytest suite
-make lint         # ruff only
-make typecheck    # mypy only
+make check        # lint + verificacion de tipos
+make test         # suite de pytest
+make lint         # solo ruff
+make typecheck    # solo mypy
 
 # Frontend
 cd core-web
-npm run build     # TypeScript + Vite build
+npm run build     # Build TypeScript + Vite
 npm run lint      # ESLint
 ```
 
-### Pre-commit hooks
+### Hooks de pre-commit
 
-[Gitleaks](https://github.com/gitleaks/gitleaks) runs on every commit to prevent accidental secret leaks:
+[Gitleaks](https://github.com/gitleaks/gitleaks) se ejecuta en cada commit para prevenir fugas accidentales de secretos:
 
 ```bash
 pip install pre-commit
 pre-commit install
 ```
 
-## License
+## Licencia
 
 [Apache License 2.0](./LICENSE)
 
@@ -299,8 +300,8 @@ pre-commit install
 
 <div align="center">
 
-Built with purpose by **[Factoria IA](https://factoriaia.com)**
+Construido con proposito por **[Factoria IA](https://factoriaia.com)**
 
-*Where humans and AI agents get things done together.*
+*Donde humanos y agentes IA hacen que las cosas sucedan, juntos.*
 
 </div>
