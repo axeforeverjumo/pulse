@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger(__name__)
 
 BRIDGE_URL = "http://127.0.0.1:4201"
-BRIDGE_TIMEOUT = 620.0  # slightly above the bridge's internal 600s timeout
+BRIDGE_TIMEOUT = 1260.0  # slightly above the bridge's internal 1200s (20 min) timeout
 
 
 async def execute_claude_code_task(
