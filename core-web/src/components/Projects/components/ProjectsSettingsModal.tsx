@@ -5,12 +5,13 @@ import { XMarkIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import type { ProjectBoard } from "../../../api/client";
 import AgentStatsPanel from "./AgentStatsPanel";
 import RoutinesPanel from "./RoutinesPanel";
+import OrgChartPanel from "./OrgChartPanel";
 
 interface ProjectsSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   board: ProjectBoard | null;
-  initialTab?: "board" | "app" | "agents" | "routines";
+  initialTab?: "board" | "app" | "agents" | "routines" | "team";
   onSave: (updates: {
     name: string;
     description?: string;
@@ -35,7 +36,7 @@ export default function ProjectsSettingsModal({
   onSave,
   onDelete,
 }: ProjectsSettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<"board" | "app" | "agents" | "routines">("board");
+  const [activeTab, setActiveTab] = useState<"board" | "app" | "agents" | "routines" | "team">("board");
   const [editingName, setEditingName] = useState(board?.name || "");
   const [editingDescription, setEditingDescription] = useState(board?.description || "");
   const [isDevelopment, setIsDevelopment] = useState(Boolean(board?.is_development));
@@ -183,6 +184,19 @@ export default function ProjectsSettingsModal({
           >
             Rutinas
             {activeTab === "routines" && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-900 rounded-full" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("team")}
+            className={`pb-2 text-sm font-medium transition-colors relative ${
+              activeTab === "team"
+                ? "text-gray-900"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Equipo
+            {activeTab === "team" && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-900 rounded-full" />
             )}
           </button>
@@ -456,7 +470,7 @@ export default function ProjectsSettingsModal({
               </button>
             </div>
           </>
-        ) : (
+        ) : activeTab === "routines" ? (
           <>
             {/* Routines Tab Content */}
             <div className="overflow-y-auto flex-1 px-6 py-4">
@@ -470,6 +484,26 @@ export default function ProjectsSettingsModal({
             </div>
 
             {/* Routines Footer */}
+            <div className="flex justify-end gap-2 px-6 py-4 border-t border-border-light">
+              <button
+                onClick={handleClose}
+                className="px-4 py-2 text-sm text-text-secondary hover:bg-bg-gray rounded-lg"
+              >
+                Cerrar
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Team Org Chart Tab Content */}
+            <div className="overflow-y-auto flex-1 px-6 py-4">
+              <OrgChartPanel
+                workspaceId={board?.workspace_id ?? null}
+                workspaceName={board?.name}
+              />
+            </div>
+
+            {/* Team Footer */}
             <div className="flex justify-end gap-2 px-6 py-4 border-t border-border-light">
               <button
                 onClick={handleClose}

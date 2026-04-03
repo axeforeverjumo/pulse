@@ -35,7 +35,7 @@ export default function ProjectsView() {
   const setActiveProject = useProjectsStore((state) => state.setActiveProject);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [settingsModalTab, setSettingsModalTab] = useState<"board" | "app">("board");
+  const [settingsModalTab, setSettingsModalTab] = useState<"board" | "app" | "agents" | "routines" | "team">("board");
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");

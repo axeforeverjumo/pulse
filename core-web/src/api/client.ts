@@ -2552,6 +2552,9 @@ export interface OpenClawAgent {
   tier?: 'core' | 'advance' | 'claude_code' | string;
   avatar_url?: string;
   openclaw_agent_id?: string;
+  category?: string;
+  description?: string;
+  is_active?: boolean;
 }
 
 export interface ItemPosition {
@@ -3372,4 +3375,37 @@ export async function updateRoutine(routineId: string, data: Partial<Routine>): 
 
 export async function deleteRoutine(routineId: string): Promise<{ status: string }> {
   return api(`/projects/routines/${routineId}`, { method: 'DELETE' });
+}
+
+// --- Workspace Templates ---
+
+export interface WorkspaceTemplate {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  agents: string[];
+  boards: { name: string; is_development: boolean }[];
+  routines: { title: string; cron: string; agent?: string }[];
+}
+
+export async function getWorkspaceTemplates(): Promise<{ templates: WorkspaceTemplate[] }> {
+  return api('/projects/workspace-templates');
+}
+
+export async function applyWorkspaceTemplate(
+  templateId: string,
+  workspaceId: string,
+  workspaceAppId: string,
+): Promise<{
+  status: string;
+  template: string;
+  created_boards: number;
+  assigned_agents: string[];
+  created_routines: number;
+}> {
+  return api(
+    `/projects/workspace-templates/${templateId}/apply?workspace_id=${encodeURIComponent(workspaceId)}&workspace_app_id=${encodeURIComponent(workspaceAppId)}`,
+    { method: 'POST' },
+  );
 }
