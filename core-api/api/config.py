@@ -191,6 +191,11 @@ class Settings(BaseSettings):
     # Anthropic (AI agent runtime)
     anthropic_api_key: str = ""
 
+    # Claude Code dev bridge (for dev tasks via CLI)
+    claude_code_bridge_url: str = "http://127.0.0.1:4201"
+    claude_code_max_budget_usd: str = "2.0"
+    claude_code_sentinel_agent_id: str = "00000000-0000-0000-0000-000000000cc1"
+
     # E2B (AI agent sandboxes)
     e2b_api_key: str = ""
     e2b_default_template: str = "base"  # Default sandbox template ID

@@ -135,6 +135,7 @@ class CreateIssueRequest(BaseModel):
     checklist_items: Optional[List[Dict[str, Any]]] = None
     label_ids: Optional[List[str]] = None
     assignee_ids: Optional[List[str]] = None
+    is_dev_task: Optional[bool] = Field(None, description="Override dev task flag (null=inherit from board)")
 
 
 class UpdateIssueRequest(BaseModel):
@@ -161,6 +162,7 @@ class UpdateIssueRequest(BaseModel):
     position: Optional[int] = Field(None, ge=0)
     label_ids: Optional[List[str]] = None
     assignee_ids: Optional[List[str]] = None
+    is_dev_task: Optional[bool] = Field(None, description="Override dev task flag (null=inherit from board)")
 
     @model_validator(mode="after")
     def check_images_not_conflicting(self) -> "UpdateIssueRequest":
@@ -538,6 +540,14 @@ def _is_qa_state(name: Optional[str]) -> bool:
 def _is_done_state(name: Optional[str]) -> bool:
     normalized = _normalize_state_name(name)
     return normalized in {"done", "hecho", "completado", "terminado", "closed", "finalizado"}
+
+
+def _resolve_effective_is_dev_task(task: Dict[str, Any], board: Dict[str, Any]) -> bool:
+    """Resolve whether a task is a dev task (explicit override or inherited from board)."""
+    issue_flag = task.get("is_dev_task")
+    if issue_flag is not None:
+        return bool(issue_flag)
+    return bool(board.get("is_development"))
 
 
 def _guess_mime_type(r2_key: str, filename: Optional[str] = None) -> str:
@@ -1517,7 +1527,7 @@ async def _execute_project_agent_job(
 
     # Get task details (include board_id to find states)
     task_result = await supabase.table("project_issues")\
-        .select("id, title, description, priority, board_id, state_id, image_r2_keys, checklist_items, created_by, workspace_id, workspace_app_id")\
+        .select("id, title, description, priority, board_id, state_id, image_r2_keys, checklist_items, created_by, workspace_id, workspace_app_id, is_dev_task")\
         .eq("id", issue_id)\
         .maybe_single()\
         .execute()
@@ -1673,6 +1683,91 @@ async def _execute_project_agent_job(
         "- Si completaste de verdad la tarea, incluye en una línea separada exacta: `Tarea completada`."
     )
 
+    # ── Claude Code dev tasks (real code execution via CLI bridge) ──
+    if agent.get("tier") == "claude_code":
+        from api.services.projects.claude_code_executor import execute_claude_code_task, build_dev_task_prompt
+        from api.config import settings
+
+        repo_url = board.get("repository_url") or ""
+        if not repo_url and board.get("repository_full_name"):
+            repo_url = f"https://github.com/{board['repository_full_name']}"
+
+        previous_session_id = previous_payload.get("claude_code_session_id") if isinstance(previous_payload, dict) else None
+        dev_prompt = build_dev_task_prompt(task, board)
+
+        cc_result = await execute_claude_code_task(
+            prompt=dev_prompt,
+            repo_url=repo_url,
+            github_token=settings.pulse_github_token,
+            session_id=previous_session_id,
+            max_budget_usd="2.0",
+        )
+
+        agent_response = cc_result.get("result") or "Sin respuesta del agente."
+        cc_session_id = cc_result.get("session_id", "")
+        cc_status = cc_result.get("status", "error")
+        cc_git_log = cc_result.get("git_log", "")
+
+        # Post the agent's response as a comment
+        await _append_agent_activity_comment(
+            supabase,
+            issue_id=issue_id,
+            comment_user_id=comment_user_id,
+            agent=agent,
+            content=agent_response,
+            workspace_id=task.get("workspace_id"),
+            workspace_app_id=task.get("workspace_app_id"),
+        )
+
+        # Post git result if there are commits
+        if cc_git_log:
+            git_comment = f"🔧 **Claude Code Dev Result**\n\n```\n{cc_git_log}\n```"
+            if cc_result.get("git_diff"):
+                git_comment += f"\n\n<details><summary>Diff</summary>\n\n```diff\n{cc_result['git_diff'][:3000]}\n```\n</details>"
+            await _append_agent_activity_comment(
+                supabase,
+                issue_id=issue_id,
+                comment_user_id=comment_user_id,
+                agent=agent,
+                content=git_comment,
+                workspace_id=task.get("workspace_id"),
+                workspace_app_id=task.get("workspace_app_id"),
+            )
+
+        # Determine queue recommendation
+        if cc_status == "completed" and not cc_result.get("is_error"):
+            # Move to QA or Done
+            target_state = qa_id or done_id
+            if target_state:
+                await supabase.table("project_issues").update({
+                    "state_id": target_state,
+                    "completed_at": datetime.utcnow().isoformat() if not qa_id else None,
+                }).eq("id", issue_id).execute()
+                # Mark checklist done
+                if checklist_items:
+                    done_items = [{**item, "done": True} for item in checklist_items if isinstance(item, dict)]
+                    await supabase.table("project_issues").update({"checklist_items": done_items}).eq("id", issue_id).execute()
+
+            return {
+                "task_completed": True,
+                "queue_recommendation": "completed",
+                "payload": {"claude_code_session_id": cc_session_id, "git_log": cc_git_log},
+            }
+        elif cc_status == "needs_continuation":
+            return {
+                "task_completed": False,
+                "queue_recommendation": "queued",
+                "payload": {"claude_code_session_id": cc_session_id, "no_progress_count": 0},
+            }
+        else:
+            return {
+                "task_completed": False,
+                "queue_recommendation": "blocked",
+                "queue_block_reason": cc_result.get("result", "Error en Claude Code"),
+                "payload": {"claude_code_session_id": cc_session_id},
+            }
+
+    # ── Core agents (Haiku text-only) ──
     if agent.get("tier") == "core":
         import anthropic
         from api.config import settings
@@ -1694,6 +1789,7 @@ async def _execute_project_agent_job(
             messages=[{"role": "user", "content": f"Tarea asignada:\n\n{task_context}\n\nTrabaja en esta tarea."}],
         )
         agent_response = response.content[0].text
+    # ── OpenClaw advance agents (bridge 4200) ──
     else:
         async with httpx.AsyncClient(timeout=420.0) as http_client:
             resp = await http_client.post(
@@ -2593,6 +2689,23 @@ async def add_agent_assignee_endpoint(
 ):
     """Add an agent assignee to an issue."""
     try:
+        # Validate: dev tasks only accept claude_code agents
+        from lib.supabase_client import get_async_service_role_client as _get_svc
+        _svc = await _get_svc()
+        _issue_check = await _svc.table("project_issues").select("is_dev_task, board_id").eq("id", issue_id).maybe_single().execute()
+        if _issue_check and _issue_check.data:
+            _board_check = await _svc.table("project_boards").select("is_development").eq("id", _issue_check.data["board_id"]).maybe_single().execute()
+            _effective_dev = _issue_check.data.get("is_dev_task")
+            if _effective_dev is None and _board_check and _board_check.data:
+                _effective_dev = _board_check.data.get("is_development", False)
+            if _effective_dev:
+                _agent_check = await _svc.table("openclaw_agents").select("tier").eq("id", request.agent_id).maybe_single().execute()
+                if _agent_check and _agent_check.data and _agent_check.data.get("tier") != "claude_code":
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Las tareas de desarrollo solo aceptan el agente Claude Code. Desactiva 'tarea de desarrollo' para asignar otros agentes.",
+                    )
+
         assignee = await add_agent_assignee(user_jwt, issue_id, request.agent_id)
 
         # Enqueue immediate agent execution for actionable states.
