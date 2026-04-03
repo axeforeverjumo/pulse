@@ -551,6 +551,36 @@ class AgentQueueProcessResponse(BaseModel):
     processed: int
 
 
+class ApprovalRequestResponse(BaseModel):
+    """Response model for an approval request."""
+    id: str
+    workspace_id: str
+    issue_id: Optional[str] = None
+    agent_id: Optional[str] = None
+    queue_job_id: Optional[str] = None
+    action_type: str
+    description: str
+    status: str = "pending"
+    decided_by: Optional[str] = None
+    decided_at: Optional[str] = None
+    created_at: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class ApprovalListResponse(BaseModel):
+    """Response model for listing approval requests."""
+    approvals: List[ApprovalRequestResponse]
+    count: int
+
+
+class ApprovalDecisionResponse(BaseModel):
+    """Response model for approve/reject."""
+    approval: ApprovalRequestResponse
+    message: str
+
+
 def _normalize_state_name(name: Optional[str]) -> str:
     return (name or "").strip().lower()
 
@@ -1541,6 +1571,24 @@ async def _append_agent_activity_comment(
         logger.warning("Failed to append agent activity comment for issue %s: %s", issue_id, comment_error)
 
 
+_APPROVAL_KEYWORDS = re.compile(
+    r"producci[oó]n|deploy|borrar|eliminar|elimina[rn]?\s+todo|drop\s+|destruir|rollback",
+    re.IGNORECASE,
+)
+
+
+def _needs_approval(task: Dict[str, Any]) -> Optional[str]:
+    """Return the reason an action needs human approval, or None if it can proceed."""
+    priority = task.get("priority", 0)
+    if priority == 1:  # urgent
+        return "Tarea con prioridad urgente"
+    text = f"{task.get('title', '')} {task.get('description', '')}"
+    match = _APPROVAL_KEYWORDS.search(text)
+    if match:
+        return f"Acción de alto impacto detectada: '{match.group()}'"
+    return None
+
+
 async def _execute_project_agent_job(
     supabase: Any,
     job: Dict[str, Any],
@@ -1562,6 +1610,69 @@ async def _execute_project_agent_job(
     if not task_result or not task_result.data:
         raise ValueError(f"Issue not found: {issue_id}")
     task = task_result.data
+
+    # ── Approval Gate: check if this task needs human approval ──
+    approval_reason = _needs_approval(task)
+    if approval_reason:
+        # Check if there's already an approval for this issue+job
+        existing = await supabase.table("agent_approval_requests")\
+            .select("id, status")\
+            .eq("issue_id", issue_id)\
+            .order("created_at", desc=True)\
+            .limit(1)\
+            .execute()
+        existing_approval = (existing.data or [None])[0] if existing.data else None
+
+        if existing_approval and existing_approval.get("status") == "approved":
+            logger.info("Approval gate: issue %s approved, proceeding.", issue_id)
+            # Approved — fall through to normal execution
+        elif existing_approval and existing_approval.get("status") == "rejected":
+            logger.info("Approval gate: issue %s rejected, blocking.", issue_id)
+            comment_user_id = job.get("requested_by") or fallback_user_id or task.get("created_by")
+            agent_result = await supabase.table("openclaw_agents").select("id, name, avatar_url").eq("id", agent_id).maybe_single().execute()
+            agent_for_comment = agent_result.data if agent_result and agent_result.data else {"id": agent_id, "name": "Agent"}
+            await _append_agent_activity_comment(
+                supabase, issue_id=issue_id, comment_user_id=comment_user_id,
+                agent=agent_for_comment,
+                content="🚫 **Aprobación rechazada**\n\nUn administrador rechazó la ejecución de esta tarea. El agente no la procesará.",
+                workspace_id=task.get("workspace_id"), workspace_app_id=task.get("workspace_app_id"),
+            )
+            return {"task_completed": False, "queue_recommendation": "blocked", "queue_block_reason": "Approval rejected"}
+        else:
+            # No approval yet or still pending — create request if not exists and re-queue
+            if not existing_approval:
+                await supabase.table("agent_approval_requests").insert({
+                    "workspace_id": task.get("workspace_id"),
+                    "issue_id": issue_id,
+                    "agent_id": agent_id,
+                    "queue_job_id": job.get("id"),
+                    "action_type": "agent_execution",
+                    "description": approval_reason,
+                    "status": "pending",
+                }).execute()
+                comment_user_id = job.get("requested_by") or fallback_user_id or task.get("created_by")
+                agent_result = await supabase.table("openclaw_agents").select("id, name, avatar_url").eq("id", agent_id).maybe_single().execute()
+                agent_for_comment = agent_result.data if agent_result and agent_result.data else {"id": agent_id, "name": "Agent"}
+                await _append_agent_activity_comment(
+                    supabase, issue_id=issue_id, comment_user_id=comment_user_id,
+                    agent=agent_for_comment,
+                    content=(
+                        f"⚠️ **Aprobación requerida**\n\n"
+                        f"Esta tarea requiere aprobación humana antes de ejecutarse.\n"
+                        f"Motivo: {approval_reason}.\n\n"
+                        f"Aprueba o rechaza desde la API: `POST /api/projects/approvals/{{id}}/approve` o `/reject`."
+                    ),
+                    workspace_id=task.get("workspace_id"), workspace_app_id=task.get("workspace_app_id"),
+                )
+                logger.info("Approval gate: created approval request for issue %s, re-queuing.", issue_id)
+            else:
+                logger.info("Approval gate: issue %s still pending approval, re-queuing.", issue_id)
+
+            return {
+                "task_completed": False,
+                "queue_recommendation": "queued",
+                "payload": {"waiting_for_approval": True},
+            }
 
     board_result = await supabase.table("project_boards")\
         .select("id, name, description, is_development, project_url, repository_url, repository_full_name, server_host, server_ip, server_user, server_port")\
@@ -3551,6 +3662,81 @@ async def delete_routine_endpoint(
         return {"status": "deleted"}
     except Exception as e:
         handle_api_exception(e, "Failed to delete routine", logger)
+
+
+# ============================================================================
+# Approval Gates
+# ============================================================================
+
+@router.get("/approvals", response_model=ApprovalListResponse)
+async def list_approvals(
+    workspace_id: str = Query(...),
+    status_filter: Optional[str] = Query(None, alias="status"),
+    request: Request = None,
+    user=Depends(get_current_user_jwt),
+):
+    """List approval requests for a workspace, optionally filtered by status."""
+    try:
+        supabase = request.app.state.supabase
+        query = supabase.table("agent_approval_requests")\
+            .select("*")\
+            .eq("workspace_id", workspace_id)\
+            .order("created_at", desc=True)
+        if status_filter:
+            query = query.eq("status", status_filter)
+        result = await query.execute()
+        approvals = result.data or []
+        return ApprovalListResponse(approvals=approvals, count=len(approvals))
+    except Exception as exc:
+        handle_api_exception(exc)
+
+
+@router.post("/approvals/{approval_id}/approve", response_model=ApprovalDecisionResponse)
+async def approve_request(
+    approval_id: str,
+    request: Request,
+    user=Depends(get_current_user_jwt),
+):
+    """Approve a pending approval request so the agent can proceed."""
+    try:
+        supabase = request.app.state.supabase
+        user_id = await get_current_user_id(request)
+        result = await supabase.table("agent_approval_requests")\
+            .update({"status": "approved", "decided_by": user_id, "decided_at": datetime.utcnow().isoformat()})\
+            .eq("id", approval_id)\
+            .eq("status", "pending")\
+            .execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Approval not found or already decided")
+        return ApprovalDecisionResponse(approval=result.data[0], message="Approved — the agent will proceed on its next cycle.")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        handle_api_exception(exc)
+
+
+@router.post("/approvals/{approval_id}/reject", response_model=ApprovalDecisionResponse)
+async def reject_request(
+    approval_id: str,
+    request: Request,
+    user=Depends(get_current_user_jwt),
+):
+    """Reject a pending approval request, blocking the agent from executing."""
+    try:
+        supabase = request.app.state.supabase
+        user_id = await get_current_user_id(request)
+        result = await supabase.table("agent_approval_requests")\
+            .update({"status": "rejected", "decided_by": user_id, "decided_at": datetime.utcnow().isoformat()})\
+            .eq("id", approval_id)\
+            .eq("status", "pending")\
+            .execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Approval not found or already decided")
+        return ApprovalDecisionResponse(approval=result.data[0], message="Rejected — the agent will not execute this task.")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        handle_api_exception(exc)
 
 
 # ── Internal: Agent progress callback (called by dev bridge, no auth) ──
