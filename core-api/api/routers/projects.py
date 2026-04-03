@@ -1628,6 +1628,7 @@ async def _execute_project_agent_job(
         goal_ancestry_lines.append(f"- Descripción del proyecto: {board_desc}")
     if board_project_url:
         goal_ancestry_lines.append(f"- URL del proyecto: {board_project_url}")
+    recent_done: list = []
     try:
         recent_done_result = await supabase.table("project_issues")\
             .select("title")\
@@ -1758,7 +1759,7 @@ async def _execute_project_agent_job(
             github_token=settings.pulse_github_token,
             session_id=previous_session_id,
             max_budget_usd="10",  # safety limit — subscription covers cost, this prevents infinite loops
-            callback_url="http://127.0.0.1:3010/api/internal/agent-progress",
+            callback_url="http://127.0.0.1:3010/api/projects/internal/agent-progress",
             issue_id=issue_id,
             agent_id=agent.get("id", ""),
         )
