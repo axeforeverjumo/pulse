@@ -21,6 +21,9 @@ async def execute_claude_code_task(
     github_token: str,
     session_id: Optional[str] = None,
     max_budget_usd: str = "1.0",
+    callback_url: Optional[str] = None,
+    issue_id: Optional[str] = None,
+    agent_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Send a dev task to the Claude Code bridge and return the structured result.
@@ -49,6 +52,12 @@ async def execute_claude_code_task(
     }
     if session_id:
         payload["session_id"] = session_id
+    if callback_url:
+        payload["callback_url"] = callback_url
+    if issue_id:
+        payload["issue_id"] = issue_id
+    if agent_id:
+        payload["agent_id"] = agent_id
 
     try:
         async with httpx.AsyncClient(timeout=BRIDGE_TIMEOUT) as client:
@@ -103,7 +112,7 @@ async def execute_claude_code_task(
         }
 
 
-def build_dev_task_prompt(task: Dict[str, Any], board: Dict[str, Any]) -> str:
+def build_dev_task_prompt(task: Dict[str, Any], board: Dict[str, Any], *, recent_done_titles: list[str] | None = None) -> str:
     """Build the prompt sent to Claude Code for a dev task."""
     title = task.get("title", "")
     description = task.get("description") or ""
@@ -117,7 +126,24 @@ def build_dev_task_prompt(task: Dict[str, Any], board: Dict[str, Any]) -> str:
 
     project_url = board.get("project_url") or ""
 
-    prompt = f"""Tarea de desarrollo asignada:
+    # PAPER-01: Goal Ancestry block for Claude Code agents
+    board_name = board.get("name") or "Sin nombre"
+    board_desc = board.get("description") or ""
+    ancestry_lines = [f"- Proyecto: {board_name}"]
+    if board_desc:
+        ancestry_lines.append(f"- Descripción: {board_desc}")
+    if project_url:
+        ancestry_lines.append(f"- URL: {project_url}")
+    if recent_done_titles:
+        ancestry_lines.append("- Tareas completadas recientemente:")
+        for t in recent_done_titles[:5]:
+            ancestry_lines.append(f"  - ✅ {t}")
+    ancestry_block = "\n".join(ancestry_lines)
+
+    prompt = f"""Contexto del proyecto:
+{ancestry_block}
+
+Tarea de desarrollo asignada:
 
 Título: {title}
 {f"Descripción: {description}" if description else ""}

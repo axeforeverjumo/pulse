@@ -1,7 +1,7 @@
 """
 Projects router - HTTP endpoints for kanban-style boards with states and issues
 """
-from fastapi import APIRouter, HTTPException, status, Depends, Query
+from fastapi import APIRouter, HTTPException, Request, status, Depends, Query
 from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime
@@ -1536,7 +1536,7 @@ async def _execute_project_agent_job(
     task = task_result.data
 
     board_result = await supabase.table("project_boards")\
-        .select("id, is_development, project_url, repository_url, repository_full_name, server_host, server_ip, server_user, server_port")\
+        .select("id, name, description, is_development, project_url, repository_url, repository_full_name, server_host, server_ip, server_user, server_port")\
         .eq("id", task["board_id"])\
         .maybe_single()\
         .execute()
@@ -1618,7 +1618,36 @@ async def _execute_project_agent_job(
         if isinstance(item, dict)
     ) or "- [ ] Sin checklist todavía"
 
+    # ── PAPER-01: Goal Ancestry — inject project context so the agent knows "why" ──
+    goal_ancestry_lines = []
+    board_name = board.get("name") or "Sin nombre"
+    board_desc = board.get("description") or ""
+    board_project_url = board.get("project_url") or ""
+    goal_ancestry_lines.append(f"- Proyecto: {board_name}")
+    if board_desc:
+        goal_ancestry_lines.append(f"- Descripción del proyecto: {board_desc}")
+    if board_project_url:
+        goal_ancestry_lines.append(f"- URL del proyecto: {board_project_url}")
+    try:
+        recent_done_result = await supabase.table("project_issues")\
+            .select("title")\
+            .eq("board_id", task["board_id"])\
+            .not_.is_("completed_at", "null")\
+            .order("completed_at", desc=True)\
+            .limit(5)\
+            .execute()
+        recent_done = recent_done_result.data or []
+        if recent_done:
+            goal_ancestry_lines.append("- Tareas completadas recientemente:")
+            for rd in recent_done:
+                goal_ancestry_lines.append(f"  - ✅ {rd.get('title', '???')}")
+    except Exception as e:
+        logger.warning("PAPER-01: failed to fetch recent done tasks: %s", e)
+
+    goal_ancestry_block = "\n".join(goal_ancestry_lines)
+
     task_context = (
+        f"Contexto del proyecto:\n{goal_ancestry_block}\n\n"
         f"Título: {task['title']}\n"
         f"Descripción: {task.get('description') or 'Sin descripción'}\n"
         f"Prioridad: {task.get('priority', 0)}\n\n"
@@ -1688,12 +1717,40 @@ async def _execute_project_agent_job(
         from api.services.projects.claude_code_executor import execute_claude_code_task, build_dev_task_prompt
         from api.config import settings
 
+        # ── PAPER-02: Atomic Checkout — prevent two agents on the same repo ──
+        try:
+            concurrent_result = await supabase.table("project_agent_queue_jobs")\
+                .select("id, issue_id")\
+                .eq("status", "running")\
+                .neq("id", job["id"])\
+                .execute()
+            for cj in (concurrent_result.data or []):
+                cj_issue_res = await supabase.table("project_issues")\
+                    .select("board_id")\
+                    .eq("id", cj["issue_id"])\
+                    .limit(1)\
+                    .execute()
+                if cj_issue_res.data and cj_issue_res.data[0].get("board_id") == task["board_id"]:
+                    logger.info(
+                        "PAPER-02: Atomic Checkout — job %s re-queued, board %s locked by job %s",
+                        job["id"], task["board_id"], cj["id"],
+                    )
+                    return {
+                        "task_completed": False,
+                        "queue_recommendation": "queued",
+                        "payload": {"waiting_for_lock": True, "locked_by_job": cj["id"]},
+                    }
+        except Exception as e:
+            logger.warning("PAPER-02: lock check failed, proceeding anyway: %s", e)
+
         repo_url = board.get("repository_url") or ""
         if not repo_url and board.get("repository_full_name"):
             repo_url = f"https://github.com/{board['repository_full_name']}"
 
         previous_session_id = previous_payload.get("claude_code_session_id") if isinstance(previous_payload, dict) else None
-        dev_prompt = build_dev_task_prompt(task, board)
+        # Pass recently completed task titles for Goal Ancestry (PAPER-01)
+        _recent_titles = [rd.get("title", "???") for rd in recent_done] if recent_done else []
+        dev_prompt = build_dev_task_prompt(task, board, recent_done_titles=_recent_titles)
 
         cc_result = await execute_claude_code_task(
             prompt=dev_prompt,
@@ -1701,6 +1758,9 @@ async def _execute_project_agent_job(
             github_token=settings.pulse_github_token,
             session_id=previous_session_id,
             max_budget_usd="10",  # safety limit — subscription covers cost, this prevents infinite loops
+            callback_url="http://127.0.0.1:3010/api/internal/agent-progress",
+            issue_id=issue_id,
+            agent_id=agent.get("id", ""),
         )
 
         agent_response = cc_result.get("result") or "Sin respuesta del agente."
@@ -2537,6 +2597,61 @@ async def delete_state_endpoint(
 
 
 # ============================================================================
+# PAPER-03: Agent Stats / Budget Dashboard
+# ============================================================================
+
+@router.get("/boards/{board_id}/agent-stats")
+async def get_board_agent_stats(
+    board_id: str,
+    limit: int = Query(50, ge=1, le=200, description="Max completed jobs to analyse"),
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Return aggregated agent execution stats for a board (token/turn tracking)."""
+    try:
+        from lib.supabase_client import get_async_service_role_client
+        supabase = await get_async_service_role_client()
+
+        # Get all issues for this board so we can filter jobs
+        issues_res = await supabase.table("project_issues")\
+            .select("id")\
+            .eq("board_id", board_id)\
+            .execute()
+        issue_ids = [i["id"] for i in (issues_res.data or [])]
+        if not issue_ids:
+            return {"board_id": board_id, "total_tasks": 0, "total_turns": 0, "total_cost_usd": 0, "total_duration_ms": 0, "jobs": []}
+
+        # Fetch completed jobs for those issues
+        jobs_res = await supabase.table("project_agent_queue_jobs")\
+            .select("id, issue_id, payload, status, created_at")\
+            .in_("issue_id", issue_ids)\
+            .eq("status", "completed")\
+            .order("created_at", desc=True)\
+            .limit(limit)\
+            .execute()
+        jobs = jobs_res.data or []
+
+        total_turns = 0
+        total_cost_usd = 0.0
+        total_duration_ms = 0
+        for j in jobs:
+            p = j.get("payload") or {}
+            total_turns += p.get("num_turns", 0)
+            total_cost_usd += p.get("total_cost_usd", 0) or 0
+            total_duration_ms += p.get("duration_ms", 0) or 0
+
+        return {
+            "board_id": board_id,
+            "total_tasks": len(jobs),
+            "total_turns": total_turns,
+            "total_cost_usd": round(total_cost_usd, 4),
+            "total_duration_ms": total_duration_ms,
+            "jobs": jobs,
+        }
+    except Exception as e:
+        handle_api_exception(e, "Failed to fetch agent stats", logger)
+
+
+# ============================================================================
 # Label Endpoints
 # ============================================================================
 
@@ -3092,3 +3207,50 @@ async def remove_comment_reaction_endpoint(
         return {"status": "deleted"}
     except Exception as e:
         handle_api_exception(e, "Failed to remove reaction", logger)
+
+
+# ── Internal: Agent progress callback (called by dev bridge, no auth) ──
+
+@router.post("/internal/agent-progress")
+async def agent_progress_callback(request: Request):
+    """Receive progress updates from the dev bridge while Claude Code is working."""
+    body = await request.json()
+    issue_id = body.get("issue_id")
+    message = body.get("message", "")
+
+    if not issue_id or not message:
+        raise HTTPException(status_code=400, detail="Missing issue_id or message")
+
+    try:
+        from lib.supabase_client import get_async_service_role_client
+        supabase = await get_async_service_role_client()
+
+        # Fetch issue context for workspace info and created_by as comment author
+        issue_result = await supabase.table("project_issues")\
+            .select("workspace_id, workspace_app_id, created_by")\
+            .eq("id", issue_id)\
+            .limit(1)\
+            .execute()
+
+        if not issue_result.data:
+            raise HTTPException(status_code=404, detail="Issue not found")
+
+        issue_data = issue_result.data[0]
+        agent = {"id": "00000000-0000-0000-0000-000000000cc1", "name": "Pulse Agent"}
+
+        await _append_agent_activity_comment(
+            supabase,
+            issue_id=issue_id,
+            comment_user_id=issue_data.get("created_by"),
+            agent=agent,
+            content=message,
+            workspace_id=issue_data.get("workspace_id"),
+            workspace_app_id=issue_data.get("workspace_app_id"),
+        )
+
+        return {"status": "ok"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("agent-progress callback failed")
+        raise HTTPException(status_code=500, detail=str(e)[:500])
