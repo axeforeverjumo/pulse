@@ -1721,7 +1721,7 @@ async def _execute_project_agent_job(
 
         # Post git result if there are commits
         if cc_git_log:
-            git_comment = f"🔧 **Claude Code Dev Result**\n\n```\n{cc_git_log}\n```"
+            git_comment = f"🔧 **Pulse Agent — Resultado**\n\n```\n{cc_git_log}\n```"
             if cc_result.get("git_diff"):
                 git_comment += f"\n\n<details><summary>Diff</summary>\n\n```diff\n{cc_result['git_diff'][:3000]}\n```\n</details>"
             await _append_agent_activity_comment(
@@ -1753,13 +1753,24 @@ async def _execute_project_agent_job(
                 "queue_recommendation": "completed",
                 "payload": {"claude_code_session_id": cc_session_id, "git_log": cc_git_log},
             }
-        elif cc_status == "needs_continuation":
+        elif cc_status == "needs_continuation" or cc_status == "timeout":
+            # Timeout or incomplete → re-enqueue to continue, NOT block
+            await _append_agent_activity_comment(
+                supabase,
+                issue_id=issue_id,
+                comment_user_id=comment_user_id,
+                agent=agent,
+                content="⏳ La tarea necesita más tiempo. Se re-encola automáticamente para continuar donde lo dejó.",
+                workspace_id=task.get("workspace_id"),
+                workspace_app_id=task.get("workspace_app_id"),
+            )
             return {
                 "task_completed": False,
                 "queue_recommendation": "queued",
                 "payload": {"claude_code_session_id": cc_session_id, "no_progress_count": 0},
             }
         else:
+            # Real error → block
             return {
                 "task_completed": False,
                 "queue_recommendation": "blocked",
