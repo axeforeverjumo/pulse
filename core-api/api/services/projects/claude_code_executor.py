@@ -24,6 +24,7 @@ async def execute_claude_code_task(
     callback_url: Optional[str] = None,
     issue_id: Optional[str] = None,
     agent_id: Optional[str] = None,
+    job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Send a dev task to the Claude Code bridge and return the structured result.
@@ -58,6 +59,8 @@ async def execute_claude_code_task(
         payload["issue_id"] = issue_id
     if agent_id:
         payload["agent_id"] = agent_id
+    if job_id:
+        payload["job_id"] = job_id
 
     try:
         async with httpx.AsyncClient(timeout=BRIDGE_TIMEOUT) as client:

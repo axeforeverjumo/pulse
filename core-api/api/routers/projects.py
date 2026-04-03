@@ -1762,6 +1762,7 @@ async def _execute_project_agent_job(
             callback_url="http://127.0.0.1:3010/api/projects/internal/agent-progress",
             issue_id=issue_id,
             agent_id=agent.get("id", ""),
+            job_id=job.get("id", ""),
         )
 
         agent_response = cc_result.get("result") or "Sin respuesta del agente."
@@ -2509,6 +2510,48 @@ async def process_agent_queue_endpoint(
         return {"processed": processed}
     except Exception as e:
         handle_api_exception(e, "Failed to process agent queue", logger)
+
+
+@router.get("/agent-log/{job_id}")
+async def get_agent_log(
+    job_id: str,
+    lines: int = Query(60, ge=1, le=500, description="Max lines to return"),
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Get streaming log for a running agent job."""
+    # Sanitise job_id to prevent path traversal
+    safe_id = re.sub(r"[^a-zA-Z0-9_-]", "", job_id)
+    log_path = f"/tmp/pulse-agent-logs/{safe_id}.log"
+
+    if not os.path.exists(log_path):
+        return {"lines": [], "total_lines": 0, "status": "no_log"}
+
+    try:
+        with open(log_path, "r") as f:
+            all_lines = f.readlines()
+    except Exception:
+        return {"lines": [], "total_lines": 0, "status": "error"}
+
+    # Check if the job is still running by querying the DB
+    job_status = "done"
+    try:
+        from lib.supabase_client import get_async_service_role_client
+        supabase = await get_async_service_role_client()
+        job_result = await supabase.table("project_agent_queue_jobs")\
+            .select("status")\
+            .eq("id", job_id)\
+            .limit(1)\
+            .execute()
+        if job_result.data and job_result.data[0].get("status") == "running":
+            job_status = "active"
+    except Exception:
+        pass
+
+    return {
+        "lines": [l.strip() for l in all_lines[-lines:]],
+        "total_lines": len(all_lines),
+        "status": job_status,
+    }
 
 
 # ============================================================================

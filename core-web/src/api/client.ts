@@ -2857,6 +2857,16 @@ export async function processProjectAgentQueue(maxJobs = 8): Promise<{ processed
   });
 }
 
+export interface AgentLogResponse {
+  lines: string[];
+  total_lines: number;
+  status: 'active' | 'done' | 'no_log' | 'error';
+}
+
+export async function getAgentLog(jobId: string, lines = 60): Promise<AgentLogResponse> {
+  return api(`/projects/agent-log/${encodeURIComponent(jobId)}?lines=${lines}`);
+}
+
 export interface GitHubRepo {
   id: number;
   name: string;

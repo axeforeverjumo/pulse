@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -18,6 +18,7 @@ import {
   useProjectMembers,
   useUpdateIssue,
   useDeleteIssue,
+  useProjectAgentQueue,
   type ProjectIssue,
 } from '../../../hooks/queries/useProjects';
 import { getRelativeDate, formatDateFull } from '../../../utils/dateUtils';
@@ -28,6 +29,7 @@ import LabelPicker from './LabelPicker';
 import AssigneePicker from './AssigneePicker';
 import StackedAvatars from './StackedAvatars';
 import IssueComments from './IssueComments';
+import AgentLogPanel from './AgentLogPanel';
 
 interface CardDetailModalProps {
   card: ProjectIssue;
@@ -66,6 +68,21 @@ export default function CardDetailModal({ card, onClose, initialEdit = false, is
     (userId: string) => members.find((m) => m.user_id === userId),
     [members]
   );
+
+  // Detect if this card has an agent assignee and a running job
+  const hasAgentAssignee = card.assignees?.some((a) => a.assignee_type === 'agent');
+  const workspaceAppId = card.workspace_app_id ?? null;
+  const { data: queueJobs = [] } = useProjectAgentQueue(
+    workspaceAppId,
+    card.board_id,
+    { enabled: !!hasAgentAssignee },
+  );
+  const runningJobId = useMemo(() => {
+    const job = queueJobs.find(
+      (j) => j.issue_id === card.id && (j.status === 'running' || j.status === 'queued'),
+    );
+    return job?.id ?? null;
+  }, [queueJobs, card.id]);
 
   const creator = card.created_by ? getMemberByUserId(card.created_by) : null;
   const currentMember = currentUserId ? members.find((m) => m.user_id === currentUserId) : null;
@@ -664,6 +681,13 @@ export default function CardDetailModal({ card, onClose, initialEdit = false, is
                 </div>
               </div>
 
+              {/* Agent Log Panel */}
+              {runningJobId && (
+                <div className="border-t border-gray-100 pt-5">
+                  <AgentLogPanel jobId={runningJobId} />
+                </div>
+              )}
+
               {/* Comments section */}
               <div className="border-t border-gray-100 pt-5">
                 <IssueComments issueId={card.id} />
@@ -788,6 +812,13 @@ export default function CardDetailModal({ card, onClose, initialEdit = false, is
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Agent Log Panel */}
+              {runningJobId && (
+                <div className="border-t border-gray-100 pt-5">
+                  <AgentLogPanel jobId={runningJobId} />
                 </div>
               )}
 
