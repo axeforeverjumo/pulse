@@ -110,18 +110,26 @@ class UpdateCompanyRequest(BaseModel):
 class CreateOpportunityRequest(BaseModel):
     """Request for creating an opportunity."""
     workspace_id: str
-    title: str = Field(..., min_length=1, max_length=300)
+    name: Optional[str] = None
+    title: Optional[str] = None
     description: Optional[str] = None
     stage: str = Field(default="lead")
     amount: Optional[float] = None
-    currency: str = Field(default="EUR")
+    currency: Optional[str] = "EUR"
+    currency_code: Optional[str] = None
+    close_date: Optional[str] = None
     expected_close_date: Optional[str] = None
     contact_id: Optional[str] = None
     company_id: Optional[str] = None
+    owner_id: Optional[str] = None
     assigned_to: Optional[str] = None
     probability: Optional[int] = Field(None, ge=0, le=100)
     tags: List[str] = Field(default_factory=list)
     custom_fields: Dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def effective_name(self) -> str:
+        return self.name or self.title or "Sin nombre"
 
 
 class UpdateOpportunityRequest(BaseModel):
@@ -551,8 +559,11 @@ async def create_opportunity_endpoint(
 ):
     """Create a new opportunity."""
     try:
+        data = body.model_dump()
+        # Normalize name field
+        data["name"] = body.effective_name
         opportunity = await create_opportunity(
-            body.workspace_id, user_id, user_jwt, body.model_dump()
+            body.workspace_id, user_id, user_jwt, data
         )
         return {"opportunity": opportunity}
     except Exception as e:

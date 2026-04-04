@@ -285,9 +285,9 @@ def _convert_attachments(attachments: Optional[List[AttachmentUpload]]) -> Optio
 @router.get("/image-proxy")
 async def email_image_proxy(
     url: str = Query(..., description="URL of the image to proxy"),
-    user_id: str = Depends(get_current_user_id),
 ):
-    """Proxy images from email providers to avoid CORS issues."""
+    """Proxy images from email providers to avoid CORS issues.
+    No auth required — images are loaded by <img> tags which can't send auth headers."""
     from urllib.parse import unquote, urlparse
     import httpx
 
