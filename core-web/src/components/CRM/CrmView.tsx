@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   MagnifyingGlassIcon,
@@ -10,19 +10,21 @@ import {
 } from '@heroicons/react/24/outline';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useCrmStore } from '../../stores/crmStore';
+import { useViewContextStore } from '../../stores/viewContextStore';
 import ContactsList from './ContactsList';
 import ContactDetail from './ContactDetail';
 import CompaniesList from './CompaniesList';
 import CompanyDetail from './CompanyDetail';
 import PipelineView from './PipelineView';
 import NotesView from './NotesView';
+import { HeaderButtons } from '../MiniAppHeader';
 import { toast } from 'sonner';
 import { createCrmContact, createCrmCompany } from '../../api/client';
 
 const tabs = [
+  { id: 'pipeline' as const, label: 'Pipeline', icon: ChartBarIcon },
   { id: 'contacts' as const, label: 'Contactos', icon: UserGroupIcon },
   { id: 'companies' as const, label: 'Empresas', icon: BuildingOfficeIcon },
-  { id: 'pipeline' as const, label: 'Pipeline', icon: ChartBarIcon },
   { id: 'notes' as const, label: 'Notas', icon: DocumentTextIcon },
 ];
 
@@ -30,6 +32,7 @@ export default function CrmView() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const workspace = workspaces.find((w) => w.id === workspaceId);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
 
   const {
     activeView,
@@ -51,6 +54,14 @@ export default function CrmView() {
   const [creating, setCreating] = useState(false);
 
   const effectiveWorkspaceId = workspaceId || workspace?.id || '';
+
+  // Set view context for sidebar chat
+  useEffect(() => {
+    useViewContextStore.getState().setCurrentView("crm");
+    return () => {
+      useViewContextStore.getState().setCurrentView(null);
+    };
+  }, []);
 
   const handleCreateContact = async () => {
     if (!newContact.first_name.trim() && !newContact.email.trim()) {
@@ -102,100 +113,112 @@ export default function CrmView() {
 
   return (
     <div className="flex-1 flex h-full min-w-0 overflow-hidden">
-      {/* Left panel: navigation + list */}
-      <div className="flex-1 flex flex-col min-w-0 border-r border-slate-200/40">
-        {/* Top bar */}
-        <div className="px-4 pt-4 pb-2 space-y-3">
-          {/* Title row */}
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900">CRM</h2>
+      <div className="relative flex-1 flex min-w-0 overflow-hidden rounded-[20px] bg-gradient-to-b from-[#f6fbff] to-[#edf4fb]">
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white/92 md:rounded-[20px]">
+          {/* Header toolbar - matching Projects header */}
+          <div className="h-14 flex items-center justify-between gap-2 border-b border-[#e4edf8] pl-3 pr-2 sm:pl-5 sm:pr-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <ChartBarIcon className="w-[18px] h-[18px] text-slate-700 hidden sm:block" />
+              <h1 className="text-sm sm:text-base font-semibold text-slate-900 truncate">
+                CRM
+              </h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <HeaderButtons
+                settingsButtonRef={settingsButtonRef}
+              />
+            </div>
           </div>
 
-          {/* Search */}
-          <div className="relative">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar contactos, empresas..."
-              className="w-full pl-9 pr-8 py-2 text-sm rounded-xl border border-slate-200 bg-white/80 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition-colors placeholder:text-slate-400"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-slate-100"
-              >
-                <XMarkIcon className="w-3.5 h-3.5 text-slate-400" />
-              </button>
+          {/* Search + Tabs bar */}
+          <div className="px-4 pt-3 pb-2 space-y-3 border-b border-[#e4edf8]">
+            {/* Search */}
+            <div className="relative max-w-md">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar contactos, empresas..."
+                className="w-full pl-9 pr-8 py-2 text-sm rounded-xl border border-slate-200 bg-white/80 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition-colors placeholder:text-slate-400"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-slate-100"
+                >
+                  <XMarkIcon className="w-3.5 h-3.5 text-slate-400" />
+                </button>
+              )}
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-1 p-0.5 rounded-xl bg-slate-100/80 max-w-lg">
+              {tabs.map((tab) => {
+                const isActive = activeView === tab.id;
+                const TabIcon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveView(tab.id)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      isActive
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <TabIcon className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* View content */}
+          <div className="flex-1 min-h-0 overflow-hidden">
+            {activeView === 'pipeline' && (
+              <PipelineView workspaceId={effectiveWorkspaceId} />
+            )}
+            {activeView === 'contacts' && (
+              <ContactsList
+                workspaceId={effectiveWorkspaceId}
+                onCreateNew={() => setShowCreateContact(true)}
+              />
+            )}
+            {activeView === 'companies' && (
+              <CompaniesList
+                workspaceId={effectiveWorkspaceId}
+                onCreateNew={() => setShowCreateCompany(true)}
+              />
+            )}
+            {activeView === 'notes' && (
+              <NotesView workspaceId={effectiveWorkspaceId} />
             )}
           </div>
+        </div>
 
-          {/* Tabs */}
-          <div className="flex gap-1 p-0.5 rounded-xl bg-slate-100/80">
-            {tabs.map((tab) => {
-              const isActive = activeView === tab.id;
-              const TabIcon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveView(tab.id)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    isActive
-                      ? 'bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  <TabIcon className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">{tab.label}</span>
-                </button>
-              );
-            })}
+        {/* Right panel: detail */}
+        {hasDetailOpen && (
+          <div className="w-[360px] shrink-0 border-l border-[#e4edf8] hidden lg:flex bg-white">
+            {selectedContact && (
+              <ContactDetail
+                contact={selectedContact}
+                workspaceId={effectiveWorkspaceId}
+                onClose={() => setSelectedContact(null)}
+              />
+            )}
+            {selectedCompany && !selectedContact && (
+              <CompanyDetail
+                company={selectedCompany}
+                workspaceId={effectiveWorkspaceId}
+                onClose={() => setSelectedCompany(null)}
+              />
+            )}
           </div>
-        </div>
-
-        {/* View content */}
-        <div className="flex-1 min-h-0 overflow-hidden">
-          {activeView === 'contacts' && (
-            <ContactsList
-              workspaceId={effectiveWorkspaceId}
-              onCreateNew={() => setShowCreateContact(true)}
-            />
-          )}
-          {activeView === 'companies' && (
-            <CompaniesList
-              workspaceId={effectiveWorkspaceId}
-              onCreateNew={() => setShowCreateCompany(true)}
-            />
-          )}
-          {activeView === 'pipeline' && (
-            <PipelineView workspaceId={effectiveWorkspaceId} />
-          )}
-          {activeView === 'notes' && (
-            <NotesView workspaceId={effectiveWorkspaceId} />
-          )}
-        </div>
+        )}
       </div>
-
-      {/* Right panel: detail */}
-      {hasDetailOpen && (
-        <div className="w-[360px] shrink-0 border-l border-slate-200/40 hidden lg:flex">
-          {selectedContact && (
-            <ContactDetail
-              contact={selectedContact}
-              workspaceId={effectiveWorkspaceId}
-              onClose={() => setSelectedContact(null)}
-            />
-          )}
-          {selectedCompany && !selectedContact && (
-            <CompanyDetail
-              company={selectedCompany}
-              workspaceId={effectiveWorkspaceId}
-              onClose={() => setSelectedCompany(null)}
-            />
-          )}
-        </div>
-      )}
 
       {/* Create Contact Modal */}
       {showCreateContact && (

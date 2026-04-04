@@ -23,7 +23,7 @@ export interface TaskContext {
   assignee: string;
 }
 
-export type ViewType = "email" | "projects" | "files" | "messages" | "calendar" | "agents" | "dashboard" | null;
+export type ViewType = "email" | "projects" | "crm" | "files" | "messages" | "calendar" | "agents" | "dashboard" | null;
 
 interface ViewContextState {
   currentView: ViewType;

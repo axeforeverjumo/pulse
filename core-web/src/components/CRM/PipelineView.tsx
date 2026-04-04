@@ -1,16 +1,28 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { CurrencyDollarIcon, CalendarIcon, BuildingOfficeIcon } from '@heroicons/react/24/outline';
+import {
+  CurrencyDollarIcon,
+  CalendarIcon,
+  BuildingOfficeIcon,
+  PlusIcon,
+  XMarkIcon,
+} from '@heroicons/react/24/outline';
 import { toast } from 'sonner';
 import { useCrmStore } from '../../stores/crmStore';
-import { updateCrmOpportunity, createCrmAgentTask, getWorkspaceOpenClawAgents, type OpenClawAgent } from '../../api/client';
+import {
+  updateCrmOpportunity,
+  createCrmOpportunity,
+  createCrmAgentTask,
+  getWorkspaceOpenClawAgents,
+  type OpenClawAgent,
+} from '../../api/client';
 
 const PIPELINE_STAGES = [
-  { id: 'lead', label: 'Lead', color: 'bg-slate-100 border-slate-200' },
-  { id: 'qualified', label: 'Calificado', color: 'bg-blue-50 border-blue-200' },
-  { id: 'proposal', label: 'Propuesta', color: 'bg-amber-50 border-amber-200' },
-  { id: 'negotiation', label: 'Negociacion', color: 'bg-purple-50 border-purple-200' },
-  { id: 'won', label: 'Ganado', color: 'bg-green-50 border-green-200' },
-  { id: 'lost', label: 'Perdido', color: 'bg-red-50 border-red-200' },
+  { id: 'lead', label: 'Lead', dotColor: '#EF4444' },
+  { id: 'qualified', label: 'Calificado', dotColor: '#3B82F6' },
+  { id: 'proposal', label: 'Propuesta', dotColor: '#F59E0B' },
+  { id: 'negotiation', label: 'Negociacion', dotColor: '#8B5CF6' },
+  { id: 'won', label: 'Ganado', dotColor: '#10B981' },
+  { id: 'lost', label: 'Perdido', dotColor: '#64748B' },
 ];
 
 interface PipelineViewProps {
@@ -144,11 +156,132 @@ function AgentAssignMenu({
   );
 }
 
+/** Inline form to add a new opportunity card to a pipeline column */
+function AddCardForm({
+  stageId,
+  workspaceId,
+  companies,
+  contacts,
+  onCreated,
+  onCancel,
+}: {
+  stageId: string;
+  workspaceId: string;
+  companies: any[];
+  contacts: any[];
+  onCreated: () => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [amount, setAmount] = useState('');
+  const [companyId, setCompanyId] = useState('');
+  const [contactId, setContactId] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!name.trim()) return;
+    setIsSubmitting(true);
+    try {
+      await createCrmOpportunity({
+        workspace_id: workspaceId,
+        name: name.trim(),
+        stage: stageId,
+        ...(amount && { amount: Number(amount) }),
+        ...(companyId && { company_id: companyId }),
+        ...(contactId && { contact_id: contactId }),
+      });
+      toast.success('Oportunidad creada');
+      onCreated();
+    } catch (err: any) {
+      toast.error(err.message || 'Error al crear oportunidad');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSubmit();
+    } else if (e.key === 'Escape') {
+      onCancel();
+    }
+  };
+
+  return (
+    <div className="mt-2 p-4 bg-white rounded-lg border border-gray-100 shadow-sm">
+      <input
+        type="text"
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="Nombre de la oportunidad..."
+        className="w-full px-0 py-1 font-medium text-[13px] text-gray-900 placeholder:text-gray-400 placeholder:font-normal bg-transparent border-0 focus:outline-none focus:ring-0"
+      />
+      <input
+        type="number"
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+        placeholder="Monto (opcional)"
+        className="w-full mt-2 px-0 py-1 text-[12px] text-gray-700 placeholder:text-gray-400 bg-transparent border-0 focus:outline-none focus:ring-0"
+      />
+
+      <div className="flex flex-col gap-2 mt-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          {companies.length > 0 && (
+            <select
+              value={companyId}
+              onChange={(e) => setCompanyId(e.target.value)}
+              className="text-[11px] text-gray-500 bg-gray-50 border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-gray-300"
+            >
+              <option value="">Empresa</option>
+              {companies.map((c: any) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          )}
+          {contacts.length > 0 && (
+            <select
+              value={contactId}
+              onChange={(e) => setContactId(e.target.value)}
+              className="text-[11px] text-gray-500 bg-gray-50 border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-gray-300"
+            >
+              <option value="">Contacto</option>
+              {contacts.map((c: any) => (
+                <option key={c.id} value={c.id}>
+                  {c.first_name} {c.last_name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-3 py-1.5 text-[12px] text-gray-500 hover:text-gray-700 font-medium transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!name.trim() || isSubmitting}
+            className="px-3 py-1.5 text-[12px] bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            {isSubmitting ? 'Creando...' : 'Crear'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PipelineView({ workspaceId }: PipelineViewProps) {
-  const { opportunities, isLoading, fetchOpportunities, setSelectedOpportunity } = useCrmStore();
+  const { opportunities, companies, contacts, isLoading, fetchOpportunities, fetchCompanies, fetchContacts, setSelectedOpportunity } = useCrmStore();
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const [agentMenuOppId, setAgentMenuOppId] = useState<string | null>(null);
+  const [addingCardStage, setAddingCardStage] = useState<string | null>(null);
   const [agents, setAgents] = useState<OpenClawAgent[]>([]);
 
   const loadOpportunities = useCallback(() => {
@@ -158,6 +291,13 @@ export default function PipelineView({ workspaceId }: PipelineViewProps) {
   useEffect(() => {
     loadOpportunities();
   }, [loadOpportunities]);
+
+  // Fetch companies and contacts for the add-card dropdowns
+  useEffect(() => {
+    if (!workspaceId) return;
+    fetchCompanies(workspaceId);
+    fetchContacts(workspaceId);
+  }, [workspaceId, fetchCompanies, fetchContacts]);
 
   // Fetch workspace agents
   useEffect(() => {
@@ -209,11 +349,11 @@ export default function PipelineView({ workspaceId }: PipelineViewProps) {
 
   if (isLoading && opportunities.length === 0) {
     return (
-      <div className="flex gap-3 p-4 overflow-x-auto h-full">
+      <div className="flex gap-2 p-2 overflow-x-auto h-full">
         {PIPELINE_STAGES.map((stage) => (
-          <div key={stage.id} className="w-64 shrink-0 rounded-xl border border-slate-200 bg-slate-50/50 p-3 animate-pulse">
-            <div className="h-4 w-20 bg-slate-200 rounded mb-3" />
-            <div className="space-y-2">
+          <div key={stage.id} className="w-80 shrink-0 rounded-md bg-[#F9F9F9] p-2 animate-pulse">
+            <div className="h-4 w-20 bg-slate-200 rounded mb-3 mx-2 mt-2" />
+            <div className="space-y-2 px-2">
               <div className="h-20 bg-slate-200/60 rounded-lg" />
               <div className="h-20 bg-slate-200/40 rounded-lg" />
             </div>
@@ -224,125 +364,167 @@ export default function PipelineView({ workspaceId }: PipelineViewProps) {
   }
 
   return (
-    <div className="flex gap-3 p-4 overflow-x-auto h-full">
-      {PIPELINE_STAGES.map((stage) => {
-        const stageOpps = getOpportunitiesForStage(stage.id);
-        const total = getStageTotal(stage.id);
-        const isDragOver = dragOverStage === stage.id;
+    <div className="flex-1 min-h-0 h-full overflow-auto px-2 pt-2 pb-8">
+      <div className="grid grid-flow-col auto-cols-max gap-2">
+        {PIPELINE_STAGES.map((stage) => {
+          const stageOpps = getOpportunitiesForStage(stage.id);
+          const total = getStageTotal(stage.id);
+          const isDragOver = dragOverStage === stage.id;
 
-        return (
-          <div
-            key={stage.id}
-            onDragOver={(e) => handleDragOver(e, stage.id)}
-            onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, stage.id)}
-            className={`w-64 shrink-0 rounded-xl border p-3 transition-colors flex flex-col ${stage.color} ${
-              isDragOver ? 'ring-2 ring-blue-400 ring-offset-1' : ''
-            }`}
-          >
-            {/* Column header */}
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-1.5">
-                <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">{stage.label}</h4>
-                <span className="text-xs text-slate-400 bg-white/80 px-1.5 py-0.5 rounded-full">{stageOpps.length}</span>
-              </div>
-              {total > 0 && (
-                <span className="text-xs font-medium text-slate-600">
-                  ${total.toLocaleString()}
-                </span>
-              )}
-            </div>
-
-            {/* Cards */}
-            <div className="flex-1 space-y-2 min-h-[100px]">
-              {stageOpps.map((opp: any) => (
-                <div
-                  key={opp.id}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, opp.id)}
-                  onClick={() => setSelectedOpportunity(opp)}
-                  className={`relative rounded-lg border border-white/80 bg-white p-3 shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow ${
-                    draggedId === opp.id ? 'opacity-40' : ''
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-1">
-                    <p className="text-sm font-medium text-slate-800 truncate mb-1.5 flex-1">{opp.name || 'Sin nombre'}</p>
-                    {/* Agent assign button */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setAgentMenuOppId(agentMenuOppId === opp.id ? null : opp.id);
-                      }}
-                      title="Asignar agente IA"
-                      className={`shrink-0 p-0.5 rounded-md transition-colors ${
-                        opp.assigned_agent_id
-                          ? 'text-violet-600 bg-violet-50 hover:bg-violet-100'
-                          : 'text-slate-400 hover:text-violet-600 hover:bg-violet-50'
-                      }`}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="11" width="18" height="10" rx="2" />
-                        <circle cx="12" cy="5" r="4" />
-                      </svg>
-                    </button>
-                  </div>
-
-                  {/* Agent status badge */}
-                  {opp.agent_status && (
-                    <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium mb-1 ${
-                      opp.agent_status === 'working' ? 'bg-amber-50 text-amber-700' :
-                      opp.agent_status === 'done' ? 'bg-green-50 text-green-700' :
-                      opp.agent_status === 'failed' ? 'bg-red-50 text-red-700' :
-                      'bg-violet-50 text-violet-700'
-                    }`}>
-                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="11" width="18" height="10" rx="2" />
-                        <circle cx="12" cy="5" r="4" />
-                      </svg>
-                      {opp.agent_status === 'pending' ? 'Pendiente' :
-                       opp.agent_status === 'working' ? 'Trabajando' :
-                       opp.agent_status === 'done' ? 'Completado' : 'Error'}
-                    </div>
-                  )}
-
-                  <div className="space-y-1">
-                    {opp.amount && (
-                      <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                        <CurrencyDollarIcon className="w-3.5 h-3.5 text-slate-400" />
-                        ${Number(opp.amount).toLocaleString()}
-                      </div>
-                    )}
-                    {opp.company_name && (
-                      <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                        <BuildingOfficeIcon className="w-3.5 h-3.5 text-slate-400" />
-                        <span className="truncate">{opp.company_name}</span>
-                      </div>
-                    )}
-                    {opp.close_date && (
-                      <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                        <CalendarIcon className="w-3.5 h-3.5 text-slate-400" />
-                        {new Date(opp.close_date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Agent assignment menu */}
-                  {agentMenuOppId === opp.id && (
-                    <AgentAssignMenu
-                      opportunityId={opp.id}
-                      workspaceId={workspaceId}
-                      agents={agents}
-                      onClose={() => setAgentMenuOppId(null)}
-                      onAssigned={() => fetchOpportunities(workspaceId)}
+          return (
+            <div
+              key={stage.id}
+              className="w-80 h-full flex-shrink-0 flex flex-col"
+            >
+              {/* Column wrapper with background - matching Projects KanbanColumn */}
+              <div
+                onDragOver={(e) => handleDragOver(e, stage.id)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, stage.id)}
+                className={`flex-1 flex flex-col rounded-md px-2 pt-2 pb-2 transition-colors duration-200 ${
+                  isDragOver ? 'bg-[#F0F1F3] ring-2 ring-blue-300 ring-offset-1' : 'bg-[#F9F9F9]'
+                }`}
+              >
+                {/* Column Header - matching Projects style with colored dot */}
+                <div className="shrink-0 pb-4 flex items-center justify-between px-2">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <div
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: stage.dotColor }}
                     />
+                    <h3 className="font-medium text-[13px] text-gray-900 truncate">
+                      {stage.label}
+                    </h3>
+                    <span className="text-[12px] text-gray-400 font-normal shrink-0">
+                      {stageOpps.length}
+                    </span>
+                  </div>
+                  {total > 0 && (
+                    <span className="text-[11px] font-medium text-gray-500 tabular-nums shrink-0">
+                      ${total.toLocaleString()}
+                    </span>
                   )}
                 </div>
-              ))}
+
+                {/* Cards */}
+                <div className="flex-1 min-h-[100px]">
+                  {stageOpps.map((opp: any) => (
+                    <div
+                      key={opp.id}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, opp.id)}
+                      onClick={() => setSelectedOpportunity(opp)}
+                      className={`group relative bg-white px-4 py-3 rounded-lg mb-2 cursor-default active:cursor-grabbing hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] border border-gray-100/60 transition-[box-shadow,opacity] duration-200 ease-out ${
+                        draggedId === opp.id ? 'opacity-30' : ''
+                      }`}
+                    >
+                      {/* Title + Agent button */}
+                      <div className="flex items-start justify-between gap-1 mb-3">
+                        <h4 className="font-medium text-[13px] text-gray-900 leading-snug line-clamp-2 flex-1">
+                          {opp.name || 'Sin nombre'}
+                        </h4>
+                        {/* Agent assign button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAgentMenuOppId(agentMenuOppId === opp.id ? null : opp.id);
+                          }}
+                          title="Asignar agente IA"
+                          className={`shrink-0 p-1 rounded-md transition-colors ${
+                            opp.assigned_agent_id
+                              ? 'text-violet-600 bg-violet-50 hover:bg-violet-100'
+                              : 'text-gray-300 hover:text-violet-600 hover:bg-violet-50 opacity-0 group-hover:opacity-100'
+                          }`}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="11" width="18" height="10" rx="2" />
+                            <circle cx="12" cy="5" r="4" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      {/* Agent status badge */}
+                      {opp.agent_status && (
+                        <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium mb-2 ${
+                          opp.agent_status === 'working' ? 'bg-amber-50 text-amber-700' :
+                          opp.agent_status === 'done' ? 'bg-green-50 text-green-700' :
+                          opp.agent_status === 'failed' ? 'bg-red-50 text-red-700' :
+                          'bg-violet-50 text-violet-700'
+                        }`}>
+                          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="11" width="18" height="10" rx="2" />
+                            <circle cx="12" cy="5" r="4" />
+                          </svg>
+                          {opp.agent_status === 'pending' ? 'Pendiente' :
+                           opp.agent_status === 'working' ? 'Trabajando' :
+                           opp.agent_status === 'done' ? 'Completado' : 'Error'}
+                        </div>
+                      )}
+
+                      {/* Metadata row - matching Projects card style */}
+                      <div className="flex items-center gap-1 -ml-1">
+                        {opp.amount && (
+                          <span className="flex items-center gap-1 min-h-[28px] px-1.5 rounded-md text-[11px] font-medium text-emerald-600 bg-emerald-50">
+                            <CurrencyDollarIcon className="w-3.5 h-3.5" />
+                            ${Number(opp.amount).toLocaleString()}
+                          </span>
+                        )}
+                        {opp.company_name && (
+                          <span className="flex items-center gap-1 min-h-[28px] px-1.5 rounded-md text-[11px] text-gray-500 hover:bg-gray-50">
+                            <BuildingOfficeIcon className="w-3.5 h-3.5 text-gray-400" />
+                            <span className="truncate max-w-[80px]">{opp.company_name}</span>
+                          </span>
+                        )}
+                        {opp.close_date && (
+                          <span className="flex items-center gap-1 min-h-[28px] px-1.5 rounded-md text-[11px] text-gray-500 hover:bg-gray-50 ml-auto">
+                            <CalendarIcon className="w-3.5 h-3.5 text-gray-400" />
+                            {new Date(opp.close_date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Agent assignment menu */}
+                      {agentMenuOppId === opp.id && (
+                        <AgentAssignMenu
+                          opportunityId={opp.id}
+                          workspaceId={workspaceId}
+                          agents={agents}
+                          onClose={() => setAgentMenuOppId(null)}
+                          onAssigned={() => fetchOpportunities(workspaceId)}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Add Card Form or Button - matching Projects "Anadir tarjeta" */}
+                {addingCardStage === stage.id ? (
+                  <AddCardForm
+                    stageId={stage.id}
+                    workspaceId={workspaceId}
+                    companies={companies}
+                    contacts={contacts}
+                    onCreated={() => {
+                      setAddingCardStage(null);
+                      fetchOpportunities(workspaceId);
+                    }}
+                    onCancel={() => setAddingCardStage(null)}
+                  />
+                ) : (
+                  <button
+                    onClick={() => setAddingCardStage(stage.id)}
+                    className="w-full mt-2 py-3 text-[13px] text-gray-400 hover:text-gray-600 rounded-lg flex items-center justify-center gap-1.5 transition-colors duration-200 hover:bg-white/60"
+                  >
+                    <PlusIcon className="w-4 h-4 stroke-2" />
+                    <span>Anadir tarjeta</span>
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
