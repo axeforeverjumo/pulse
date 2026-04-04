@@ -373,9 +373,10 @@ async def create_crm_opportunity(args: Dict, ctx: ToolContext) -> ToolResult:
         data["description"] = description
 
     result = await create_opportunity(
-        data=data,
+        workspace_id=workspace_id,
         user_id=ctx.user_id,
         user_jwt=ctx.user_jwt,
+        data=data,
     )
 
     return success(
