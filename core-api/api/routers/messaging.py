@@ -882,7 +882,7 @@ async def _sync_whatsapp_messages_for_chat(
         return 0
 
 class LinkWhatsAppRequest(BaseModel):
-    workspace_id: str
+    workspace_id: Optional[str] = None  # No longer required - connections are user-level
 
 class SendMessageRequest(BaseModel):
     chat_id: str
@@ -1040,7 +1040,6 @@ async def link_whatsapp(
     # Save account in DB
     await supabase.table("external_accounts").upsert({
         "user_id": user_id,
-        "workspace_id": request.workspace_id,
         "provider": "whatsapp",
         "instance_id": instance_name,
         "instance_name": instance_name,
@@ -1182,7 +1181,6 @@ async def link_telegram(
     await supabase.table("external_accounts").upsert(
         {
             "user_id": user_id,
-            "workspace_id": request.workspace_id,
             "provider": "telegram",
             "instance_name": bot_username,
             "telegram_chat_id": None,
@@ -1370,30 +1368,25 @@ async def list_chats(
 
 @router.get("/unread-summary")
 async def get_messaging_unread_summary(
-    workspace_id: Optional[str] = None,
     user_jwt: str = Depends(get_current_user_jwt),
     user_id: str = Depends(get_current_user_id),
 ):
-    """Return unread totals for external messaging, grouped by workspace."""
+    """Return unread totals for external messaging (user-level, cross-workspace)."""
     supabase = await get_async_service_role_client()
 
     accounts_q = (
         supabase.table("external_accounts")
-        .select("id, workspace_id")
+        .select("id")
         .eq("user_id", user_id)
     )
-    if workspace_id:
-        accounts_q = accounts_q.eq("workspace_id", workspace_id)
 
     accounts_result = await accounts_q.execute()
     accounts = accounts_result.data or []
     if not accounts:
-        return {"total_unread": 0, "chats_with_unread": 0, "unread_by_workspace": {}}
+        return {"total_unread": 0, "chats_with_unread": 0}
 
     account_ids = [a["id"] for a in accounts]
-    workspace_by_account = {
-        a["id"]: a.get("workspace_id") for a in accounts if a.get("id") and a.get("workspace_id")
-    }
+    # workspace_id no longer tracked - connections are user-level
 
     chats_result = await (
         supabase.table("external_chats")
@@ -1404,21 +1397,16 @@ async def get_messaging_unread_summary(
     )
     unread_chats = chats_result.data or []
 
-    unread_by_workspace: Dict[str, int] = {}
     total_unread = 0
     for chat in unread_chats:
         count = int(chat.get("unread_count") or 0)
         if count <= 0:
             continue
         total_unread += count
-        workspace = workspace_by_account.get(chat.get("account_id"))
-        if workspace:
-            unread_by_workspace[workspace] = unread_by_workspace.get(workspace, 0) + count
 
     return {
         "total_unread": total_unread,
         "chats_with_unread": len(unread_chats),
-        "unread_by_workspace": unread_by_workspace,
     }
 
 
