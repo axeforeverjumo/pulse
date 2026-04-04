@@ -498,6 +498,53 @@ async def get_attachment_endpoint(
         handle_api_exception(e, "Failed to fetch attachment", logger)
 
 
+@router.get("/messages/{email_id}/attachments/{attachment_id}/download")
+async def download_attachment_direct(
+    email_id: str,
+    attachment_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Download attachment as direct binary response for browser download."""
+    from fastapi.responses import Response
+    import base64
+
+    try:
+        result = await asyncio.to_thread(
+            get_email_attachment, user_id, user_jwt, email_id, attachment_id
+        )
+
+        if not result or 'attachment' not in result:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+
+        att = result['attachment']
+        data = att.get('data', '')
+
+        # Gmail uses base64url, Outlook uses standard base64
+        try:
+            content = base64.urlsafe_b64decode(data + '==')
+        except Exception:
+            try:
+                content = base64.b64decode(data + '==')
+            except Exception:
+                content = base64.b64decode(data)
+
+        filename = att.get('name') or att.get('filename') or 'attachment'
+        mime_type = att.get('contentType') or att.get('mimeType') or 'application/octet-stream'
+
+        return Response(
+            content=content,
+            media_type=mime_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to download attachment", logger)
+
+
 @router.get("/threads/{thread_id}", response_model=EmailThreadResponse)
 async def get_thread_endpoint(
     thread_id: str,

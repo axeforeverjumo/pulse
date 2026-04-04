@@ -1224,32 +1224,44 @@ export async function downloadEmailAttachment(
   emailId: string,
   attachmentId: string
 ): Promise<{ blob: Blob; filename: string }> {
-  const response = await api<AttachmentDownloadResponse>(
-    `/email/messages/${emailId}/attachments/${attachmentId}`
+  // Use the direct binary download endpoint to avoid base64 decoding issues
+  const token = await ensureFreshToken();
+  const response = await fetch(
+    `${API_BASE}/email/messages/${emailId}/attachments/${attachmentId}/download`,
+    {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    }
   );
 
-  try {
-    // Decode base64url to binary
-    const base64Data = response.attachment.data
-      .replace(/-/g, '+')
-      .replace(/_/g, '/');
-
-    const binaryString = atob(base64Data);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
+  if (response.status === 401) {
+    const refreshed = await forceRefreshToken();
+    if (refreshed) {
+      const retry = await fetch(
+        `${API_BASE}/email/messages/${emailId}/attachments/${attachmentId}/download`,
+        {
+          headers: { Authorization: `Bearer ${refreshed}` },
+        }
+      );
+      if (!retry.ok) throw new Error('Failed to download attachment.');
+      const blob = await retry.blob();
+      const disposition = retry.headers.get('Content-Disposition') || '';
+      const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
+      return { blob, filename: filenameMatch?.[1] || attachmentId };
     }
+    await handleTerminalAuthFailure();
+    throw new AuthExpiredError();
+  }
 
-    const blob = new Blob([bytes]);
-
-    return {
-      blob,
-      filename: attachmentId,
-    };
-  } catch (err) {
-    console.error('Attachment download failed:', err);
+  if (!response.ok) {
     throw new Error('Failed to download attachment. Please try again.');
   }
+
+  const blob = await response.blob();
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
+  return { blob, filename: filenameMatch?.[1] || attachmentId };
 }
 
 export async function markEmailRead(emailId: string): Promise<void> {
