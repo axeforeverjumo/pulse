@@ -20,6 +20,8 @@ VALID_APP_TYPES = (
     "email",
     "calendar",
     "agents",
+    "crm",
+    "messaging",
 )
 
 
