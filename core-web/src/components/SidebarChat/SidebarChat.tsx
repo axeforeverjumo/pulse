@@ -185,11 +185,28 @@ export default function SidebarChat() {
       const projPrefix = "[Contexto: El usuario est\u00e1 en el proyecto \"" + proj.name + "\"]\n---\nMensaje del usuario: ";
       apiMessage = projPrefix + apiMessage;
     } else if (viewCtx.currentView === "crm") {
-      const crmPrefix = "[Contexto: El usuario está en el módulo CRM (Pipeline de ventas, Contactos, Empresas)]\n" +
-        "IMPORTANTE: Cuando el usuario pida crear un lead, oportunidad, deal o tarea de ventas, " +
-        "usa las herramientas de CRM (create_crm_opportunity, create_crm_contact, create_crm_note, etc.), " +
-        "NO uses las herramientas de Proyectos.\n" +
-        "---\nMensaje del usuario: ";
+      let crmPrefix = "[Contexto: El usuario está en el módulo CRM";
+      const subView = (viewCtx as any).crmSubView;
+      if (subView === 'pipeline') crmPrefix += " > Pipeline de ventas";
+      else if (subView === 'contacts') crmPrefix += " > Contactos";
+      else if (subView === 'companies') crmPrefix += " > Empresas";
+      else if (subView === 'notes') crmPrefix += " > Notas";
+      crmPrefix += "]\n";
+      if ((viewCtx as any).currentCrmContact) {
+        const c = (viewCtx as any).currentCrmContact;
+        crmPrefix += "Contacto seleccionado: " + c.name + " (" + c.email + ")\n";
+      }
+      if ((viewCtx as any).currentCrmCompany) {
+        const co = (viewCtx as any).currentCrmCompany;
+        crmPrefix += "Empresa seleccionada: " + co.name + (co.domain ? " (" + co.domain + ")" : "") + "\n";
+      }
+      if ((viewCtx as any).currentCrmOpportunity) {
+        const o = (viewCtx as any).currentCrmOpportunity;
+        crmPrefix += "Oportunidad: " + o.name + " (Etapa: " + o.stage + (o.amount ? ", " + o.amount + "€" : "") + ")\n";
+      }
+      crmPrefix += "IMPORTANTE: Usa SOLO herramientas de CRM (create_crm_opportunity, create_crm_contact, " +
+        "create_crm_note, search_crm_contacts, search_crm_companies, get_pipeline_summary, update_opportunity_stage). " +
+        "NUNCA uses herramientas de Proyectos cuando el usuario está en CRM.\n---\nMensaje del usuario: ";
       apiMessage = crmPrefix + apiMessage;
     }
 

@@ -55,13 +55,19 @@ export default function CrmView() {
 
   const effectiveWorkspaceId = workspaceId || workspace?.id || '';
 
-  // Set view context for sidebar chat
+  // Set view context for sidebar chat — updates with sub-view and selected entity
   useEffect(() => {
-    useViewContextStore.getState().setCurrentView("crm");
+    const store = useViewContextStore.getState();
+    store.setCurrentView("crm");
+    store.setCrmContext({
+      subView: activeView as any,
+      contact: selectedContact ? { id: selectedContact.id, name: `${selectedContact.first_name || ''} ${selectedContact.last_name || ''}`.trim(), email: selectedContact.email || '' } : null,
+      company: selectedCompany ? { id: selectedCompany.id, name: selectedCompany.name || '', domain: selectedCompany.domain } : null,
+    });
     return () => {
-      useViewContextStore.getState().setCurrentView(null);
+      useViewContextStore.getState().clearContext();
     };
-  }, []);
+  }, [activeView, selectedContact, selectedCompany]);
 
   const handleCreateContact = async () => {
     if (!newContact.first_name.trim() && !newContact.email.trim()) {
