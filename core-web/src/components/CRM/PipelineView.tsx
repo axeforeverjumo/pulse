@@ -4,7 +4,6 @@ import {
   CalendarIcon,
   BuildingOfficeIcon,
   PlusIcon,
-  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { toast } from 'sonner';
 import { useCrmStore } from '../../stores/crmStore';

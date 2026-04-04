@@ -44,6 +44,10 @@
     {
       "path": "/api/cron/agent-health",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-email-cache",
+      "schedule": "0 3 * * *"
     }
   ]
 }
