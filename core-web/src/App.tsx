@@ -53,6 +53,7 @@ const DashboardView = lazy(
 const AIBuilderView = lazy(() => import("./components/ai-app-builder/AIBuilderView"));
 const WebsiteBuilderView = lazy(() => import("./components/WebsiteBuilder/WebsiteBuilderView"));
 const MessagingView = lazy(() => import("./components/Messaging/MessagingView"));
+const CrmView = lazy(() => import("./components/CRM/CrmView"));
 const OnboardingWizard = lazy(() => import("./components/Onboarding/OnboardingWizard"));
 const PENDING_INVITE_TOKEN_KEY = "pending_invite_token";
 const PENDING_INVITE_TOKEN_SET_AT_KEY = "pending_invite_token_set_at";
@@ -628,6 +629,7 @@ function AppContent() {
         <Route path="/workspace/:workspaceId/agents" element={<AgentsView />} />
         <Route path="/workspace/:workspaceId/agents/:agentId" element={<AgentsView />} />
         <Route path="/workspace/:workspaceId/messaging" element={<MessagingView />} />
+        <Route path="/workspace/:workspaceId/crm" element={<CrmView />} />
 
         {/* Website / Linktree Builder */}
         <Route path="/sites" element={<WebsiteBuilderView />} />

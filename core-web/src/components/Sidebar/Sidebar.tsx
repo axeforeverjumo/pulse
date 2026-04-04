@@ -24,6 +24,7 @@ import {
   Code,
   ExternalLink,
   Smartphone,
+  Contact,
 } from "lucide-react";
 import { Icon, type LucideIcon } from "../ui/Icon";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
@@ -110,6 +111,11 @@ const availableAppTypes = [
     name: "Mensajeria",
     icon: Smartphone,
   },
+  {
+    type: "crm",
+    name: "CRM",
+    icon: Contact,
+  },
 ];
 
 // Map app types to their icons
@@ -124,6 +130,7 @@ const appIcons: Record<string, LucideIcon> = {
   email: Mail,
   calendar: Calendar,
   messaging: Smartphone,
+  crm: Contact,
 };
 
 // Generate workspace-specific path for an app

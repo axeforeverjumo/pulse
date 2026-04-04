@@ -183,7 +183,7 @@ export interface Workspace {
 export interface WorkspaceApp {
   id: string;
   workspace_id: string;
-  app_type: 'chat' | 'team' | 'files' | 'messages' | 'dashboard' | 'projects' | 'email' | 'calendar' | 'agents' | 'messaging';
+  app_type: 'chat' | 'team' | 'files' | 'messages' | 'dashboard' | 'projects' | 'email' | 'calendar' | 'agents' | 'messaging' | 'crm';
   is_public: boolean;
   position: number;
   config: Record<string, unknown>;
@@ -3420,4 +3420,93 @@ export async function applyWorkspaceTemplate(
     `/projects/workspace-templates/${templateId}/apply?workspace_id=${encodeURIComponent(workspaceId)}&workspace_app_id=${encodeURIComponent(workspaceAppId)}`,
     { method: 'POST' },
   );
+}
+
+// ============================================================================
+// CRM API
+// ============================================================================
+
+export async function getCrmContacts(workspaceId: string, query?: string) {
+  const params = new URLSearchParams({ workspace_id: workspaceId });
+  if (query) params.set('q', query);
+  return api<{ contacts: any[] }>(`/crm/contacts?${params}`);
+}
+
+export async function getCrmContact(contactId: string) {
+  return api<any>(`/crm/contacts/${contactId}`);
+}
+
+export async function createCrmContact(data: any) {
+  return api<any>('/crm/contacts', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function createContactFromEmail(data: { email_address: string; workspace_id: string }) {
+  return api<any>('/crm/contacts/from-email', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function updateCrmContact(contactId: string, data: any) {
+  return api<any>(`/crm/contacts/${contactId}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export async function deleteCrmContact(contactId: string) {
+  return api<any>(`/crm/contacts/${contactId}`, { method: 'DELETE' });
+}
+
+export async function getCrmCompanies(workspaceId: string, query?: string) {
+  const params = new URLSearchParams({ workspace_id: workspaceId });
+  if (query) params.set('q', query);
+  return api<{ companies: any[] }>(`/crm/companies?${params}`);
+}
+
+export async function getCrmCompany(companyId: string) {
+  return api<any>(`/crm/companies/${companyId}`);
+}
+
+export async function createCrmCompany(data: any) {
+  return api<any>('/crm/companies', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function updateCrmCompany(companyId: string, data: any) {
+  return api<any>(`/crm/companies/${companyId}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export async function deleteCrmCompany(companyId: string) {
+  return api<any>(`/crm/companies/${companyId}`, { method: 'DELETE' });
+}
+
+export async function getCrmOpportunities(workspaceId: string, stage?: string) {
+  const params = new URLSearchParams({ workspace_id: workspaceId });
+  if (stage) params.set('stage', stage);
+  return api<{ opportunities: any[] }>(`/crm/opportunities?${params}`);
+}
+
+export async function getCrmPipeline(workspaceId: string) {
+  return api<any>(`/crm/opportunities/pipeline?workspace_id=${workspaceId}`);
+}
+
+export async function createCrmOpportunity(data: any) {
+  return api<any>('/crm/opportunities', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function updateCrmOpportunity(id: string, data: any) {
+  return api<any>(`/crm/opportunities/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export async function getCrmTimeline(entityType: string, entityId: string) {
+  return api<{ events: any[] }>(`/crm/timeline/${entityType}/${entityId}`);
+}
+
+export async function getCrmNotes(workspaceId: string, targetType?: string, targetId?: string) {
+  const params = new URLSearchParams({ workspace_id: workspaceId });
+  if (targetType) params.set('target_type', targetType);
+  if (targetId) params.set('target_id', targetId);
+  return api<{ notes: any[] }>(`/crm/notes?${params}`);
+}
+
+export async function createCrmNote(data: any) {
+  return api<any>('/crm/notes', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function searchCrm(workspaceId: string, query: string) {
+  return api<any>(`/crm/search?workspace_id=${workspaceId}&q=${encodeURIComponent(query)}`);
 }
