@@ -33,7 +33,7 @@ export const useCrmStore = create<CrmState>()((set) => ({
   selectedCompany: null,
   selectedOpportunity: null,
   isLoading: false,
-  activeView: 'contacts',
+  activeView: 'pipeline',
   searchQuery: '',
 
   setActiveView: (view) => set({ activeView: view }),
