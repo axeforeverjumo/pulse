@@ -18,6 +18,7 @@ class ToolCategory(str, Enum):
     MESSAGES = "messages"
     SEARCH = "search"
     PROJECTS = "projects"
+    CRM = "crm"
 
 
 @dataclass

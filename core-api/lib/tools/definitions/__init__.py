@@ -17,6 +17,7 @@ from lib.tools.definitions import email_thread
 from lib.tools.definitions import semantic_search
 from lib.tools.definitions import projects
 from lib.tools.definitions import google_drive
+from lib.tools.definitions import crm
 
 __all__ = [
     "calendar",
@@ -30,4 +31,5 @@ __all__ = [
     "semantic_search",
     "projects",
     "google_drive",
+    "crm",
 ]
