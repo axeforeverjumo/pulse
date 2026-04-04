@@ -1343,6 +1343,66 @@ async def cron_process_routines(authorization: str = Header(None)):
         )
 
 
+@router.get("/cleanup-email-cache", response_model=CleanupResponse)
+async def cleanup_email_cache(authorization: Optional[str] = Header(None)):
+    """
+    CRON JOB: Clean up expired email cached files
+
+    RUNS: Daily
+
+    PURPOSE: Removes email cached files not accessed in 30 days
+    - Finds email_cached_files with last_accessed_at older than 30 days
+    - Deletes them from R2 storage
+    - Deletes the database records
+    - Prevents stale cached files from accumulating storage
+    """
+    logger.info("=" * 80)
+    logger.info("🕐 CRON: Starting email cache cleanup")
+    logger.info(f"⏰ Timestamp: {datetime.now(timezone.utc).isoformat()}")
+
+    # Verify authorization
+    if not verify_cron_auth(authorization):
+        logger.warning("⚠️ Unauthorized cron attempt")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+
+    logger.info("✅ Authorization verified")
+    start_time = datetime.now(timezone.utc)
+
+    check_in_id = capture_checkin(monitor_slug="cleanup-email-cache", status=MonitorStatus.IN_PROGRESS)
+
+    try:
+        from api.services.email.file_cache import cleanup_expired_cache
+
+        # Use service role client to access all files (bypasses RLS)
+        service_supabase = get_service_role_client()
+
+        result = await cleanup_expired_cache(service_supabase)
+
+        duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+
+        logger.info(f"✅ CRON: Email cache cleanup completed in {duration:.2f}s")
+        logger.info(f"📊 Results: {result['deleted']} cached files deleted, {result.get('errors', 0)} errors")
+        logger.info("=" * 80)
+
+        capture_checkin(monitor_slug="cleanup-email-cache", check_in_id=check_in_id, status=MonitorStatus.OK)
+
+        return {
+            "status": "completed",
+            "duration_seconds": duration,
+            "deleted": result['deleted'],
+        }
+
+    except Exception as e:
+        capture_checkin(monitor_slug="cleanup-email-cache", check_in_id=check_in_id, status=MonitorStatus.ERROR)
+        logger.error(f"❌ CRON: Email cache cleanup failed: {str(e)}")
+        logger.exception("Full traceback:")
+        logger.info("=" * 80)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Cleanup failed: {str(e)}"
+        )
+
+
 @router.get("/health", response_model=CronHealthResponse)
 async def cron_health():
     """
@@ -1398,6 +1458,11 @@ async def cron_health():
                 "name": "routines",
                 "schedule": "Every 5 minutes",
                 "description": "Creates issues from due recurring routines"
+            },
+            {
+                "name": "cleanup-email-cache",
+                "schedule": "Daily",
+                "description": "Removes email cached files not accessed in 30 days"
             }
         ]
     }
