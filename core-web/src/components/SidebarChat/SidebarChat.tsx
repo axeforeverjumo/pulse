@@ -184,6 +184,13 @@ export default function SidebarChat() {
       const proj = viewCtx.currentProject;
       const projPrefix = "[Contexto: El usuario est\u00e1 en el proyecto \"" + proj.name + "\"]\n---\nMensaje del usuario: ";
       apiMessage = projPrefix + apiMessage;
+    } else if (viewCtx.currentView === "crm") {
+      const crmPrefix = "[Contexto: El usuario está en el módulo CRM (Pipeline de ventas, Contactos, Empresas)]\n" +
+        "IMPORTANTE: Cuando el usuario pida crear un lead, oportunidad, deal o tarea de ventas, " +
+        "usa las herramientas de CRM (create_crm_opportunity, create_crm_contact, create_crm_note, etc.), " +
+        "NO uses las herramientas de Proyectos.\n" +
+        "---\nMensaje del usuario: ";
+      apiMessage = crmPrefix + apiMessage;
     }
 
     if (mentions.length > 0) {

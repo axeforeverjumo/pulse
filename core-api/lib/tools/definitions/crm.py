@@ -1,5 +1,6 @@
 """CRM tools: search_crm_contacts, get_contact_details, create_crm_contact,
-search_crm_companies, get_pipeline_summary, update_opportunity_stage, create_crm_note."""
+search_crm_companies, get_pipeline_summary, update_opportunity_stage, create_crm_note,
+create_crm_opportunity."""
 
 import logging
 from typing import Any, Dict
@@ -299,6 +300,96 @@ async def search_crm_companies(args: Dict, ctx: ToolContext) -> ToolResult:
     return success(
         {"companies": companies, "count": len(companies), "total": result.get("count", 0)},
         f"Found {len(companies)} companies matching '{query}'",
+    )
+
+
+# =============================================================================
+# CREATE OPPORTUNITY
+# =============================================================================
+
+
+@tool(
+    name="create_crm_opportunity",
+    description=(
+        "Create a new opportunity/deal/lead in the CRM pipeline. Use this when the user asks "
+        "to create a lead, deal, or opportunity."
+    ),
+    params={
+        "name": "Name/title for the opportunity or deal",
+        "stage": "Pipeline stage (default: lead). Valid: lead, qualified, proposal, negotiation, closed_won, closed_lost",
+        "amount": "Deal value/amount (optional)",
+        "currency_code": "Currency code, e.g. EUR, USD (default: EUR)",
+        "close_date": "Expected close date in YYYY-MM-DD format (optional)",
+        "company_name": "Associated company name (optional)",
+        "contact_email": "Associated contact email (optional)",
+        "description": "Description or notes about the opportunity (optional)",
+        "workspace_id": "Workspace ID (auto-resolved from context when omitted)",
+    },
+    required=["name"],
+    category=ToolCategory.CRM,
+    status="Creating opportunity...",
+)
+async def create_crm_opportunity(args: Dict, ctx: ToolContext) -> ToolResult:
+    from api.services.crm.opportunities import create_opportunity
+
+    name = (args.get("name") or "").strip()
+    if not name:
+        return error("name is required")
+
+    workspace_id = _workspace_id_from(args, ctx)
+    if not workspace_id:
+        return error("workspace_id is required and could not be resolved from context")
+
+    stage = (args.get("stage") or "lead").strip()
+
+    logger.info("[CHAT] User %s creating CRM opportunity: %s", ctx.user_id, name)
+
+    data: Dict[str, Any] = {
+        "workspace_id": workspace_id,
+        "name": name,
+        "stage": stage,
+        "created_by": ctx.user_id,
+    }
+
+    amount = args.get("amount")
+    if amount is not None:
+        data["amount"] = amount
+        data["currency_code"] = args.get("currency_code", "EUR")
+
+    close_date = args.get("close_date")
+    if close_date:
+        data["close_date"] = close_date
+
+    company_name = args.get("company_name")
+    if company_name:
+        data["company_name"] = company_name
+
+    contact_email = args.get("contact_email")
+    if contact_email:
+        data["contact_email"] = contact_email
+
+    description = args.get("description")
+    if description:
+        data["description"] = description
+
+    result = await create_opportunity(
+        data=data,
+        user_id=ctx.user_id,
+        user_jwt=ctx.user_jwt,
+    )
+
+    return success(
+        {
+            "opportunity": {
+                "id": result.get("id"),
+                "name": result.get("name"),
+                "stage": result.get("stage"),
+                "amount": result.get("amount"),
+                "currency": result.get("currency"),
+                "created_at": result.get("created_at"),
+            }
+        },
+        f"Created opportunity '{name}' in stage '{stage}'",
     )
 
 
