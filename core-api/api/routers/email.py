@@ -278,6 +278,45 @@ def _convert_attachments(attachments: Optional[List[AttachmentUpload]]) -> Optio
     ]
 
 
+# ============================================================================
+# Image Proxy
+# ============================================================================
+
+@router.get("/image-proxy")
+async def email_image_proxy(
+    url: str = Query(..., description="URL of the image to proxy"),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Proxy images from email providers to avoid CORS issues."""
+    from urllib.parse import unquote, urlparse
+    import httpx
+
+    decoded_url = unquote(url)
+    parsed = urlparse(decoded_url)
+
+    # Only allow HTTPS
+    if parsed.scheme != "https":
+        raise HTTPException(status_code=400, detail="Only HTTPS URLs allowed")
+
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        try:
+            resp = await client.get(decoded_url)
+            resp.raise_for_status()
+        except httpx.HTTPError:
+            raise HTTPException(status_code=502, detail="Failed to fetch image")
+
+    content_type = resp.headers.get("content-type", "image/png")
+
+    from fastapi.responses import Response
+    return Response(
+        content=resp.content,
+        media_type=content_type,
+        headers={
+            "Cache-Control": "public, max-age=86400",
+        }
+    )
+
+
 # Email fetch endpoints
 @router.get("/messages", response_model=EmailListResponse)
 async def fetch_emails_endpoint(

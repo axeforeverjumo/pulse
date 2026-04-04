@@ -8,7 +8,9 @@ from fastapi import HTTPException, status
 from lib.supabase_client import get_authenticated_supabase_client, get_service_role_client
 from lib.token_encryption import decrypt_ext_connection_tokens
 import logging
+import re
 import requests
+from urllib.parse import quote
 from googleapiclient.errors import HttpError
 from .google_api_helpers import (
     get_gmail_service,
@@ -21,6 +23,48 @@ from api.services.microsoft.microsoft_oauth_provider import get_valid_microsoft_
 from api.services.microsoft.microsoft_email_sync_provider import MicrosoftEmailSyncProvider
 
 logger = logging.getLogger(__name__)
+
+
+def rewrite_email_image_urls(html: str) -> str:
+    """Rewrite image src URLs in email HTML to go through our proxy."""
+    if not html:
+        return html
+
+    def replace_src(match):
+        url = match.group(1)
+        if url.startswith(('data:', 'cid:', '/api/')):
+            return match.group(0)
+        encoded_url = quote(url, safe='')
+        return f'src="/api/email/image-proxy?url={encoded_url}"'
+
+    return re.sub(r'src="(https?://[^"]+)"', replace_src, html)
+
+
+def rewrite_cid_urls(html: str, attachments: list, email_id: str) -> str:
+    """Replace cid: references with attachment download URLs."""
+    if not html or not attachments:
+        return html
+
+    cid_map = {}
+    for att in attachments:
+        headers = att.get('headers', [])
+        for h in headers:
+            if h.get('name', '').lower() == 'content-id':
+                cid = h['value'].strip('<>')
+                cid_map[cid] = att.get('attachmentId', '')
+
+    if not cid_map:
+        return html
+
+    def replace_cid(match):
+        cid = match.group(1)
+        att_id = cid_map.get(cid)
+        if att_id:
+            return f'src="/api/email/messages/{email_id}/attachments/{att_id}"'
+        return match.group(0)
+
+    return re.sub(r'src="cid:([^"]+)"', replace_cid, html)
+
 
 # Microsoft Graph API base URL
 GRAPH_API_URL = "https://graph.microsoft.com/v1.0"
@@ -123,6 +167,14 @@ def _format_cached_email(email_data: dict, provider: str) -> Dict[str, Any]:
             body_html = body_content
         else:
             body_plain = body_content
+
+    # Rewrite image URLs to go through our proxy (avoids CORS)
+    if body_html:
+        email_id = email_data.get('external_id', '')
+        attachments = email_data.get('attachments', []) or []
+        body_html = rewrite_email_image_urls(body_html)
+        if attachments:
+            body_html = rewrite_cid_urls(body_html, attachments, email_id)
 
     # Format to/cc/bcc - they're stored as arrays in DB
     to_list = email_data.get('to', []) or []
@@ -365,6 +417,14 @@ def _get_outlook_email_details(
 
     logger.info(f"✅ [Outlook] Retrieved email details for message {email_id}")
 
+    # Rewrite image URLs to go through our proxy (avoids CORS)
+    if email_details.get('body_html'):
+        email_details['body_html'] = rewrite_email_image_urls(email_details['body_html'])
+        if email_details.get('attachments'):
+            email_details['body_html'] = rewrite_cid_urls(
+                email_details['body_html'], email_details['attachments'], email_id
+            )
+
     return {
         "message": "Email details retrieved successfully",
         "email": email_details,
@@ -589,6 +649,14 @@ def get_email_details(
                 .execute()
 
         logger.info(f"✅ [Gmail] Retrieved email details for message {email_id}")
+
+        # Rewrite image URLs to go through our proxy (avoids CORS)
+        if email_details.get('body_html'):
+            email_details['body_html'] = rewrite_email_image_urls(email_details['body_html'])
+            if email_details.get('attachments'):
+                email_details['body_html'] = rewrite_cid_urls(
+                    email_details['body_html'], email_details['attachments'], email_id
+                )
 
         return {
             "message": "Email details retrieved successfully",
