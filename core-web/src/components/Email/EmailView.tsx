@@ -18,6 +18,7 @@ import {
   MagnifyingGlassIcon,
   XMarkIcon,
   CloudArrowDownIcon,
+  PlusIcon,
 } from "@heroicons/react/24/outline";
 import { motion, AnimatePresence } from "motion/react";
 import { Pencil, ArrowUpLeft, ArrowUpRight } from "lucide-react";
@@ -52,6 +53,7 @@ import { HeaderButtons } from "../MiniAppHeader";
 import EmailSettingsDropdown from "./EmailSettingsDropdown";
 import { sanitizeEmailHtml } from "../../utils/sanitizeHtml";
 import { useViewContextStore } from "../../stores/viewContextStore";
+import { useEmailAccountsStore } from "../../stores/emailAccountsStore";
 
 // Get initials from name or email
 function getInitials(name?: string, email?: string): string {
@@ -633,6 +635,16 @@ export default function EmailView() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const preloadedIdsRef = useRef<Set<string>>(new Set());
   const replyComposerRef = useRef<HTMLDivElement>(null);
+
+  // Email accounts store (for adding new accounts)
+  const {
+    accounts: emailAccounts,
+    isAdding: accountAdding,
+    addGoogleAccount,
+    addMicrosoftAccount,
+    fetchAccounts: fetchEmailAccounts,
+  } = useEmailAccountsStore();
+  const [showAddAccountPicker, setShowAddAccountPicker] = useState(false);
 
   // Track which accounts are expanded to show folders
   const [expandedAccounts, setExpandedAccounts] = useState<Set<string>>(
@@ -1608,7 +1620,60 @@ export default function EmailView() {
             })}
           </div>
 
-          <div className="p-2">
+          <div className="p-2 space-y-1">
+            {/* Add account shortcut — only show if under 5 accounts */}
+            {emailAccounts.length < 5 && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowAddAccountPicker((prev) => !prev)}
+                  disabled={accountAdding}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-1.5 text-[13px] text-text-secondary hover:text-text-body transition-colors rounded-lg hover:bg-bg-gray-dark/50 disabled:opacity-50"
+                  title="Añadir cuenta de correo"
+                >
+                  <PlusIcon className="w-3.5 h-3.5" />
+                  {accountAdding ? "Conectando..." : "Añadir cuenta"}
+                </button>
+
+                {/* Inline provider picker */}
+                {showAddAccountPicker && !accountAdding && (
+                  <div className="mt-1 p-2 rounded-lg border border-border-gray bg-white shadow-sm space-y-1">
+                    <button
+                      onClick={async () => {
+                        setShowAddAccountPicker(false);
+                        await addGoogleAccount();
+                        fetchEmailAccounts();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-text-body hover:bg-bg-gray transition-colors text-left"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" className="shrink-0">
+                        <path d="M19.6 10.23c0-.68-.06-1.36-.17-2.02H10v3.82h5.38a4.6 4.6 0 0 1-2 3.02v2.5h3.24c1.89-1.74 2.98-4.3 2.98-7.32Z" fill="#4285F4"/>
+                        <path d="M10 20c2.7 0 4.96-.89 6.62-2.42l-3.24-2.5c-.9.6-2.04.95-3.38.95-2.6 0-4.8-1.76-5.58-4.12H1.07v2.58A9.99 9.99 0 0 0 10 20Z" fill="#34A853"/>
+                        <path d="M4.42 11.91A6.01 6.01 0 0 1 4.1 10c0-.66.11-1.3.32-1.91V5.51H1.07A9.99 9.99 0 0 0 0 10c0 1.61.39 3.14 1.07 4.49l3.35-2.58Z" fill="#FBBC05"/>
+                        <path d="M10 3.96c1.47 0 2.78.5 3.82 1.5l2.86-2.86C14.96.99 12.7 0 10 0 6.09 0 2.71 2.24 1.07 5.51l3.35 2.58C5.2 5.72 7.4 3.96 10 3.96Z" fill="#EA4335"/>
+                      </svg>
+                      Google
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setShowAddAccountPicker(false);
+                        await addMicrosoftAccount();
+                        fetchEmailAccounts();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-text-body hover:bg-bg-gray transition-colors text-left"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 21 21" fill="none" className="shrink-0">
+                        <rect x="1" y="1" width="9" height="9" fill="#F25022"/>
+                        <rect x="11" y="1" width="9" height="9" fill="#7FBA00"/>
+                        <rect x="1" y="11" width="9" height="9" fill="#00A4EF"/>
+                        <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
+                      </svg>
+                      Microsoft
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             <button
               onClick={handleSync}
               disabled={isSyncing}
