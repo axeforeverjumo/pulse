@@ -184,7 +184,7 @@ export default function LandingPage() {
           onClick={() => setShowSignInModal(true)}
           className="px-4 py-2 bg-text-body text-white rounded-sm text-sm font-medium hover:bg-black/80 transition-all active:scale-[0.98]"
         >
-          Comenzar
+          Iniciar sesión
         </button>
       </nav>
 
@@ -215,7 +215,7 @@ export default function LandingPage() {
               onClick={() => setShowSignInModal(true)}
               className="px-4 py-2 bg-text-body text-white rounded-sm text-sm font-medium hover:bg-black/80 transition-all active:scale-[0.98] animate-enter"
             >
-              Comenzar
+              Iniciar sesión
             </button>
           </div>
 

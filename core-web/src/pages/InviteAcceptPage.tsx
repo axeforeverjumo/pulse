@@ -160,8 +160,14 @@ export default function InviteAcceptPage() {
         style={{ width: '100%', maxWidth: '28rem' }}
         className="bg-white border border-border-gray rounded-2xl p-6 shadow-sm"
       >
-        <h1 className="text-xl font-semibold text-text-body mb-2">Invitación al espacio de trabajo</h1>
-        <p className="text-sm text-text-secondary mb-6">{message || 'Preparando invitación...'}</p>
+        <h1 className="text-xl font-semibold text-text-body mb-2">
+          {state === 'needs-auth' ? 'Has sido invitado a unirte' : 'Invitación al espacio de trabajo'}
+        </h1>
+        <p className="text-sm text-text-secondary mb-6">
+          {state === 'needs-auth'
+            ? 'Crea tu cuenta o inicia sesión para empezar a colaborar.'
+            : (message || 'Preparando invitación...')}
+        </p>
 
         {state === 'loading' && (
           <div className="text-sm text-text-secondary">Cargando...</div>
@@ -177,13 +183,13 @@ export default function InviteAcceptPage() {
               onClick={() => void handleSignInGoogle()}
               className="w-full px-4 py-2 text-sm rounded-lg bg-black text-white"
             >
-              Iniciar sesión con Google
+              Continuar con Google
             </button>
             <button
               onClick={() => void handleSignInMicrosoft()}
               className="w-full px-4 py-2 text-sm rounded-lg border border-border-gray hover:bg-bg-gray"
             >
-              Iniciar sesión con Microsoft
+              Continuar con Microsoft
             </button>
           </div>
         )}
