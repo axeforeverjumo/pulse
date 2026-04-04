@@ -272,7 +272,8 @@ class UpdateEmailAccountRequest(BaseModel):
 @router.post("/users", response_model=UserCreateResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     user: UserCreate,
-    current_user_id: str = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id),
+    user_jwt: str = Depends(get_current_user_jwt),
 ):
     """
     Create a new user in the database.
@@ -280,12 +281,40 @@ async def create_user(
 
     Requires: Authorization header with user's Supabase JWT
     User ID in request must match the authenticated user.
+    Registration is by invitation only — the user's email must have
+    a pending entry in workspace_invitations.
     """
     # Validate user_id matches JWT
     if user.id != current_user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Cannot create user for a different user ID"
+        )
+
+    # Verify user has a pending invitation before allowing account creation
+    from lib.supabase_client import get_authenticated_async_client
+
+    try:
+        supabase = await get_authenticated_async_client(user_jwt)
+        invitations = await supabase.table('workspace_invitations')\
+            .select('id')\
+            .eq('email', user.email.lower().strip())\
+            .eq('status', 'pending')\
+            .limit(1)\
+            .execute()
+
+        if not invitations.data:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Registration is by invitation only. Please request an invitation."
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to verify invitation for {user.email}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to verify invitation status. Please try again later."
         )
 
     try:
