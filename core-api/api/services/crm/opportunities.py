@@ -124,24 +124,29 @@ async def create_opportunity(
     supabase = await get_authenticated_async_client(user_jwt)
 
     now = datetime.now(timezone.utc).isoformat()
+    # Map field names to match actual DB columns
+    name = data.get("name") or data.get("title") or "Sin nombre"
+    close_date = data.get("close_date") or data.get("expected_close_date")
+    currency = data.get("currency_code") or data.get("currency", "EUR")
+    owner = data.get("owner_id") or data.get("assigned_to")
+
     record = {
         "workspace_id": workspace_id,
-        "title": data["title"],
+        "name": name,
         "description": data.get("description"),
         "stage": data.get("stage", "lead"),
         "amount": data.get("amount"),
-        "currency": data.get("currency", "EUR"),
-        "expected_close_date": data.get("expected_close_date"),
+        "currency_code": currency,
+        "close_date": close_date,
         "contact_id": data.get("contact_id"),
         "company_id": data.get("company_id"),
-        "assigned_to": data.get("assigned_to"),
-        "probability": data.get("probability"),
-        "tags": data.get("tags", []),
-        "custom_fields": data.get("custom_fields", {}),
+        "owner_id": owner,
         "created_by": user_id,
         "created_at": now,
         "updated_at": now,
     }
+    # Remove None values to avoid inserting nulls for columns with defaults
+    record = {k: v for k, v in record.items() if v is not None}
 
     result = await (
         supabase.table("crm_opportunities")
