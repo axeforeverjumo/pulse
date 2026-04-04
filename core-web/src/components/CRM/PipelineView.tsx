@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { CurrencyDollarIcon, CalendarIcon, BuildingOfficeIcon } from '@heroicons/react/24/outline';
 import { toast } from 'sonner';
 import { useCrmStore } from '../../stores/crmStore';
-import { updateCrmOpportunity } from '../../api/client';
+import { updateCrmOpportunity, createCrmAgentTask, getWorkspaceOpenClawAgents, type OpenClawAgent } from '../../api/client';
 
 const PIPELINE_STAGES = [
   { id: 'lead', label: 'Lead', color: 'bg-slate-100 border-slate-200' },
@@ -17,10 +17,139 @@ interface PipelineViewProps {
   workspaceId: string;
 }
 
+const CRM_TASK_TYPES = [
+  { id: 'research_contact', label: 'Investigar contacto' },
+  { id: 'draft_email', label: 'Redactar email' },
+  { id: 'update_deal', label: 'Actualizar trato' },
+  { id: 'summarize_relationship', label: 'Resumir relacion' },
+  { id: 'custom', label: 'Tarea personalizada' },
+];
+
+function AgentAssignMenu({
+  opportunityId,
+  workspaceId,
+  agents,
+  onClose,
+  onAssigned,
+}: {
+  opportunityId: string;
+  workspaceId: string;
+  agents: OpenClawAgent[];
+  onClose: () => void;
+  onAssigned: () => void;
+}) {
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [selectedTask, setSelectedTask] = useState('research_contact');
+  const [instructions, setInstructions] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [onClose]);
+
+  const handleSubmit = async () => {
+    if (!selectedAgent) return;
+    setIsSubmitting(true);
+    try {
+      await createCrmAgentTask({
+        workspace_id: workspaceId,
+        agent_id: selectedAgent,
+        task_type: selectedTask,
+        opportunity_id: opportunityId,
+        instructions: instructions || undefined,
+      });
+      toast.success('Tarea de agente creada');
+      onAssigned();
+      onClose();
+    } catch (err: any) {
+      toast.error(err.message || 'Error al asignar agente');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      ref={menuRef}
+      onClick={(e) => e.stopPropagation()}
+      className="absolute right-0 top-full mt-1 z-50 w-64 bg-white rounded-xl shadow-lg border border-gray-100 p-3 space-y-2.5"
+    >
+      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Asignar agente</p>
+
+      {/* Agent select */}
+      <div className="space-y-1">
+        {agents.map((agent) => (
+          <button
+            key={agent.id}
+            type="button"
+            onClick={() => setSelectedAgent(agent.id)}
+            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[12px] transition-colors ${
+              selectedAgent === agent.id ? 'bg-violet-50 text-violet-700' : 'hover:bg-gray-50 text-gray-700'
+            }`}
+          >
+            <div className="w-5 h-5 rounded-full flex items-center justify-center bg-gradient-to-br from-violet-500 to-indigo-600 shrink-0">
+              {agent.avatar_url ? (
+                <img src={agent.avatar_url} alt={agent.name} className="w-full h-full rounded-full object-cover" />
+              ) : (
+                <span className="text-[9px] font-medium text-white">{agent.name.slice(0, 2).toUpperCase()}</span>
+              )}
+            </div>
+            <span className="truncate">{agent.name}</span>
+          </button>
+        ))}
+        {agents.length === 0 && (
+          <p className="text-[11px] text-gray-400 text-center py-2">No hay agentes disponibles</p>
+        )}
+      </div>
+
+      {/* Task type */}
+      {selectedAgent && (
+        <>
+          <select
+            value={selectedTask}
+            onChange={(e) => setSelectedTask(e.target.value)}
+            className="w-full text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-300"
+          >
+            {CRM_TASK_TYPES.map((t) => (
+              <option key={t.id} value={t.id}>{t.label}</option>
+            ))}
+          </select>
+
+          <textarea
+            value={instructions}
+            onChange={(e) => setInstructions(e.target.value)}
+            placeholder="Instrucciones (opcional)..."
+            rows={2}
+            className="w-full text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-300 resize-none"
+          />
+
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+            className="w-full text-[12px] font-medium text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50 rounded-lg px-3 py-1.5 transition-colors"
+          >
+            {isSubmitting ? 'Creando...' : 'Crear tarea'}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function PipelineView({ workspaceId }: PipelineViewProps) {
   const { opportunities, isLoading, fetchOpportunities, setSelectedOpportunity } = useCrmStore();
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
+  const [agentMenuOppId, setAgentMenuOppId] = useState<string | null>(null);
+  const [agents, setAgents] = useState<OpenClawAgent[]>([]);
 
   const loadOpportunities = useCallback(() => {
     fetchOpportunities(workspaceId);
@@ -29,6 +158,14 @@ export default function PipelineView({ workspaceId }: PipelineViewProps) {
   useEffect(() => {
     loadOpportunities();
   }, [loadOpportunities]);
+
+  // Fetch workspace agents
+  useEffect(() => {
+    if (!workspaceId) return;
+    getWorkspaceOpenClawAgents(workspaceId)
+      .then((res) => setAgents(res.agents || []))
+      .catch(() => {});
+  }, [workspaceId]);
 
   const handleDragStart = (e: React.DragEvent, id: string) => {
     e.dataTransfer.effectAllowed = 'move';
@@ -124,11 +261,51 @@ export default function PipelineView({ workspaceId }: PipelineViewProps) {
                   draggable
                   onDragStart={(e) => handleDragStart(e, opp.id)}
                   onClick={() => setSelectedOpportunity(opp)}
-                  className={`rounded-lg border border-white/80 bg-white p-3 shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow ${
+                  className={`relative rounded-lg border border-white/80 bg-white p-3 shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow ${
                     draggedId === opp.id ? 'opacity-40' : ''
                   }`}
                 >
-                  <p className="text-sm font-medium text-slate-800 truncate mb-1.5">{opp.name || 'Sin nombre'}</p>
+                  <div className="flex items-start justify-between gap-1">
+                    <p className="text-sm font-medium text-slate-800 truncate mb-1.5 flex-1">{opp.name || 'Sin nombre'}</p>
+                    {/* Agent assign button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAgentMenuOppId(agentMenuOppId === opp.id ? null : opp.id);
+                      }}
+                      title="Asignar agente IA"
+                      className={`shrink-0 p-0.5 rounded-md transition-colors ${
+                        opp.assigned_agent_id
+                          ? 'text-violet-600 bg-violet-50 hover:bg-violet-100'
+                          : 'text-slate-400 hover:text-violet-600 hover:bg-violet-50'
+                      }`}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="10" rx="2" />
+                        <circle cx="12" cy="5" r="4" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {/* Agent status badge */}
+                  {opp.agent_status && (
+                    <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium mb-1 ${
+                      opp.agent_status === 'working' ? 'bg-amber-50 text-amber-700' :
+                      opp.agent_status === 'done' ? 'bg-green-50 text-green-700' :
+                      opp.agent_status === 'failed' ? 'bg-red-50 text-red-700' :
+                      'bg-violet-50 text-violet-700'
+                    }`}>
+                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="10" rx="2" />
+                        <circle cx="12" cy="5" r="4" />
+                      </svg>
+                      {opp.agent_status === 'pending' ? 'Pendiente' :
+                       opp.agent_status === 'working' ? 'Trabajando' :
+                       opp.agent_status === 'done' ? 'Completado' : 'Error'}
+                    </div>
+                  )}
+
                   <div className="space-y-1">
                     {opp.amount && (
                       <div className="flex items-center gap-1.5 text-xs text-slate-600">
@@ -149,6 +326,17 @@ export default function PipelineView({ workspaceId }: PipelineViewProps) {
                       </div>
                     )}
                   </div>
+
+                  {/* Agent assignment menu */}
+                  {agentMenuOppId === opp.id && (
+                    <AgentAssignMenu
+                      opportunityId={opp.id}
+                      workspaceId={workspaceId}
+                      agents={agents}
+                      onClose={() => setAgentMenuOppId(null)}
+                      onAssigned={() => fetchOpportunities(workspaceId)}
+                    />
+                  )}
                 </div>
               ))}
             </div>

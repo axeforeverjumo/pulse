@@ -232,6 +232,28 @@ class SearchResultsResponse(BaseModel):
     total_count: int
 
 
+class CreateAgentTaskRequest(BaseModel):
+    """Request for creating a CRM agent task."""
+    workspace_id: str
+    agent_id: str
+    task_type: str = Field(..., description="research_contact, draft_email, update_deal, summarize_relationship, or custom")
+    opportunity_id: Optional[str] = None
+    contact_id: Optional[str] = None
+    instructions: Optional[str] = None
+
+
+class AgentTaskResponse(BaseModel):
+    task: Dict[str, Any]
+
+    class Config:
+        extra = "allow"
+
+
+class AgentTaskListResponse(BaseModel):
+    tasks: List[Dict[str, Any]]
+    count: int
+
+
 # ============================================================================
 # Contact Endpoints
 # ============================================================================
@@ -772,3 +794,141 @@ async def search_crm_endpoint(
         }
     except Exception as e:
         handle_api_exception(e, "Failed to search CRM", logger)
+
+
+# ============================================================================
+# Agent Queue Endpoints
+# ============================================================================
+
+VALID_CRM_TASK_TYPES = {"research_contact", "draft_email", "update_deal", "summarize_relationship", "custom"}
+
+
+@router.post("/agent-queue", response_model=AgentTaskResponse, status_code=status.HTTP_201_CREATED)
+async def create_agent_task_endpoint(
+    body: CreateAgentTaskRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Create a new CRM agent task in the queue."""
+    try:
+        if body.task_type not in VALID_CRM_TASK_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid task_type. Must be one of: {', '.join(sorted(VALID_CRM_TASK_TYPES))}",
+            )
+        if not body.opportunity_id and not body.contact_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Either opportunity_id or contact_id is required",
+            )
+
+        supabase = await get_authenticated_async_client(user_jwt)
+
+        row = {
+            "workspace_id": body.workspace_id,
+            "agent_id": body.agent_id,
+            "task_type": body.task_type,
+            "status": "pending",
+            "created_by": user_id,
+        }
+        if body.opportunity_id:
+            row["opportunity_id"] = body.opportunity_id
+        if body.contact_id:
+            row["contact_id"] = body.contact_id
+        if body.instructions:
+            row["instructions"] = body.instructions
+
+        result = await (
+            supabase.table("crm_agent_queue")
+            .insert(row)
+            .execute()
+        )
+
+        data = result.data or []
+        if not data:
+            raise RuntimeError("Failed to create agent task")
+
+        # Update opportunity agent status if linked
+        if body.opportunity_id:
+            await (
+                supabase.table("crm_opportunities")
+                .update({
+                    "assigned_agent_id": body.agent_id,
+                    "agent_status": "pending",
+                    "agent_instructions": body.instructions,
+                })
+                .eq("id", body.opportunity_id)
+                .execute()
+            )
+
+        return {"task": data[0]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to create agent task", logger)
+
+
+@router.get("/agent-queue", response_model=AgentTaskListResponse)
+async def list_agent_tasks_endpoint(
+    workspace_id: str = Query(..., description="Workspace ID"),
+    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
+    agent_id: Optional[str] = Query(None, description="Filter by agent"),
+    opportunity_id: Optional[str] = Query(None, description="Filter by opportunity"),
+    limit: int = Query(50, ge=1, le=200),
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """List CRM agent tasks for a workspace."""
+    try:
+        supabase = await get_authenticated_async_client(user_jwt)
+
+        query = (
+            supabase.table("crm_agent_queue")
+            .select("*")
+            .eq("workspace_id", workspace_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+        )
+        if status_filter:
+            query = query.eq("status", status_filter)
+        if agent_id:
+            query = query.eq("agent_id", agent_id)
+        if opportunity_id:
+            query = query.eq("opportunity_id", opportunity_id)
+
+        result = await query.execute()
+        tasks = result.data or []
+        return {"tasks": tasks, "count": len(tasks)}
+    except Exception as e:
+        handle_api_exception(e, "Failed to list agent tasks", logger)
+
+
+@router.get("/agent-queue/{task_id}", response_model=AgentTaskResponse)
+async def get_agent_task_endpoint(
+    task_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Get a specific CRM agent task with its result."""
+    try:
+        supabase = await get_authenticated_async_client(user_jwt)
+
+        result = await (
+            supabase.table("crm_agent_queue")
+            .select("*")
+            .eq("id", task_id)
+            .limit(1)
+            .execute()
+        )
+
+        data = result.data or []
+        if not data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Agent task not found",
+            )
+        return {"task": data[0]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to get agent task", logger)

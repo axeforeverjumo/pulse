@@ -3510,3 +3510,27 @@ export async function createCrmNote(data: any) {
 export async function searchCrm(workspaceId: string, query: string) {
   return api<any>(`/crm/search?workspace_id=${workspaceId}&q=${encodeURIComponent(query)}`);
 }
+
+// CRM Agent Queue
+export async function createCrmAgentTask(data: {
+  workspace_id: string;
+  agent_id: string;
+  task_type: string;
+  opportunity_id?: string;
+  contact_id?: string;
+  instructions?: string;
+}) {
+  return api<{ task: any }>('/crm/agent-queue', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function getCrmAgentTasks(workspaceId: string, filters?: { status?: string; agent_id?: string; opportunity_id?: string }) {
+  const params = new URLSearchParams({ workspace_id: workspaceId });
+  if (filters?.status) params.set('status', filters.status);
+  if (filters?.agent_id) params.set('agent_id', filters.agent_id);
+  if (filters?.opportunity_id) params.set('opportunity_id', filters.opportunity_id);
+  return api<{ tasks: any[]; count: number }>(`/crm/agent-queue?${params}`);
+}
+
+export async function getCrmAgentTask(taskId: string) {
+  return api<{ task: any }>(`/crm/agent-queue/${taskId}`);
+}
