@@ -737,6 +737,20 @@ def sync_outlook_incremental(
                 logger.warning(f"⚠️ [Outlook] Some batch errors: {result['errors'][:3]}")
                 batch_had_errors = True
 
+        # Proactively cache attachments for truly new emails
+        if added_count > 0:
+            try:
+                from api.services.email.file_cache import proactive_cache_new_email_attachments
+                new_only = [e for e in all_emails_data if e['external_id'] not in existing_ids]
+                proactive_cache_new_email_attachments(
+                    new_emails_data=new_only,
+                    user_id=user_id,
+                    supabase_client=supabase,
+                    microsoft_access_token=access_token,
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ [Outlook] Proactive attachment caching failed: {e}")
+
         # Store new deltaLink and update last synced (only if no errors)
         if new_delta_link and not (batch_had_errors or delete_had_errors):
             supabase.table('ext_connections')\

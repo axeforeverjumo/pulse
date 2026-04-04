@@ -195,6 +195,20 @@ def sync_gmail(
                 batch_had_errors = True
                 error_count += result['error_count']
 
+        # Proactively cache attachments for truly new emails
+        if synced_count > 0:
+            try:
+                from api.services.email.file_cache import proactive_cache_new_email_attachments
+                new_only = [e for e in all_emails_data if e['external_id'] not in existing_ids]
+                proactive_cache_new_email_attachments(
+                    new_emails_data=new_only,
+                    user_id=user_id,
+                    supabase_client=auth_supabase,
+                    user_jwt=user_jwt,
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ Proactive attachment caching failed: {e}")
+
         _reconcile_inactive_drafts(
             supabase_client=auth_supabase,
             user_id=user_id,
@@ -462,6 +476,20 @@ def process_gmail_history(
             if result['errors']:
                 logger.warning(f"⚠️ Some batch errors: {result['errors'][:3]}")
                 batch_had_errors = True
+
+        # Proactively cache attachments for truly new emails
+        if added_count > 0:
+            try:
+                from api.services.email.file_cache import proactive_cache_new_email_attachments
+                new_only = [e for e in all_emails_data if e['external_id'] not in existing_ids]
+                proactive_cache_new_email_attachments(
+                    new_emails_data=new_only,
+                    user_id=user_id,
+                    supabase_client=auth_supabase,
+                    user_jwt=user_jwt,
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ Proactive attachment caching failed: {e}")
 
         _reconcile_inactive_drafts(
             supabase_client=auth_supabase,
