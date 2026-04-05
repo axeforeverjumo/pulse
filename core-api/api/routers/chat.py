@@ -471,7 +471,16 @@ async def send_message(
             logger.info(f"[CHAT] User {user['id']} sending message in conversation {conversation_id} (timezone: {body.timezone}, attachments: {len(attachments)})")
             # Resolve workspace_ids: prefer new array field, fall back to legacy single field
             effective_workspace_ids = body.workspace_ids or ([body.workspace_id] if body.workspace_id else None)
-            async for chunk in stream_chat_response(formatted_history, user['id'], user['jwt'], context_dict, body.timezone, attachments, effective_workspace_ids, is_disconnected=request.is_disconnected):
+            # Detect if a dev agent is mentioned to use a more capable model
+            from api.services.chat.claude_agent import DEV_AGENT_NAMES, DEV_AGENT_MODEL
+            agent_model = None
+            msg_lower = body.content.lower() if body.content else ""
+            for dev_name in DEV_AGENT_NAMES:
+                if dev_name in msg_lower:
+                    agent_model = DEV_AGENT_MODEL
+                    break
+
+            async for chunk in stream_chat_response(formatted_history, user['id'], user['jwt'], context_dict, body.timezone, attachments, effective_workspace_ids, is_disconnected=request.is_disconnected, agent_model=agent_model):
                 # Parse NDJSON to build blocks with proper interleaving
                 stripped_chunk = chunk.strip()
                 if stripped_chunk:
