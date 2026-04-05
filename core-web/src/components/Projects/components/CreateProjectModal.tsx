@@ -43,7 +43,7 @@ export default function CreateProjectModal({
   const [repositoryUrl, setRepositoryUrl] = useState('');
   const [newRepoName, setNewRepoName] = useState('');
   const [githubToken, setGithubToken] = useState('');
-  const [showToken, setShowToken] = useState(false);
+  const [, setShowToken] = useState(false);
   const [isCreatingRepo, setIsCreatingRepo] = useState(false);
   const [githubError, setGithubError] = useState<string | null>(null);
 
