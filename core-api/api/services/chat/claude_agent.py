@@ -3,6 +3,10 @@ Chat agent streaming response handler using Claude (Anthropic).
 
 Streams responses via NDJSON events, handles tool calling with parallel
 execution, and image attachments.
+
+Authentication priority:
+  1. Claude CLI OAuth token (uses user's subscription, no API credits)
+  2. ANTHROPIC_API_KEY env var (fallback)
 """
 
 from typing import List, Dict, AsyncGenerator, Optional, Any
@@ -12,6 +16,7 @@ import uuid
 import base64
 import asyncio
 import time
+import subprocess
 import anthropic
 from anthropic import APIStatusError
 from api.config import settings
@@ -39,6 +44,12 @@ CLAUDE_RETRY_DELAY_S = 1.0
 # Transient HTTP status codes worth retrying
 _TRANSIENT_STATUS_CODES = {429, 500, 502, 503, 529}
 
+# Claude CLI credentials path
+_CLAUDE_CLI_CREDENTIALS_PATH = "/home/claude/.claude/.credentials.json"
+
+# Cached CLI token state
+_cli_token_cache: Optional[Dict[str, Any]] = None
+
 
 def _truncate_tool_result(result_str: str, max_chars: int = MAX_TOOL_RESULT_CHARS) -> str:
     """Truncate a tool result string to avoid blowing the context window."""
@@ -47,18 +58,135 @@ def _truncate_tool_result(result_str: str, max_chars: int = MAX_TOOL_RESULT_CHAR
     return result_str[:max_chars] + "... [truncated]"
 
 
+def _read_claude_cli_token() -> Optional[Dict[str, Any]]:
+    """
+    Read the OAuth token from the Claude CLI credentials file.
+
+    Returns dict with 'accessToken', 'expiresAt' (epoch ms), etc. or None.
+    """
+    try:
+        with open(_CLAUDE_CLI_CREDENTIALS_PATH, "r") as f:
+            data = json.load(f)
+        oauth = data.get("claudeAiOauth")
+        if oauth and oauth.get("accessToken"):
+            return oauth
+    except (FileNotFoundError, json.JSONDecodeError, PermissionError, KeyError) as e:
+        logger.debug(f"[CHAT] Could not read Claude CLI credentials: {e}")
+    return None
+
+
+def _refresh_claude_cli_token() -> Optional[str]:
+    """
+    Trigger a Claude CLI invocation to refresh the OAuth token.
+
+    The CLI automatically refreshes expired tokens on any invocation.
+    Returns the new access token or None on failure.
+    """
+    try:
+        logger.info("[CHAT] Refreshing Claude CLI OAuth token...")
+        result = subprocess.run(
+            ["su", "claude", "-c", "claude -p 'hi' --max-turns 1"],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode != 0:
+            logger.warning(f"[CHAT] Claude CLI refresh failed: {result.stderr[:200]}")
+            return None
+        # Re-read the refreshed token
+        oauth = _read_claude_cli_token()
+        if oauth:
+            logger.info("[CHAT] Claude CLI token refreshed successfully")
+            return oauth["accessToken"]
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+        logger.warning(f"[CHAT] Claude CLI refresh error: {e}")
+    return None
+
+
+def _get_claude_cli_api_key() -> Optional[str]:
+    """
+    Get a valid API key from the Claude CLI OAuth credentials.
+
+    Reads the cached token, checks expiry, and refreshes if needed.
+    Uses the user's Claude subscription instead of API credits.
+    """
+    global _cli_token_cache
+
+    oauth = _read_claude_cli_token()
+    if not oauth:
+        return None
+
+    access_token = oauth["accessToken"]
+    expires_at_ms = oauth.get("expiresAt", 0)
+    now_ms = time.time() * 1000
+
+    # Token is valid (with 5-minute buffer)
+    if expires_at_ms > now_ms + 300_000:
+        if _cli_token_cache is None or _cli_token_cache.get("accessToken") != access_token:
+            logger.info("[CHAT] Using Claude CLI OAuth token (subscription)")
+        _cli_token_cache = oauth
+        return access_token
+
+    # Token expired or about to expire — try to refresh
+    logger.info(f"[CHAT] Claude CLI token expired ({int((now_ms - expires_at_ms) / 1000)}s ago), refreshing...")
+    refreshed = _refresh_claude_cli_token()
+    if refreshed:
+        _cli_token_cache = _read_claude_cli_token()
+        return refreshed
+
+    # Refresh failed but token might still work (grace period)
+    if expires_at_ms > now_ms - 3600_000:  # expired less than 1 hour ago
+        logger.warning("[CHAT] Using possibly-expired CLI token (refresh failed, within grace period)")
+        return access_token
+
+    logger.warning("[CHAT] Claude CLI token expired and refresh failed")
+    return None
+
+
 # Initialize Anthropic client
 _anthropic_client = None
+_client_auth_source: Optional[str] = None  # Track which auth method is active
+
+
+def _reset_client():
+    """Reset the cached client (e.g., when token changes)."""
+    global _anthropic_client, _client_auth_source
+    _anthropic_client = None
+    _client_auth_source = None
 
 
 def get_anthropic_client() -> anthropic.AsyncAnthropic:
-    """Get or create the async Anthropic client."""
-    global _anthropic_client
-    if _anthropic_client is None:
+    """
+    Get or create the async Anthropic client.
+
+    Priority:
+      1. Claude CLI OAuth token (user's subscription, no API credits)
+      2. ANTHROPIC_API_KEY from settings (fallback)
+    """
+    global _anthropic_client, _client_auth_source
+
+    # Try Claude CLI token first
+    cli_key = _get_claude_cli_api_key()
+    if cli_key:
+        # Recreate client if token changed
+        if _client_auth_source != "cli" or _anthropic_client is None:
+            _anthropic_client = anthropic.AsyncAnthropic(api_key=cli_key)
+            _client_auth_source = "cli"
+            logger.info("[CHAT] Anthropic client initialized with Claude CLI token (subscription)")
+        else:
+            # Update the API key if it changed (token refresh)
+            _anthropic_client.api_key = cli_key
+        return _anthropic_client
+
+    # Fallback to configured API key
+    if _client_auth_source != "api_key" or _anthropic_client is None:
         api_key = settings.anthropic_api_key
         if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY not set in configuration")
+            raise ValueError(
+                "No Claude authentication available. "
+                "Neither Claude CLI credentials nor ANTHROPIC_API_KEY found."
+            )
         _anthropic_client = anthropic.AsyncAnthropic(api_key=api_key)
+        _client_auth_source = "api_key"
+        logger.info("[CHAT] Anthropic client initialized with ANTHROPIC_API_KEY (fallback)")
     return _anthropic_client
 
 
@@ -396,6 +524,18 @@ async def stream_chat_response(
 
             except APIStatusError as e:
                 last_error = e
+
+                # Handle expired OAuth token (401) — refresh and retry
+                if e.status_code == 401 and _client_auth_source == "cli" and attempt < CLAUDE_MAX_RETRIES:
+                    logger.warning("[CHAT] Auth error with CLI token, attempting refresh...")
+                    _reset_client()
+                    refreshed_key = _get_claude_cli_api_key()
+                    if refreshed_key:
+                        client = get_anthropic_client()
+                        collected_text = ""
+                        collected_tool_uses = []
+                        continue
+
                 is_transient = e.status_code in _TRANSIENT_STATUS_CODES
                 # Catch mid-stream overload errors (SSE error on 200 response)
                 if not is_transient:
