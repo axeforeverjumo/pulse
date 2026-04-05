@@ -168,7 +168,7 @@ function SignInModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void
 
 export default function LandingPage() {
   const [showSignInModal, setShowSignInModal] = useState(false);
-  const [activeApp, setActiveApp] = useState<'chat' | 'messages' | 'projects' | 'email' | 'calendar'>('chat');
+  const [activeApp, setActiveApp] = useState<'chat' | 'messages' | 'crm' | 'projects' | 'agents' | 'email' | 'calendar'>('chat');
 
   return (
     <div className="h-screen overflow-hidden bg-white fixed inset-0 z-50 flex flex-col">
@@ -234,7 +234,9 @@ export default function LandingPage() {
                   {[
                     { id: 'chat', icon: (isActive: boolean) => <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke={isActive ? 'black' : 'rgba(0,0,0,0.4)'} strokeWidth="1.5"><path d="M7.99902 12.4971H15.499M8.00391 7.49982L11.499 7.49707M19.9983 2H4C2.89543 2 2 2.89543 2 4V15.9971C2 17.1016 2.89543 17.9971 4 17.9971H5.99902V20.0333C5.99902 20.8506 6.92623 21.3227 7.58719 20.842L11.499 17.9971H19.9983C21.1029 17.9971 21.9983 17.1016 21.9983 15.9971V4C21.9983 2.89543 21.1029 2 19.9983 2Z"/></svg> },
                     { id: 'messages', icon: (isActive: boolean) => <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke={isActive ? 'black' : 'rgba(0,0,0,0.4)'} strokeWidth="1.5"><path d="M13 7C13 9.20914 11.2091 11 9 11C6.79086 11 5 9.20914 5 7C5 4.79086 6.79086 3 9 3C11.2091 3 13 4.79086 13 7Z"/><path d="M15 11C17.2091 11 19 9.20914 19 7C19 4.79086 17.2091 3 15 3"/><path d="M16 19C16 16.2386 13.7614 14 11 14H7C4.23858 14 2 16.2386 2 19V21H16V19Z"/><path d="M19 21H22V19C22 16.2386 19.7614 14 17 14"/></svg> },
+                    { id: 'crm', icon: (isActive: boolean) => <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke={isActive ? 'black' : 'rgba(0,0,0,0.4)'} strokeWidth="1.5"><path d="M3 3v18h18"/><path d="m7 16 4-8 4 4 4-6"/></svg> },
                     { id: 'projects', icon: (isActive: boolean) => <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke={isActive ? 'black' : 'rgba(0,0,0,0.4)'} strokeWidth="1.5"><path d="M3 21L8.5 15.5"/><path d="M13.3625 7.39582L15.7087 3.4855C15.8894 3.1843 16.2158 2.99365 16.5657 3.02451C19.0645 3.2449 20.7551 4.93548 20.9755 7.43434C21.0064 7.78425 20.8157 8.11058 20.5145 8.2913L16.6043 10.6374C16.2419 10.8549 16.0553 11.2766 16.1382 11.691L16.4198 13.0989C16.7856 14.9278 16.28 16.8229 15.0517 18.2266L14.2039 19.1956C13.8229 19.6309 13.1532 19.6532 12.7442 19.2442L4.7554 11.2554C4.34652 10.8465 4.36862 10.1771 4.80359 9.79608L5.769 8.95041C7.17262 7.72088 9.06839 7.21437 10.8982 7.58001L12.3091 7.86194C12.7234 7.94473 13.1451 7.75815 13.3625 7.39582Z"/></svg> },
+                    { id: 'agents', icon: (isActive: boolean) => <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke={isActive ? 'black' : 'rgba(0,0,0,0.4)'} strokeWidth="1.5"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><circle cx="15" cy="10" r="1.5"/><path d="M9 15h6"/><path d="M8 2v2M16 2v2"/></svg> },
                     { id: 'email', icon: (isActive: boolean) => <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke={isActive ? 'black' : 'rgba(0,0,0,0.4)'} strokeWidth="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg> },
                     { id: 'calendar', icon: (isActive: boolean) => <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke={isActive ? 'black' : 'rgba(0,0,0,0.4)'} strokeWidth="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> },
                   ].map((app) => (
@@ -507,6 +509,92 @@ export default function LandingPage() {
                                   </div>
                                 </div>
                               </div>
+                            </div>
+                          </motion.div>
+                        )}
+                        {/* ── CRM ── */}
+                        {activeApp === 'crm' && (
+                          <motion.div
+                            key="crm"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                            className="flex-1 flex flex-col"
+                          >
+                            <div className="h-7 border-b border-black/[0.04] flex items-center gap-1 px-2 bg-white">
+                              <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 3v18h18"/><path d="m7 16 4-8 4 4 4-6"/></svg>
+                              <span className="text-[9px] font-medium">Pipeline</span>
+                            </div>
+                            <div className="flex-1 flex gap-1 p-1.5 bg-white overflow-hidden">
+                              {[
+                                { title: "Lead", color: "#6B7280", cards: [
+                                  { name: "Rister - Presupuesto", amount: "4.000\u20AC" },
+                                  { name: "Tech Corp - Consultor\u00EDa", amount: "12.000\u20AC" },
+                                ]},
+                                { title: "Calificado", color: "#3B82F6", cards: [
+                                  { name: "ID Waste - Odoo", amount: "8.929\u20AC" },
+                                ]},
+                                { title: "Propuesta", color: "#F59E0B", cards: [
+                                  { name: "Spora - Fase 2", amount: "6.500\u20AC" },
+                                ]},
+                                { title: "Ganado", color: "#22C55E", cards: [
+                                  { name: "SolidTeam - Formaci\u00F3n", amount: "3.200\u20AC" },
+                                ]},
+                              ].map((col) => (
+                                <div key={col.title} className="flex-1 min-w-0 flex flex-col bg-[#F9F9F9] rounded p-1">
+                                  <div className="flex items-center gap-1 mb-1">
+                                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: col.color }} />
+                                    <span className="text-[6px] font-medium text-text-secondary truncate">{col.title}</span>
+                                    <span className="text-[6px] text-text-tertiary">{col.cards.length}</span>
+                                  </div>
+                                  <div className="space-y-1">
+                                    {col.cards.map((card) => (
+                                      <div key={card.name} className="bg-white rounded p-1.5 border border-black/[0.04]">
+                                        <p className="text-[7px] font-medium leading-tight">{card.name}</p>
+                                        <p className="text-[6px] text-emerald-600 font-medium mt-0.5">{card.amount}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                        {/* ── Agents ── */}
+                        {activeApp === 'agents' && (
+                          <motion.div
+                            key="agents"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                            className="flex-1 flex flex-col"
+                          >
+                            <div className="h-7 border-b border-black/[0.04] flex items-center gap-1 px-2 bg-white">
+                              <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+                              <span className="text-[9px] font-medium">Agentes IA</span>
+                            </div>
+                            <div className="flex-1 bg-white px-2 py-1.5 space-y-1.5">
+                              {[
+                                { name: "Claudia Torres", status: "Trabajando", task: "Investigando cliente Rister", color: "#7C3AED", statusColor: "#22C55E" },
+                                { name: "Jarvis", status: "Disponible", task: "Listo para asignar", color: "#2563EB", statusColor: "#9CA3AF" },
+                                { name: "Marta Bolt", status: "Trabajando", task: "Redactando presupuesto", color: "#DC2626", statusColor: "#22C55E" },
+                                { name: "Donna Sullivan", status: "Disponible", task: "Listo para asignar", color: "#F59E0B", statusColor: "#9CA3AF" },
+                              ].map((agent) => (
+                                <div key={agent.name} className="flex items-center gap-1.5 bg-[#F9F9F9] rounded-lg px-2 py-1.5">
+                                  <div className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[6px] font-semibold shrink-0" style={{ backgroundColor: agent.color }}>
+                                    {agent.name.split(' ').map(n => n[0]).join('')}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1">
+                                      <p className="text-[7px] font-semibold">{agent.name}</p>
+                                      <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: agent.statusColor }} />
+                                    </div>
+                                    <p className="text-[6px] text-text-tertiary truncate">{agent.task}</p>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           </motion.div>
                         )}
