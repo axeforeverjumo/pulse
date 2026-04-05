@@ -141,6 +141,11 @@ export default function ProjectsView() {
     server_user?: string;
     server_password?: string;
     server_port?: number;
+    deploy_mode?: 'local' | 'external' | 'dedicated';
+    deploy_server_id?: string;
+    deploy_subdomain?: string;
+    deploy_url?: string;
+    specs_enabled?: boolean;
   }) => {
     if (!activeProjectId) return;
     await updateProjectBoard(activeProjectId, updates);
@@ -209,6 +214,17 @@ export default function ProjectsView() {
                   <h1 className="text-sm sm:text-base font-semibold text-slate-900 truncate">
                     {activeBoard?.name || "Project Board"}
                   </h1>
+                  {activeBoard?.deploy_url && (
+                    <a
+                      href={activeBoard.deploy_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-full hover:bg-blue-100 transition-colors truncate max-w-[200px]"
+                      title={activeBoard.deploy_url}
+                    >
+                      {activeBoard.deploy_url.replace(/^https?:\/\//, '')}
+                    </a>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <AgentQueuePanel

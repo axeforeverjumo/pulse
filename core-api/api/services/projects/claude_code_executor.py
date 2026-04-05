@@ -167,6 +167,25 @@ IMPORTANTE:
 - Haz commit y push cuando termines.
 - Si no puedes completar la tarea en una sola iteración, describe lo que falta."""
 
+    # Auto-spec generation (enabled by default via board.specs_enabled)
+    specs_enabled = board.get("specs_enabled", True)
+    if specs_enabled is not False:
+        prompt += """
+
+ESPECIFICACIÓN TÉCNICA:
+Después de completar tu tarea, actualiza o crea el archivo de especificación:
+- Ubicación: specs/{section}/SPEC.md (crea la carpeta si no existe)
+- La sección corresponde al área del proyecto que tocaste (ej: specs/auth/, specs/api/, specs/frontend/)
+- El SPEC.md debe incluir:
+  * Descripción de los cambios realizados
+  * Archivos modificados/creados
+  * Decisiones técnicas tomadas y por qué
+  * Dependencias añadidas
+  * Cómo probar los cambios
+  * Fecha y referencia a la tarea
+- Si el SPEC.md ya existe, AÑADE al final una nueva sección con la fecha
+- Haz commit del spec junto con los cambios de código"""
+
     if previous_context:
         iteration = previous_context.get("iteration_count", 1) + 1
         prev_result = previous_context.get("previous_result", "No disponible")

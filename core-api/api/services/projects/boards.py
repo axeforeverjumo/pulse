@@ -199,6 +199,11 @@ async def update_board(
     server_user: Optional[str] = None,
     server_password: Optional[str] = None,
     server_port: Optional[int] = None,
+    deploy_mode: Optional[str] = None,
+    deploy_server_id: Optional[str] = None,
+    deploy_subdomain: Optional[str] = None,
+    deploy_url: Optional[str] = None,
+    specs_enabled: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
     Update a board's fields.
@@ -246,6 +251,16 @@ async def update_board(
         updates["server_password"] = server_password
     if server_port is not None:
         updates["server_port"] = server_port
+    if deploy_mode is not None:
+        updates["deploy_mode"] = deploy_mode
+    if deploy_server_id is not None:
+        updates["deploy_server_id"] = deploy_server_id
+    if deploy_subdomain is not None:
+        updates["deploy_subdomain"] = deploy_subdomain
+    if deploy_url is not None:
+        updates["deploy_url"] = deploy_url
+    if specs_enabled is not None:
+        updates["specs_enabled"] = specs_enabled
 
     if not updates:
         # Nothing to update, just return current board

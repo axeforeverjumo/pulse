@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import { XMarkIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import type { ProjectBoard } from "../../../api/client";
+import { updateDeployConfig, triggerDeploy } from "../../../api/client";
 import AgentStatsPanel from "./AgentStatsPanel";
 import RoutinesPanel from "./RoutinesPanel";
 import OrgChartPanel from "./OrgChartPanel";
@@ -24,6 +25,11 @@ interface ProjectsSettingsModalProps {
     server_user?: string;
     server_password?: string;
     server_port?: number;
+    deploy_mode?: 'local' | 'external' | 'dedicated';
+    deploy_server_id?: string;
+    deploy_subdomain?: string;
+    deploy_url?: string;
+    specs_enabled?: boolean;
   }) => Promise<void>;
   onDelete?: () => void;
 }
@@ -48,6 +54,13 @@ export default function ProjectsSettingsModal({
   const [serverUser, setServerUser] = useState(board?.server_user || "");
   const [serverPassword, setServerPassword] = useState(board?.server_password || "");
   const [serverPort, setServerPort] = useState(board?.server_port ? String(board.server_port) : "");
+  const [deployMode, setDeployMode] = useState<'local' | 'external' | 'dedicated'>(board?.deploy_mode || 'local');
+  const [deployServerId, setDeployServerId] = useState(board?.deploy_server_id || '');
+  const [deploySubdomain, setDeploySubdomain] = useState(board?.deploy_subdomain || '');
+  const [deployUrl, setDeployUrl] = useState(board?.deploy_url || '');
+  const [specsEnabled, setSpecsEnabled] = useState(board?.specs_enabled !== false);
+  const [isDeploying, setIsDeploying] = useState(false);
+  const [deployError, setDeployError] = useState<string | null>(null);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -65,6 +78,12 @@ export default function ProjectsSettingsModal({
       setServerUser(board?.server_user || "");
       setServerPassword(board?.server_password || "");
       setServerPort(board?.server_port ? String(board.server_port) : "");
+      setDeployMode(board?.deploy_mode || 'local');
+      setDeployServerId(board?.deploy_server_id || '');
+      setDeploySubdomain(board?.deploy_subdomain || '');
+      setDeployUrl(board?.deploy_url || '');
+      setSpecsEnabled(board?.specs_enabled !== false);
+      setDeployError(null);
       setShowAdvancedOptions(false);
       setActiveTab(initialTab);
     }
@@ -86,6 +105,11 @@ export default function ProjectsSettingsModal({
         server_user: isDevelopment ? (serverUser.trim() || undefined) : undefined,
         server_password: isDevelopment ? (serverPassword.trim() || undefined) : undefined,
         server_port: isDevelopment && serverPort.trim() ? Number(serverPort.trim()) : undefined,
+        deploy_mode: isDevelopment ? deployMode : undefined,
+        deploy_server_id: isDevelopment && deployServerId.trim() ? deployServerId.trim() : undefined,
+        deploy_subdomain: isDevelopment && deploySubdomain.trim() ? deploySubdomain.trim() : undefined,
+        deploy_url: isDevelopment && deployUrl.trim() ? deployUrl.trim() : undefined,
+        specs_enabled: isDevelopment ? specsEnabled : undefined,
       });
       onClose();
     } catch (err) {
@@ -349,6 +373,139 @@ export default function ProjectsSettingsModal({
                     <p className="text-[11px] text-text-tertiary">
                       Estos datos se usan como contexto de ejecución para agentes.
                     </p>
+
+                    {/* Deploy Mode */}
+                    <div className="border-t border-border-light pt-3 mt-3">
+                      <label className="block text-xs font-medium text-text-secondary mb-2">Modo de despliegue</label>
+                      <div className="space-y-1.5">
+                        <label className="flex items-center gap-2 text-[13px] text-gray-700 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="deployMode"
+                            value="local"
+                            checked={deployMode === 'local'}
+                            onChange={() => setDeployMode('local')}
+                            className="text-gray-900 focus:ring-gray-300"
+                          />
+                          Servidor local
+                        </label>
+                        <label className="flex items-center gap-2 text-[13px] text-gray-700 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="deployMode"
+                            value="external"
+                            checked={deployMode === 'external'}
+                            onChange={() => setDeployMode('external')}
+                            className="text-gray-900 focus:ring-gray-300"
+                          />
+                          Servidor externo
+                        </label>
+                        <label className="flex items-center gap-2 text-[13px] text-gray-700 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="deployMode"
+                            value="dedicated"
+                            checked={deployMode === 'dedicated'}
+                            onChange={() => setDeployMode('dedicated')}
+                            className="text-gray-900 focus:ring-gray-300"
+                          />
+                          Servidor dedicado
+                        </label>
+                      </div>
+
+                      {(deployMode === 'external' || deployMode === 'dedicated') && (
+                        <div className="mt-3 space-y-2">
+                          <div>
+                            <label className="block text-xs text-text-secondary mb-1">ID del servidor</label>
+                            <input
+                              type="text"
+                              value={deployServerId}
+                              onChange={(e) => setDeployServerId(e.target.value)}
+                              placeholder="UUID del servidor en workspace_servers"
+                              className="w-full px-3 py-2 text-[13px] border border-border-gray rounded-lg bg-white outline-none focus:border-text-tertiary"
+                            />
+                          </div>
+                          {deployMode === 'external' && (
+                            <div>
+                              <label className="block text-xs text-text-secondary mb-1">Subdominio</label>
+                              <input
+                                type="text"
+                                value={deploySubdomain}
+                                onChange={(e) => setDeploySubdomain(e.target.value)}
+                                placeholder="miproyecto"
+                                className="w-full px-3 py-2 text-[13px] border border-border-gray rounded-lg bg-white outline-none focus:border-text-tertiary"
+                              />
+                              <p className="text-[11px] text-text-tertiary mt-1">
+                                Se creará como subdominio.dominio-del-servidor.com
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {deployMode === 'external' && deployServerId && deploySubdomain && (
+                        <div className="mt-3">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!board?.id) return;
+                              setIsDeploying(true);
+                              setDeployError(null);
+                              try {
+                                await updateDeployConfig(board.id, {
+                                  deploy_mode: deployMode,
+                                  deploy_server_id: deployServerId,
+                                  deploy_subdomain: deploySubdomain,
+                                });
+                                const result = await triggerDeploy(board.id);
+                                setDeployUrl(result.deploy_url);
+                              } catch (err) {
+                                setDeployError(err instanceof Error ? err.message : 'Error al desplegar');
+                              } finally {
+                                setIsDeploying(false);
+                              }
+                            }}
+                            disabled={isDeploying}
+                            className="px-3 py-1.5 text-xs font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50"
+                          >
+                            {isDeploying ? 'Desplegando...' : 'Desplegar ahora'}
+                          </button>
+                          {deployError && (
+                            <p className="text-[11px] text-red-500 mt-1">{deployError}</p>
+                          )}
+                        </div>
+                      )}
+
+                      {deployUrl && (
+                        <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+                          <p className="text-[11px] text-text-secondary mb-0.5">URL de despliegue</p>
+                          <a
+                            href={deployUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[13px] text-blue-600 hover:underline break-all"
+                          >
+                            {deployUrl}
+                          </a>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Specs Toggle */}
+                    <div className="border-t border-border-light pt-3 mt-3">
+                      <label className="flex items-center gap-2 text-[13px] text-gray-700 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={specsEnabled}
+                          onChange={(e) => setSpecsEnabled(e.target.checked)}
+                          className="rounded border-gray-300 text-gray-900 focus:ring-gray-300"
+                        />
+                        Generar especificaciones automáticas
+                      </label>
+                      <p className="text-[11px] text-text-tertiary mt-1 ml-5">
+                        Los agentes crearán specs/SPEC.md documentando cada cambio realizado.
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>

@@ -116,6 +116,11 @@ class UpdateBoardRequest(BaseModel):
     server_user: Optional[str] = None
     server_password: Optional[str] = None
     server_port: Optional[int] = Field(default=None, ge=1, le=65535)
+    deploy_mode: Optional[str] = Field(None, description="local | external | dedicated")
+    deploy_server_id: Optional[str] = None
+    deploy_subdomain: Optional[str] = None
+    deploy_url: Optional[str] = None
+    specs_enabled: Optional[bool] = None
 
 
 class CreateStateRequest(BaseModel):
@@ -2543,6 +2548,11 @@ async def update_board_endpoint(
             server_user=request.server_user,
             server_password=request.server_password,
             server_port=request.server_port,
+            deploy_mode=request.deploy_mode,
+            deploy_server_id=request.deploy_server_id,
+            deploy_subdomain=request.deploy_subdomain,
+            deploy_url=request.deploy_url,
+            specs_enabled=request.specs_enabled,
         )
         return board
     except ValueError as e:
@@ -2561,6 +2571,126 @@ async def delete_board_endpoint(
         return await delete_board(user_jwt, board_id)
     except Exception as e:
         handle_api_exception(e, "Failed to delete board", logger)
+
+
+# ============================================================================
+# Deploy Configuration Endpoints
+# ============================================================================
+
+
+class DeployConfigRequest(BaseModel):
+    """Request model for updating deploy configuration."""
+    deploy_mode: Optional[str] = Field(None, description="local | external | dedicated")
+    deploy_server_id: Optional[str] = None
+    deploy_subdomain: Optional[str] = None
+    specs_enabled: Optional[bool] = None
+
+
+class TriggerDeployRequest(BaseModel):
+    """Request model for triggering deployment setup."""
+    target_port: int = Field(default=3000, ge=1, le=65535, description="Port the app listens on")
+
+
+@router.patch("/boards/{board_id}/deploy-config")
+async def update_deploy_config_endpoint(
+    board_id: str,
+    request: DeployConfigRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Update deployment mode, server, and subdomain for a board."""
+    try:
+        from api.services.projects.deploy_manager import update_deploy_config
+
+        result = await update_deploy_config(
+            board_id=board_id,
+            user_jwt=user_jwt,
+            deploy_mode=request.deploy_mode,
+            deploy_server_id=request.deploy_server_id,
+            deploy_subdomain=request.deploy_subdomain,
+            specs_enabled=request.specs_enabled,
+        )
+        return {"status": "ok", "config": result}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        handle_api_exception(e, "Failed to update deploy config", logger)
+
+
+@router.post("/boards/{board_id}/deploy")
+async def trigger_deploy_endpoint(
+    board_id: str,
+    request: TriggerDeployRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Trigger deployment setup (create subdomain, nginx, SSL on external server)."""
+    try:
+        from api.services.projects.deploy_manager import get_deploy_config, setup_external_deployment
+
+        config = await get_deploy_config(board_id, user_jwt)
+        if config.get("deploy_mode") != "external":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Deploy trigger is only for 'external' mode",
+            )
+
+        if not config.get("deploy_server_id"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No server configured for this board",
+            )
+
+        if not config.get("deploy_subdomain"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No subdomain configured for this board",
+            )
+
+        # Get repo URL from the board
+        from api.services.projects import get_board_by_id as _get_board
+        board = await _get_board(user_jwt, board_id)
+        if not board or not board.get("repository_url"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Board must have a repository URL configured",
+            )
+
+        result = await setup_external_deployment(
+            server_id=config["deploy_server_id"],
+            repo_url=board["repository_url"],
+            subdomain=config["deploy_subdomain"],
+            user_jwt=user_jwt,
+            target_port=request.target_port,
+        )
+
+        # Save the deploy URL back to the board
+        from api.services.projects.deploy_manager import update_deploy_config as _update
+        await _update(
+            board_id=board_id,
+            user_jwt=user_jwt,
+            deploy_url=result["deploy_url"],
+        )
+
+        return {"status": "deployed", **result}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        handle_api_exception(e, "Failed to trigger deployment", logger)
+
+
+@router.get("/boards/{board_id}/deploy-status")
+async def get_deploy_status_endpoint(
+    board_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Check deployment status for a board."""
+    try:
+        from api.services.projects.deploy_manager import get_deploy_status
+
+        return await get_deploy_status(board_id, user_jwt)
+    except Exception as e:
+        handle_api_exception(e, "Failed to get deploy status", logger)
 
 
 # ============================================================================
