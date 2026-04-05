@@ -2451,6 +2451,11 @@ export interface ProjectBoard {
   server_user?: string;
   server_password?: string;
   server_port?: number;
+  deploy_mode?: 'local' | 'external' | 'dedicated';
+  deploy_server_id?: string;
+  deploy_subdomain?: string;
+  deploy_url?: string;
+  specs_enabled?: boolean;
   position: number;
   next_issue_number: number;
   created_by?: string;
@@ -2654,6 +2659,11 @@ export async function updateProjectBoard(boardId: string, updates: {
   server_user?: string;
   server_password?: string;
   server_port?: number;
+  deploy_mode?: 'local' | 'external' | 'dedicated';
+  deploy_server_id?: string;
+  deploy_subdomain?: string;
+  deploy_url?: string;
+  specs_enabled?: boolean;
 }): Promise<ProjectBoard> {
   return api(`/projects/boards/${boardId}`, {
     method: 'PATCH',
@@ -2663,6 +2673,41 @@ export async function updateProjectBoard(boardId: string, updates: {
 
 export async function deleteProjectBoard(boardId: string): Promise<{ status: string }> {
   return api(`/projects/boards/${boardId}`, { method: 'DELETE' });
+}
+
+// --- Deploy Configuration ---
+
+export async function updateDeployConfig(boardId: string, config: {
+  deploy_mode?: 'local' | 'external' | 'dedicated';
+  deploy_server_id?: string;
+  deploy_subdomain?: string;
+  specs_enabled?: boolean;
+}): Promise<{ status: string; config: Record<string, unknown> }> {
+  return api(`/projects/boards/${boardId}/deploy-config`, {
+    method: 'PATCH',
+    body: JSON.stringify(config),
+  });
+}
+
+export async function triggerDeploy(boardId: string, options?: {
+  target_port?: number;
+}): Promise<{ status: string; deploy_url: string; deploy_dir: string }> {
+  return api(`/projects/boards/${boardId}/deploy`, {
+    method: 'POST',
+    body: JSON.stringify(options || {}),
+  });
+}
+
+export async function getDeployStatus(boardId: string): Promise<{
+  board_id: string;
+  deploy_mode: string;
+  deploy_url?: string;
+  deploy_subdomain?: string;
+  is_deployed: boolean;
+  server_status?: string;
+  server_name?: string;
+}> {
+  return api(`/projects/boards/${boardId}/deploy-status`);
 }
 
 // --- States ---
@@ -3648,4 +3693,93 @@ export async function getCrmWorkflowRuns(workspaceId: string, workflowId?: strin
 
 export async function triggerCrmWorkflow(workflowId: string, data: { workspace_id: string; opportunity_id?: string }) {
   return api<any>(`/crm/workflows/${workflowId}/trigger`, { method: 'POST', body: JSON.stringify(data) });
+}
+
+// =============================================================================
+// Server Management
+// =============================================================================
+
+export interface WorkspaceServer {
+  id: string;
+  workspace_id: string;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  auth_type: 'ssh_key' | 'password' | 'both';
+  wildcard_domain?: string;
+  status: 'pending' | 'verified' | 'failed' | 'offline';
+  last_verified_at?: string;
+  verification_details?: {
+    os?: string;
+    docker_installed?: boolean;
+    docker_version?: string;
+    nginx_installed?: boolean;
+    nginx_version?: string;
+    disk_total_gb?: number;
+    disk_used_gb?: number;
+    disk_free_gb?: number;
+    ram_total_mb?: number;
+    ram_available_mb?: number;
+    error?: string;
+  };
+  is_default: boolean;
+  created_at: string;
+}
+
+export interface WorkspaceSSHKey {
+  id: string;
+  workspace_id: string;
+  name: string;
+  public_key: string;
+  fingerprint?: string;
+  created_by?: string;
+  created_at: string;
+}
+
+export async function listServers(workspaceId: string) {
+  return api<{ servers: WorkspaceServer[]; count: number }>(`/servers?workspace_id=${workspaceId}`);
+}
+
+export async function addServer(data: {
+  workspace_id: string;
+  name: string;
+  host: string;
+  port?: number;
+  username?: string;
+  auth_type?: string;
+  ssh_private_key?: string;
+  password?: string;
+  wildcard_domain?: string;
+  is_default?: boolean;
+}) {
+  return api<{ server: WorkspaceServer }>('/servers', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function verifyServer(serverId: string) {
+  return api<{ status: string; details: WorkspaceServer['verification_details'] }>(`/servers/${serverId}/verify`, { method: 'POST' });
+}
+
+export async function updateServer(serverId: string, data: Record<string, any>) {
+  return api<{ server: WorkspaceServer }>(`/servers/${serverId}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export async function removeServer(serverId: string) {
+  return api<{ ok: boolean }>(`/servers/${serverId}`, { method: 'DELETE' });
+}
+
+export async function generateSSHKey(data: { workspace_id: string; name?: string }) {
+  return api<{ key: WorkspaceSSHKey }>('/servers/ssh-keys/generate', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function listSSHKeys(workspaceId: string) {
+  return api<{ keys: WorkspaceSSHKey[]; count: number }>(`/servers/ssh-keys?workspace_id=${workspaceId}`);
+}
+
+export async function getSSHPublicKey(keyId: string) {
+  return api<{ public_key: string }>(`/servers/ssh-keys/${keyId}/public`);
+}
+
+export async function deleteSSHKey(keyId: string) {
+  return api<{ ok: boolean }>(`/servers/ssh-keys/${keyId}`, { method: 'DELETE' });
 }

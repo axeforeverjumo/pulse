@@ -45,7 +45,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from api.rate_limit import limiter
 
-from api.routers import auth, calendar, email, webhooks, cron, sync, documents, files, chat, chat_attachments, app_drawer, preferences, workspaces, invitations, messages, users, projects, notifications, init, agents, agent_dispatch, permissions, public, workers, builder, openclaw_agents, google_drive, messaging, crm
+from api.routers import auth, calendar, email, webhooks, cron, sync, documents, files, chat, chat_attachments, app_drawer, preferences, workspaces, invitations, messages, users, projects, notifications, init, agents, agent_dispatch, permissions, public, workers, builder, openclaw_agents, google_drive, messaging, crm, servers
 
 # Create FastAPI app - Vercel will auto-detect this
 app = FastAPI(
@@ -187,6 +187,7 @@ app.include_router(openclaw_agents.router)
 app.include_router(google_drive.router)
 app.include_router(messaging.router)
 app.include_router(crm.router)
+app.include_router(servers.router)
 
 @app.get("/", response_model=HealthResponse)
 async def root():

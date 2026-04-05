@@ -6,6 +6,8 @@ import { useEmailAccountsStore } from '../../stores/emailAccountsStore';
 import Modal from '../Modal/Modal';
 import EmailSignatureEditor from './EmailSignatureEditor';
 import { uploadAvatar, deleteAvatar } from '../../api/client';
+import { useWorkspaceStore } from '../../stores/workspaceStore';
+import ServersSettings from './ServersSettings';
 
 interface SettingsViewProps {
   isOpen: boolean;
@@ -14,6 +16,7 @@ interface SettingsViewProps {
 
 export default function SettingsView({ isOpen, onClose }: SettingsViewProps) {
   const { isAuthenticated, user, userProfile, signInWithGoogle, signInWithMicrosoft, signOut, updateAvatarUrl, updateUserName } = useAuthStore();
+  const activeWorkspaceId = useWorkspaceStore(s => s.activeWorkspaceId);
   const [error, setError] = useState('');
   const [authLoadingProvider, setAuthLoadingProvider] = useState<'google' | 'microsoft' | null>(null);
 
@@ -515,6 +518,11 @@ export default function SettingsView({ isOpen, onClose }: SettingsViewProps) {
         {/* Email Signature Section */}
         {isAuthenticated && emailAccounts.length > 0 && (
           <EmailSignatureEditor accounts={emailAccounts} />
+        )}
+
+        {/* Servers Section */}
+        {isAuthenticated && activeWorkspaceId && (
+          <ServersSettings workspaceId={activeWorkspaceId} />
         )}
 
       </div>
