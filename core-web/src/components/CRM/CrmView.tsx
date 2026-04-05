@@ -7,6 +7,7 @@ import {
   ChartBarIcon,
   DocumentTextIcon,
   CubeIcon,
+  BoltIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
@@ -20,6 +21,7 @@ import PipelineView from './PipelineView';
 import OpportunityDetail from './OpportunityDetail';
 import NotesView from './NotesView';
 import ProductsView from './ProductsView';
+import WorkflowsView from './WorkflowsView';
 import { HeaderButtons } from '../MiniAppHeader';
 import { toast } from 'sonner';
 import { createCrmContact, createCrmCompany } from '../../api/client';
@@ -30,6 +32,7 @@ const tabs = [
   { id: 'contacts' as const, label: 'Contactos', icon: UserGroupIcon },
   { id: 'companies' as const, label: 'Empresas', icon: BuildingOfficeIcon },
   { id: 'notes' as const, label: 'Notas', icon: DocumentTextIcon },
+  { id: 'workflows' as const, label: 'Automatizaciones', icon: BoltIcon },
 ];
 
 export default function CrmView() {
@@ -208,6 +211,9 @@ export default function CrmView() {
             {activeView === 'pipeline' && (
               <PipelineView workspaceId={effectiveWorkspaceId} />
             )}
+            {activeView === 'products' && (
+              <ProductsView workspaceId={effectiveWorkspaceId} />
+            )}
             {activeView === 'contacts' && (
               <ContactsList
                 workspaceId={effectiveWorkspaceId}
@@ -222,6 +228,9 @@ export default function CrmView() {
             )}
             {activeView === 'notes' && (
               <NotesView workspaceId={effectiveWorkspaceId} />
+            )}
+            {activeView === 'workflows' && (
+              <WorkflowsView workspaceId={effectiveWorkspaceId} />
             )}
           </div>
         </div>
