@@ -996,19 +996,26 @@ async def get_opportunity_full_endpoint(
 
         supabase = await get_authenticated_async_client(user_jwt)
 
-        # Fetch notes linked to this opportunity
-        notes_result = await (
-            supabase.table("crm_notes")
-            .select("*")
-            .eq("workspace_id", workspace_id)
-            .eq("entity_type", "opportunity")
-            .eq("entity_id", opportunity_id)
-            .is_("deleted_at", "null")
-            .order("created_at", desc=True)
-            .limit(50)
+        # Fetch notes linked to this opportunity via crm_note_targets
+        note_targets_result = await (
+            supabase.table("crm_note_targets")
+            .select("note_id")
+            .eq("target_opportunity_id", opportunity_id)
             .execute()
         )
-        opportunity["notes"] = notes_result.data or []
+        note_ids = [nt["note_id"] for nt in (note_targets_result.data or [])]
+        if note_ids:
+            notes_result = await (
+                supabase.table("crm_notes")
+                .select("*")
+                .in_("id", note_ids)
+                .is_("deleted_at", "null")
+                .order("created_at", desc=True)
+                .execute()
+            )
+            opportunity["notes"] = notes_result.data or []
+        else:
+            opportunity["notes"] = []
 
         # Fetch tasks
         try:
@@ -1028,10 +1035,9 @@ async def get_opportunity_full_endpoint(
         messages_result = await (
             supabase.table("crm_timeline")
             .select("*")
-            .eq("entity_type", "opportunity")
-            .eq("entity_id", opportunity_id)
+            .eq("target_opportunity_id", opportunity_id)
             .eq("event_type", "chat_message")
-            .order("occurred_at", desc=False)
+            .order("happens_at", desc=False)
             .limit(100)
             .execute()
         )
@@ -1111,11 +1117,10 @@ async def get_opportunity_messages_endpoint(
         result = await (
             supabase.table("crm_timeline")
             .select("*", count="exact")
-            .eq("entity_type", "opportunity")
-            .eq("entity_id", opportunity_id)
+            .eq("target_opportunity_id", opportunity_id)
             .eq("workspace_id", workspace_id)
             .eq("event_type", "chat_message")
-            .order("occurred_at", desc=False)
+            .order("happens_at", desc=False)
             .limit(limit)
             .execute()
         )
