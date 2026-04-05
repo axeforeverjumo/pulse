@@ -1403,6 +1403,60 @@ async def cleanup_email_cache(authorization: Optional[str] = Header(None)):
         )
 
 
+class CrmWorkflowsCronResponse(BaseModel):
+    """Response for CRM workflows cron job."""
+    status: str
+    processed: int = 0
+    errors: int = 0
+    total: int = 0
+    duration_seconds: Optional[float] = None
+
+
+@router.get("/process-crm-workflows", response_model=CrmWorkflowsCronResponse)
+async def cron_process_crm_workflows(authorization: str = Header(None)):
+    """
+    CRON JOB: Process CRM workflows in 'waiting' status
+
+    RUNS: Every 5 minutes
+
+    PURPOSE: Resumes workflow runs whose wait step has elapsed.
+    Checks crm_workflow_runs with status='waiting' and next_action_at <= now.
+    """
+    logger.info("=" * 80)
+    logger.info("CRON: Starting CRM workflow processing")
+
+    if not verify_cron_auth(authorization):
+        logger.warning("Unauthorized cron attempt")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+
+    start_time = datetime.now(timezone.utc)
+
+    try:
+        from lib.supabase_client import get_async_service_role_client
+        from api.services.crm.workflows import process_waiting_workflows
+
+        supabase = await get_async_service_role_client()
+        result = await process_waiting_workflows(supabase)
+
+        duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+        logger.info(f"CRON: CRM workflow processing completed in {duration:.2f}s - {result}")
+
+        return {
+            "status": "completed",
+            "processed": result["processed"],
+            "errors": result["errors"],
+            "total": result["total"],
+            "duration_seconds": duration,
+        }
+
+    except Exception as e:
+        logger.error(f"CRON: CRM workflow processing failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Processing failed: {str(e)}"
+        )
+
+
 @router.get("/health", response_model=CronHealthResponse)
 async def cron_health():
     """
@@ -1463,6 +1517,11 @@ async def cron_health():
                 "name": "cleanup-email-cache",
                 "schedule": "Daily",
                 "description": "Removes email cached files not accessed in 30 days"
+            },
+            {
+                "name": "process-crm-workflows",
+                "schedule": "Every 5 minutes",
+                "description": "Resumes CRM workflow runs whose wait step has elapsed"
             }
         ]
     }

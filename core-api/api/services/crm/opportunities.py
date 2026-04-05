@@ -162,9 +162,23 @@ async def create_opportunity(
         entity_type="opportunity",
         entity_id=opportunity["id"],
         event_type="created",
-        description=f"Opportunity '{opportunity['title']}' was created",
+        description=f"Opportunity '{opportunity.get('title', opportunity.get('name', ''))}' was created",
         actor_id=user_id,
     )
+
+    # Trigger new_lead workflows
+    if data.get("stage", "lead") == "lead":
+        try:
+            from api.services.crm.workflows import trigger_workflows
+            opp_data = {
+                "opportunity_id": opportunity["id"],
+                "workspace_id": workspace_id,
+                "owner_id": opportunity.get("owner_id"),
+                "assigned_to": opportunity.get("assigned_to"),
+            }
+            await trigger_workflows(workspace_id, "new_lead", opp_data, user_jwt)
+        except Exception as wf_err:
+            logger.warning(f"Workflow trigger (new_lead) failed (non-blocking): {wf_err}")
 
     return opportunity
 
@@ -225,6 +239,34 @@ async def update_opportunity(
             actor_id=user_id,
             metadata={"old_stage": old_stage, "new_stage": new_stage},
         )
+
+        # Trigger workflow automations on stage change
+        try:
+            from api.services.crm.workflows import trigger_workflows
+
+            opp_data = {
+                "opportunity_id": opportunity_id,
+                "workspace_id": workspace_id,
+                "old_stage": old_stage,
+                "new_stage": new_stage,
+                "owner_id": opportunity.get("owner_id"),
+                "assigned_to": opportunity.get("assigned_to"),
+            }
+
+            # Determine trigger type
+            trigger_type = "stage_change"
+            if new_stage in ("won", "closed_won"):
+                trigger_type = "lead_won"
+            elif new_stage in ("lost", "closed_lost"):
+                trigger_type = "lead_lost"
+
+            await trigger_workflows(workspace_id, trigger_type, opp_data, user_jwt)
+
+            # Also fire generic stage_change if we fired a specific one
+            if trigger_type != "stage_change":
+                await trigger_workflows(workspace_id, "stage_change", opp_data, user_jwt)
+        except Exception as wf_err:
+            logger.warning(f"Workflow trigger failed (non-blocking): {wf_err}")
     else:
         await create_timeline_event(
             supabase=supabase,
