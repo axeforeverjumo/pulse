@@ -70,9 +70,8 @@ async def get_contact(
     timeline_result = await (
         supabase.table("crm_timeline")
         .select("*")
-        .eq("entity_type", "contact")
-        .eq("entity_id", contact_id)
-        .order("occurred_at", desc=True)
+        .eq("target_contact_id", contact_id)
+        .order("happens_at", desc=True)
         .limit(50)
         .execute()
     )

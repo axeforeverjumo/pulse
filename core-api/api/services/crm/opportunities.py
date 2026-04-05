@@ -82,9 +82,8 @@ async def get_opportunity(
     timeline_result = await (
         supabase.table("crm_timeline")
         .select("*")
-        .eq("entity_type", "opportunity")
-        .eq("entity_id", opportunity_id)
-        .order("occurred_at", desc=True)
+        .eq("target_opportunity_id", opportunity_id)
+        .order("happens_at", desc=True)
         .limit(50)
         .execute()
     )
