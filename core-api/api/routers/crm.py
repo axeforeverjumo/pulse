@@ -181,6 +181,10 @@ class CreateProductRequest(BaseModel):
     unit_of_measure: str = "Unidad"
     tax_rate: float = 21
     category: Optional[str] = None
+    product_type: str = "bienes"
+    cost: float = 0
+    sales_description: Optional[str] = None
+    internal_notes: Optional[str] = None
     is_active: bool = True
 
 
@@ -193,6 +197,10 @@ class UpdateProductRequest(BaseModel):
     unit_of_measure: Optional[str] = None
     tax_rate: Optional[float] = None
     category: Optional[str] = None
+    product_type: Optional[str] = None
+    cost: Optional[float] = None
+    sales_description: Optional[str] = None
+    internal_notes: Optional[str] = None
     is_active: Optional[bool] = None
 
 
