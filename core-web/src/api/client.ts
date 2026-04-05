@@ -3786,3 +3786,42 @@ export async function getSSHPublicKey(keyId: string) {
 export async function deleteSSHKey(keyId: string) {
   return api<{ ok: boolean }>(`/servers/ssh-keys/${keyId}`, { method: 'DELETE' });
 }
+
+// =============================================================================
+// Repo Tokens
+// =============================================================================
+
+export interface RepoToken {
+  id: string;
+  workspace_id: string;
+  name: string;
+  provider: string;
+  username?: string;
+  is_default: boolean;
+  last_used_at?: string;
+  created_by?: string;
+  created_at: string;
+}
+
+export async function listRepoTokens(workspaceId: string) {
+  return api<{ tokens: RepoToken[]; count: number }>(`/servers/tokens?workspace_id=${workspaceId}`);
+}
+
+export async function addRepoToken(data: {
+  workspace_id: string;
+  name: string;
+  provider?: string;
+  token: string;
+  username?: string;
+  is_default?: boolean;
+}) {
+  return api<{ token: RepoToken }>('/servers/tokens', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function updateRepoToken(tokenId: string, data: Record<string, any>) {
+  return api<{ token: RepoToken }>(`/servers/tokens/${tokenId}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export async function deleteRepoToken(tokenId: string) {
+  return api<{ ok: boolean }>(`/servers/tokens/${tokenId}`, { method: 'DELETE' });
+}

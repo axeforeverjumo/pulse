@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useProjectsStore } from '../../../stores/projectsStore';
 import { useCreateBoard } from '../../../hooks/queries/useProjects';
-import { createGitHubRepo, listServers, type WorkspaceServer } from '../../../api/client';
+import { api, createGitHubRepo, listServers, listRepoTokens, type WorkspaceServer, type RepoToken } from '../../../api/client';
 import Modal from '../../Modal/Modal';
 
 type DeployMode = 'local' | 'external' | 'dedicated';
@@ -46,6 +47,12 @@ export default function CreateProjectModal({
   const [isCreatingRepo, setIsCreatingRepo] = useState(false);
   const [githubError, setGithubError] = useState<string | null>(null);
 
+  // Saved tokens
+  const [savedTokens, setSavedTokens] = useState<RepoToken[]>([]);
+  const [selectedTokenId, setSelectedTokenId] = useState<string>('');
+  const [useManualToken, setUseManualToken] = useState(false);
+
+  const navigate = useNavigate();
   const workspaceAppId = useProjectsStore((state) => state.workspaceAppId);
   const workspaceId = useProjectsStore((state) => state.workspaceId);
   const createBoard = useCreateBoard(workspaceAppId);
@@ -88,6 +95,20 @@ export default function CreateProjectModal({
       .finally(() => setLoadingServers(false));
   }, [isOpen, isDevelopment, needsServer, workspaceId]);
 
+  // Load saved tokens when dev mode is activated
+  useEffect(() => {
+    if (!isOpen || !isDevelopment || !workspaceId) return;
+    if (savedTokens.length > 0) return;
+    listRepoTokens(workspaceId)
+      .then((res) => {
+        setSavedTokens(res.tokens || []);
+        // Auto-select default token
+        const def = (res.tokens || []).find((t) => t.is_default);
+        if (def) setSelectedTokenId(def.id);
+      })
+      .catch(() => setSavedTokens([]));
+  }, [isOpen, isDevelopment, workspaceId]);
+
   const reset = () => {
     setName('');
     setDescription('');
@@ -102,15 +123,31 @@ export default function CreateProjectModal({
     setGithubToken('');
     setShowToken(false);
     setGithubError(null);
+    setSavedTokens([]);
+    setSelectedTokenId('');
+    setUseManualToken(false);
   };
 
+  // Resolve the effective token (manual or saved)
+  const hasToken = useManualToken ? !!githubToken.trim() : !!selectedTokenId;
+
   const handleCreateRepo = async () => {
-    if (!githubToken.trim() || !newRepoName.trim()) return;
+    if (!newRepoName.trim()) return;
     setIsCreatingRepo(true);
     setGithubError(null);
     try {
+      let tokenValue = githubToken.trim();
+      // If using a saved token, fetch its decrypted value
+      if (!useManualToken && selectedTokenId) {
+        const res = await api<{ value: string }>(`/servers/tokens/${selectedTokenId}/value`);
+        tokenValue = res.value;
+      }
+      if (!tokenValue) {
+        setGithubError('No se encontro un token valido');
+        return;
+      }
       const result = await createGitHubRepo({
-        token: githubToken.trim(),
+        token: tokenValue,
         name: newRepoName.trim(),
         private: true,
         description: `Repository for ${name.trim() || newRepoName.trim()}`,
@@ -244,8 +281,15 @@ export default function CreateProjectModal({
                   ) : servers.length === 0 ? (
                     <div className="px-3 py-2 text-[13px] text-gray-500 border border-dashed border-gray-200 rounded-lg bg-white text-center">
                       No hay servidores configurados.{' '}
-                      <span className="text-gray-900 underline underline-offset-2 cursor-pointer">
-                        Configura uno en Ajustes
+                      <span
+                        className="text-gray-900 underline underline-offset-2 cursor-pointer"
+                        onClick={() => {
+                          reset();
+                          onClose();
+                          navigate(`/workspace/${workspaceId}/devops`);
+                        }}
+                      >
+                        Configura uno en DevOps
                       </span>
                     </div>
                   ) : (
@@ -347,13 +391,13 @@ export default function CreateProjectModal({
                     <button
                       type="button"
                       onClick={handleCreateRepo}
-                      disabled={!githubToken.trim() || !newRepoName.trim() || isCreatingRepo}
+                      disabled={!hasToken || !newRepoName.trim() || isCreatingRepo}
                       className="px-3 py-2 text-[12px] font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
                     >
                       {isCreatingRepo ? 'Creando...' : 'Crear'}
                     </button>
                   </div>
-                  {!githubToken.trim() && (
+                  {!hasToken && (
                     <p className="text-[11px] text-amber-600">
                       Necesitas un token de GitHub para crear repositorios
                     </p>
@@ -365,32 +409,66 @@ export default function CreateProjectModal({
                 <p className="text-[12px] text-red-500">{githubError}</p>
               )}
 
-              {/* Collapsible token */}
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setShowToken(!showToken)}
-                  className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <svg
-                    className={`w-3 h-3 transition-transform ${showToken ? 'rotate-90' : ''}`}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                  Token GitHub
-                </button>
-                {showToken && (
-                  <input
-                    type="password"
-                    value={githubToken}
-                    onChange={(e) => setGithubToken(e.target.value)}
-                    placeholder="ghp_..."
-                    className={`mt-1.5 ${inputCls}`}
-                  />
+              {/* Token selection */}
+              <div className="space-y-2">
+                <label className="block text-[11px] font-medium text-gray-500">Token GitHub</label>
+                {savedTokens.length > 0 && !useManualToken ? (
+                  <div className="space-y-1.5">
+                    <select
+                      value={selectedTokenId}
+                      onChange={(e) => setSelectedTokenId(e.target.value)}
+                      className={inputCls}
+                    >
+                      <option value="">Selecciona un token guardado</option>
+                      {savedTokens.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name} ({t.provider}){t.is_default ? ' - Por defecto' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setUseManualToken(true)}
+                      className="text-[11px] text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      Usar otro token manualmente
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <input
+                      type="password"
+                      value={githubToken}
+                      onChange={(e) => setGithubToken(e.target.value)}
+                      placeholder="ghp_..."
+                      className={inputCls}
+                    />
+                    {savedTokens.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setUseManualToken(false)}
+                        className="text-[11px] text-gray-400 hover:text-gray-600 transition-colors"
+                      >
+                        Usar token guardado
+                      </button>
+                    )}
+                    {savedTokens.length === 0 && (
+                      <p className="text-[10px] text-gray-400">
+                        Guarda tokens en{' '}
+                        <span
+                          className="text-gray-600 underline cursor-pointer"
+                          onClick={() => {
+                            reset();
+                            onClose();
+                            navigate(`/workspace/${workspaceId}/devops`);
+                          }}
+                        >
+                          DevOps
+                        </span>{' '}
+                        para reutilizarlos
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

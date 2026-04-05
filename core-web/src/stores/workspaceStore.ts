@@ -19,7 +19,7 @@ import {
 // Frontend types that map to API types
 export interface MiniApp {
   id: string;
-  type: 'chat' | 'team' | 'files' | 'messages' | 'dashboard' | 'projects' | 'email' | 'calendar' | 'agents' | 'messaging' | 'crm';
+  type: 'chat' | 'team' | 'files' | 'messages' | 'dashboard' | 'projects' | 'email' | 'calendar' | 'agents' | 'messaging' | 'crm' | 'devops';
   name: string;
   icon: string;
   workspaceId: string;
@@ -54,6 +54,7 @@ const APP_DISPLAY_INFO: Record<string, { name: string; icon: string; emoji: stri
   agents: { name: 'Agents', icon: 'AI', emoji: '🤖' },
   messaging: { name: 'Messaging', icon: 'Smartphone', emoji: '📱' },
   crm: { name: 'CRM', icon: 'Contact', emoji: '📇' },
+  devops: { name: 'DevOps', icon: 'Wrench', emoji: '🔧' },
 };
 
 const APP_ORDER = [

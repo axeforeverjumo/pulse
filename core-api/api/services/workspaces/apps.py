@@ -22,6 +22,7 @@ VALID_APP_TYPES = (
     "agents",
     "crm",
     "messaging",
+    "devops",
 )
 
 

@@ -21,6 +21,13 @@ from api.services.servers.ssh_keys import (
     get_public_key,
     delete_ssh_key,
 )
+from api.services.servers.tokens import (
+    list_tokens,
+    add_token,
+    update_token,
+    delete_token,
+    get_token_value,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +66,21 @@ class UpdateServerRequest(BaseModel):
 class GenerateSSHKeyRequest(BaseModel):
     workspace_id: str
     name: str = "pulse-deploy"
+
+
+class AddTokenRequest(BaseModel):
+    workspace_id: str
+    name: str = Field(..., min_length=1, max_length=100)
+    provider: str = Field(default="github")
+    token: str = Field(..., min_length=1)
+    username: Optional[str] = None
+    is_default: bool = False
+
+
+class UpdateTokenRequest(BaseModel):
+    name: Optional[str] = None
+    username: Optional[str] = None
+    is_default: Optional[bool] = None
 
 
 # =============================================================================
@@ -201,3 +223,83 @@ async def api_delete_ssh_key(
         return {"ok": True}
     except Exception as e:
         handle_api_exception(e, "Failed to delete SSH key", logger)
+
+
+# =============================================================================
+# REPO TOKEN ENDPOINTS
+# =============================================================================
+
+@router.get("/tokens")
+async def api_list_tokens(
+    workspace_id: str = Query(...),
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """List repo tokens for a workspace (metadata only)."""
+    try:
+        tokens = await list_tokens(workspace_id, user_jwt)
+        return {"tokens": tokens, "count": len(tokens)}
+    except Exception as e:
+        handle_api_exception(e, "Failed to list tokens", logger)
+
+
+@router.post("/tokens")
+async def api_add_token(
+    body: AddTokenRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Add a new repo token (encrypted at rest)."""
+    try:
+        token = await add_token(
+            workspace_id=body.workspace_id,
+            user_id=user_id,
+            user_jwt=user_jwt,
+            data=body.model_dump(exclude_none=True),
+        )
+        return {"token": token}
+    except Exception as e:
+        handle_api_exception(e, "Failed to add token", logger)
+
+
+@router.patch("/tokens/{token_id}")
+async def api_update_token(
+    token_id: str,
+    body: UpdateTokenRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Update token metadata."""
+    try:
+        token = await update_token(
+            token_id=token_id,
+            user_jwt=user_jwt,
+            data=body.model_dump(exclude_none=True),
+        )
+        return {"token": token}
+    except Exception as e:
+        handle_api_exception(e, "Failed to update token", logger)
+
+
+@router.delete("/tokens/{token_id}")
+async def api_delete_token(
+    token_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Delete a repo token."""
+    try:
+        await delete_token(token_id, user_jwt)
+        return {"ok": True}
+    except Exception as e:
+        handle_api_exception(e, "Failed to delete token", logger)
+
+
+@router.get("/tokens/{token_id}/value")
+async def api_get_token_value(
+    token_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Get the decrypted token value (for internal/agent use)."""
+    try:
+        value = await get_token_value(token_id, user_jwt)
+        return {"value": value}
+    except Exception as e:
+        handle_api_exception(e, "Failed to get token value", logger)
