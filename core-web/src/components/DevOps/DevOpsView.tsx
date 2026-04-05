@@ -805,7 +805,8 @@ function TokensTab({
   onAdd, onUpdate, onDelete,
   inputCls, btnPrimary, btnSecondary,
 }: any) {
-  const [editName, setEditName] = useState('');
+  const [_editName, _setEditName] = useState('');
+  void _editName; void _setEditName;
 
   if (loading) {
     return <div className="text-[13px] text-gray-400 py-12 text-center">Cargando tokens...</div>;
