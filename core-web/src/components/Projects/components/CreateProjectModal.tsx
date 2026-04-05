@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useProjectsStore } from '../../../stores/projectsStore';
 import { useCreateBoard } from '../../../hooks/queries/useProjects';
-import { createGitHubRepo, listGitHubRepos, listServers, type GitHubRepo, type WorkspaceServer } from '../../../api/client';
+import { createGitHubRepo, listServers, type WorkspaceServer } from '../../../api/client';
 import Modal from '../../Modal/Modal';
 
 type DeployMode = 'local' | 'external' | 'dedicated';
