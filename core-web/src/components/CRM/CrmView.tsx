@@ -6,6 +6,7 @@ import {
   BuildingOfficeIcon,
   ChartBarIcon,
   DocumentTextIcon,
+  CubeIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
@@ -16,13 +17,16 @@ import ContactDetail from './ContactDetail';
 import CompaniesList from './CompaniesList';
 import CompanyDetail from './CompanyDetail';
 import PipelineView from './PipelineView';
+import OpportunityDetail from './OpportunityDetail';
 import NotesView from './NotesView';
+import ProductsView from './ProductsView';
 import { HeaderButtons } from '../MiniAppHeader';
 import { toast } from 'sonner';
 import { createCrmContact, createCrmCompany } from '../../api/client';
 
 const tabs = [
   { id: 'pipeline' as const, label: 'Pipeline', icon: ChartBarIcon },
+  { id: 'products' as const, label: 'Productos', icon: CubeIcon },
   { id: 'contacts' as const, label: 'Contactos', icon: UserGroupIcon },
   { id: 'companies' as const, label: 'Empresas', icon: BuildingOfficeIcon },
   { id: 'notes' as const, label: 'Notas', icon: DocumentTextIcon },
@@ -43,6 +47,8 @@ export default function CrmView() {
     setSelectedContact,
     selectedCompany,
     setSelectedCompany,
+    selectedOpportunity,
+    setSelectedOpportunity,
     fetchContacts,
     fetchCompanies,
   } = useCrmStore();
@@ -116,6 +122,21 @@ export default function CrmView() {
   }
 
   const hasDetailOpen = selectedContact || selectedCompany;
+
+  // Full-screen opportunity detail view
+  if (selectedOpportunity) {
+    return (
+      <div className="flex-1 flex h-full min-w-0 overflow-hidden">
+        <div className="relative flex-1 flex min-w-0 overflow-hidden rounded-[20px] bg-gradient-to-b from-[#f6fbff] to-[#edf4fb]">
+          <OpportunityDetail
+            opportunityId={selectedOpportunity.id}
+            workspaceId={effectiveWorkspaceId}
+            onBack={() => setSelectedOpportunity(null)}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex h-full min-w-0 overflow-hidden">

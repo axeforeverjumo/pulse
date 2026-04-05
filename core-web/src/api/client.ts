@@ -3511,6 +3511,53 @@ export async function searchCrm(workspaceId: string, query: string) {
   return api<any>(`/crm/search?workspace_id=${workspaceId}&q=${encodeURIComponent(query)}`);
 }
 
+// CRM Products
+export async function getCrmProducts(workspaceId: string, search?: string, category?: string) {
+  const params = new URLSearchParams({ workspace_id: workspaceId });
+  if (search) params.set('search', search);
+  if (category) params.set('category', category);
+  return api<{ products: any[]; count: number }>(`/crm/products?${params}`);
+}
+
+export async function createCrmProduct(data: any) {
+  return api<{ product: any }>('/crm/products', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function updateCrmProduct(productId: string, data: any) {
+  return api<{ product: any }>(`/crm/products/${productId}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+// CRM Quotations
+export async function getCrmQuotations(workspaceId: string, opportunityId?: string) {
+  const params = new URLSearchParams({ workspace_id: workspaceId });
+  if (opportunityId) params.set('opportunity_id', opportunityId);
+  return api<{ quotations: any[]; count: number }>(`/crm/quotations?${params}`);
+}
+
+export async function getCrmQuotation(quotationId: string) {
+  return api<{ quotation: any }>(`/crm/quotations/${quotationId}`);
+}
+
+export async function createCrmQuotation(data: any) {
+  return api<{ quotation: any }>('/crm/quotations', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function updateCrmQuotation(quotationId: string, data: any) {
+  return api<{ quotation: any }>(`/crm/quotations/${quotationId}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export async function addCrmQuotationLine(quotationId: string, data: any) {
+  return api<{ line: any }>(`/crm/quotations/${quotationId}/lines`, { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function updateCrmQuotationLine(lineId: string, data: any) {
+  return api<{ line: any }>(`/crm/quotation-lines/${lineId}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export async function deleteCrmQuotationLine(lineId: string) {
+  return api<any>(`/crm/quotation-lines/${lineId}`, { method: 'DELETE' });
+}
+
 // CRM Agent Queue
 export async function createCrmAgentTask(data: {
   workspace_id: string;
@@ -3533,4 +3580,72 @@ export async function getCrmAgentTasks(workspaceId: string, filters?: { status?:
 
 export async function getCrmAgentTask(taskId: string) {
   return api<{ task: any }>(`/crm/agent-queue/${taskId}`);
+}
+
+// CRM Opportunity Detail
+export async function getCrmOpportunityFull(id: string, workspaceId: string) {
+  return api<{ opportunity: any }>(`/crm/opportunities/${id}/full?workspace_id=${workspaceId}`);
+}
+
+export async function updateOpportunityStage(id: string, stage: string, workspaceId: string) {
+  return api<{ opportunity: any }>(`/crm/opportunities/${id}/stage?workspace_id=${workspaceId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ stage }),
+  });
+}
+
+export async function postOpportunityMessage(id: string, data: { workspace_id: string; content: string }) {
+  return api<{ message: any }>(`/crm/opportunities/${id}/messages`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getOpportunityMessages(id: string, workspaceId: string) {
+  return api<{ messages: any[]; count: number }>(`/crm/opportunities/${id}/messages?workspace_id=${workspaceId}`);
+}
+
+export async function createOpportunityTask(id: string, data: { workspace_id: string; title: string; due_date?: string; assignee_id?: string }) {
+  return api<{ task: any }>(`/crm/opportunities/${id}/tasks`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getOpportunityTasks(id: string, workspaceId: string) {
+  return api<{ tasks: any[]; count: number }>(`/crm/opportunities/${id}/tasks?workspace_id=${workspaceId}`);
+}
+
+export async function updateOpportunityTask(taskId: string, data: { title?: string; due_date?: string; assignee_id?: string; status?: string }) {
+  return api<{ task: any }>(`/crm/opportunities/tasks/${taskId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+// CRM Workflows
+export async function getCrmWorkflows(workspaceId: string) {
+  return api<{ workflows: any[]; count: number }>(`/crm/workflows?workspace_id=${workspaceId}`);
+}
+
+export async function createCrmWorkflow(data: any) {
+  return api<{ workflow: any }>('/crm/workflows', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function updateCrmWorkflow(workflowId: string, data: any) {
+  return api<{ workflow: any }>(`/crm/workflows/${workflowId}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export async function deleteCrmWorkflow(workflowId: string) {
+  return api<any>(`/crm/workflows/${workflowId}`, { method: 'DELETE' });
+}
+
+export async function getCrmWorkflowRuns(workspaceId: string, workflowId?: string) {
+  const params = new URLSearchParams({ workspace_id: workspaceId });
+  if (workflowId) params.set('workflow_id', workflowId);
+  return api<{ runs: any[]; count: number }>(`/crm/workflow-runs?${params}`);
+}
+
+export async function triggerCrmWorkflow(workflowId: string, data: { workspace_id: string; opportunity_id?: string }) {
+  return api<any>(`/crm/workflows/${workflowId}/trigger`, { method: 'POST', body: JSON.stringify(data) });
 }

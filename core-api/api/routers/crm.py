@@ -27,6 +27,14 @@ from api.services.crm.opportunities import (
     delete_opportunity,
     get_pipeline_summary,
 )
+from api.services.crm.workflows import (
+    list_workflows,
+    create_workflow,
+    update_workflow,
+    delete_workflow,
+    list_workflow_runs,
+    trigger_workflows,
+)
 from api.services.crm.notes import (
     list_notes,
     create_note,
@@ -34,6 +42,21 @@ from api.services.crm.notes import (
     delete_note,
 )
 from api.services.crm.timeline import get_timeline
+from api.services.crm.products import (
+    list_products,
+    create_product,
+    update_product,
+)
+from api.services.crm.quotations import (
+    list_quotations,
+    get_quotation,
+    create_quotation,
+    update_quotation,
+    add_quotation_line,
+    update_quotation_line,
+    delete_quotation_line,
+    recalculate_quotation_totals,
+)
 from api.dependencies import get_current_user_jwt, get_current_user_id
 from api.exceptions import handle_api_exception
 from lib.supabase_client import get_authenticated_async_client
@@ -148,6 +171,84 @@ class UpdateOpportunityRequest(BaseModel):
     custom_fields: Optional[Dict[str, Any]] = None
 
 
+class CreateProductRequest(BaseModel):
+    """Request for creating a product."""
+    workspace_id: str
+    name: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+    unit_price: float = 0
+    currency_code: str = "EUR"
+    unit_of_measure: str = "Unidad"
+    tax_rate: float = 21
+    category: Optional[str] = None
+    is_active: bool = True
+
+
+class UpdateProductRequest(BaseModel):
+    """Request for updating a product."""
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = None
+    unit_price: Optional[float] = None
+    currency_code: Optional[str] = None
+    unit_of_measure: Optional[str] = None
+    tax_rate: Optional[float] = None
+    category: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class QuotationLineRequest(BaseModel):
+    """Request for a quotation line."""
+    line_type: str = "product"
+    product_id: Optional[str] = None
+    name: str = ""
+    description: Optional[str] = None
+    quantity: float = 1
+    unit_price: float = 0
+    unit_of_measure: str = "Unidad"
+    discount: float = 0
+    tax_rate: float = 21
+    position: Optional[int] = None
+
+
+class CreateQuotationRequest(BaseModel):
+    """Request for creating a quotation."""
+    workspace_id: str
+    opportunity_id: Optional[str] = None
+    company_id: Optional[str] = None
+    contact_id: Optional[str] = None
+    expiry_date: Optional[str] = None
+    payment_terms: str = "Inmediato"
+    notes: Optional[str] = None
+    currency_code: str = "EUR"
+    lines: List[QuotationLineRequest] = Field(default_factory=list)
+
+
+class UpdateQuotationRequest(BaseModel):
+    """Request for updating a quotation."""
+    opportunity_id: Optional[str] = None
+    company_id: Optional[str] = None
+    contact_id: Optional[str] = None
+    status: Optional[str] = None
+    expiry_date: Optional[str] = None
+    payment_terms: Optional[str] = None
+    notes: Optional[str] = None
+    currency_code: Optional[str] = None
+
+
+class UpdateQuotationLineRequest(BaseModel):
+    """Request for updating a quotation line."""
+    line_type: Optional[str] = None
+    product_id: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    quantity: Optional[float] = None
+    unit_price: Optional[float] = None
+    unit_of_measure: Optional[str] = None
+    discount: Optional[float] = None
+    tax_rate: Optional[float] = None
+    position: Optional[int] = None
+
+
 class CreateNoteRequest(BaseModel):
     """Request for creating a note."""
     workspace_id: str
@@ -211,6 +312,37 @@ class PipelineSummaryResponse(BaseModel):
     stages: List[PipelineStage]
 
 
+class ProductResponse(BaseModel):
+    product: Dict[str, Any]
+
+    class Config:
+        extra = "allow"
+
+
+class ProductListResponse(BaseModel):
+    products: List[Dict[str, Any]]
+    count: int
+
+
+class QuotationResponse(BaseModel):
+    quotation: Dict[str, Any]
+
+    class Config:
+        extra = "allow"
+
+
+class QuotationListResponse(BaseModel):
+    quotations: List[Dict[str, Any]]
+    count: int
+
+
+class QuotationLineResponse(BaseModel):
+    line: Dict[str, Any]
+
+    class Config:
+        extra = "allow"
+
+
 class NoteResponse(BaseModel):
     note: Dict[str, Any]
 
@@ -240,6 +372,57 @@ class SearchResultsResponse(BaseModel):
     total_count: int
 
 
+class UpdateStageRequest(BaseModel):
+    """Request for quick stage update."""
+    stage: str = Field(..., description="Pipeline stage id")
+
+
+class PostMessageRequest(BaseModel):
+    """Request for posting a chat message to an opportunity."""
+    workspace_id: str
+    content: str = Field(..., min_length=1)
+
+
+class CreateOpportunityTaskRequest(BaseModel):
+    """Request for creating a task linked to an opportunity."""
+    workspace_id: str
+    title: str = Field(..., min_length=1, max_length=300)
+    due_date: Optional[str] = None
+    assignee_id: Optional[str] = None
+
+
+class UpdateOpportunityTaskRequest(BaseModel):
+    """Request for updating an opportunity task."""
+    title: Optional[str] = Field(None, min_length=1, max_length=300)
+    due_date: Optional[str] = None
+    assignee_id: Optional[str] = None
+    status: Optional[str] = Field(None, description="pending or done")
+
+
+class OpportunityTaskResponse(BaseModel):
+    task: Dict[str, Any]
+
+    class Config:
+        extra = "allow"
+
+
+class OpportunityTaskListResponse(BaseModel):
+    tasks: List[Dict[str, Any]]
+    count: int
+
+
+class MessageResponse(BaseModel):
+    message: Dict[str, Any]
+
+    class Config:
+        extra = "allow"
+
+
+class MessageListResponse(BaseModel):
+    messages: List[Dict[str, Any]]
+    count: int
+
+
 class CreateAgentTaskRequest(BaseModel):
     """Request for creating a CRM agent task."""
     workspace_id: str
@@ -260,6 +443,55 @@ class AgentTaskResponse(BaseModel):
 class AgentTaskListResponse(BaseModel):
     tasks: List[Dict[str, Any]]
     count: int
+
+
+# ---- Workflow models ----
+
+class WorkflowStepInput(BaseModel):
+    action_type: str
+    action_config: Dict[str, Any] = Field(default_factory=dict)
+    condition: Optional[Dict[str, Any]] = None
+
+
+class CreateWorkflowRequest(BaseModel):
+    workspace_id: str
+    name: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+    trigger_type: str = Field(default="manual")
+    trigger_config: Dict[str, Any] = Field(default_factory=dict)
+    is_active: bool = True
+    steps: List[WorkflowStepInput] = Field(default_factory=list)
+
+
+class UpdateWorkflowRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = None
+    trigger_type: Optional[str] = None
+    trigger_config: Optional[Dict[str, Any]] = None
+    is_active: Optional[bool] = None
+    steps: Optional[List[WorkflowStepInput]] = None
+
+
+class WorkflowResponse(BaseModel):
+    workflow: Dict[str, Any]
+
+    class Config:
+        extra = "allow"
+
+
+class WorkflowListResponse(BaseModel):
+    workflows: List[Dict[str, Any]]
+    count: int
+
+
+class WorkflowRunListResponse(BaseModel):
+    runs: List[Dict[str, Any]]
+    count: int
+
+
+class TriggerWorkflowRequest(BaseModel):
+    workspace_id: str
+    opportunity_id: Optional[str] = None
 
 
 # ============================================================================
@@ -731,6 +963,584 @@ async def get_timeline_endpoint(
         )
     except Exception as e:
         handle_api_exception(e, "Failed to get timeline", logger)
+
+
+# ============================================================================
+# Opportunity Detail Endpoints (full, stage, messages, tasks)
+# ============================================================================
+
+@router.get("/opportunities/{opportunity_id}/full", response_model=OpportunityResponse)
+async def get_opportunity_full_endpoint(
+    opportunity_id: str,
+    workspace_id: str = Query(..., description="Workspace ID"),
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Get full opportunity detail with contact, company, notes, timeline, and tasks."""
+    try:
+        from api.services.crm.opportunities import get_opportunity
+        opportunity = await get_opportunity(opportunity_id, workspace_id, user_jwt)
+        if not opportunity:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Opportunity not found"
+            )
+
+        supabase = await get_authenticated_async_client(user_jwt)
+
+        # Fetch notes linked to this opportunity
+        notes_result = await (
+            supabase.table("crm_notes")
+            .select("*")
+            .eq("workspace_id", workspace_id)
+            .eq("entity_type", "opportunity")
+            .eq("entity_id", opportunity_id)
+            .is_("deleted_at", "null")
+            .order("created_at", desc=True)
+            .limit(50)
+            .execute()
+        )
+        opportunity["notes"] = notes_result.data or []
+
+        # Fetch tasks
+        try:
+            tasks_result = await (
+                supabase.table("crm_opportunity_tasks")
+                .select("*")
+                .eq("opportunity_id", opportunity_id)
+                .eq("workspace_id", workspace_id)
+                .order("created_at", desc=True)
+                .execute()
+            )
+            opportunity["tasks"] = tasks_result.data or []
+        except Exception:
+            opportunity["tasks"] = []
+
+        # Fetch chat messages from timeline
+        messages_result = await (
+            supabase.table("crm_timeline")
+            .select("*")
+            .eq("entity_type", "opportunity")
+            .eq("entity_id", opportunity_id)
+            .eq("event_type", "chat_message")
+            .order("occurred_at", desc=False)
+            .limit(100)
+            .execute()
+        )
+        opportunity["messages"] = messages_result.data or []
+
+        return {"opportunity": opportunity}
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to get full opportunity detail", logger)
+
+
+@router.patch("/opportunities/{opportunity_id}/stage", response_model=OpportunityResponse)
+async def update_opportunity_stage_endpoint(
+    opportunity_id: str,
+    body: UpdateStageRequest,
+    workspace_id: str = Query(..., description="Workspace ID"),
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Quick stage update for an opportunity."""
+    try:
+        opportunity = await update_opportunity(
+            opportunity_id, workspace_id, user_id, user_jwt, {"stage": body.stage}
+        )
+        if not opportunity:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Opportunity not found"
+            )
+        return {"opportunity": opportunity}
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to update opportunity stage", logger)
+
+
+@router.post("/opportunities/{opportunity_id}/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+async def post_opportunity_message_endpoint(
+    opportunity_id: str,
+    body: PostMessageRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Post a chat message to an opportunity timeline."""
+    try:
+        supabase = await get_authenticated_async_client(user_jwt)
+
+        from api.services.crm.timeline import create_timeline_event
+        event = await create_timeline_event(
+            supabase=supabase,
+            workspace_id=body.workspace_id,
+            entity_type="opportunity",
+            entity_id=opportunity_id,
+            event_type="chat_message",
+            description=body.content,
+            actor_id=user_id,
+            metadata={"content": body.content, "author_id": user_id},
+        )
+        return {"message": event}
+    except Exception as e:
+        handle_api_exception(e, "Failed to post opportunity message", logger)
+
+
+@router.get("/opportunities/{opportunity_id}/messages", response_model=MessageListResponse)
+async def get_opportunity_messages_endpoint(
+    opportunity_id: str,
+    workspace_id: str = Query(..., description="Workspace ID"),
+    limit: int = Query(100, ge=1, le=500),
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Get chat messages for an opportunity."""
+    try:
+        supabase = await get_authenticated_async_client(user_jwt)
+
+        result = await (
+            supabase.table("crm_timeline")
+            .select("*", count="exact")
+            .eq("entity_type", "opportunity")
+            .eq("entity_id", opportunity_id)
+            .eq("workspace_id", workspace_id)
+            .eq("event_type", "chat_message")
+            .order("occurred_at", desc=False)
+            .limit(limit)
+            .execute()
+        )
+        return {"messages": result.data or [], "count": result.count or 0}
+    except Exception as e:
+        handle_api_exception(e, "Failed to get opportunity messages", logger)
+
+
+# ============================================================================
+# Opportunity Tasks Endpoints
+# ============================================================================
+
+@router.post("/opportunities/{opportunity_id}/tasks", response_model=OpportunityTaskResponse, status_code=status.HTTP_201_CREATED)
+async def create_opportunity_task_endpoint(
+    opportunity_id: str,
+    body: CreateOpportunityTaskRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Create a task linked to an opportunity."""
+    try:
+        supabase = await get_authenticated_async_client(user_jwt)
+
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).isoformat()
+        record = {
+            "opportunity_id": opportunity_id,
+            "workspace_id": body.workspace_id,
+            "title": body.title,
+            "status": "pending",
+            "created_by": user_id,
+            "created_at": now,
+        }
+        if body.due_date:
+            record["due_date"] = body.due_date
+        if body.assignee_id:
+            record["assignee_id"] = body.assignee_id
+
+        result = await (
+            supabase.table("crm_opportunity_tasks")
+            .insert(record)
+            .execute()
+        )
+        data = result.data or []
+        if not data:
+            raise RuntimeError("Failed to create task")
+        return {"task": data[0]}
+    except Exception as e:
+        handle_api_exception(e, "Failed to create opportunity task", logger)
+
+
+@router.get("/opportunities/{opportunity_id}/tasks", response_model=OpportunityTaskListResponse)
+async def list_opportunity_tasks_endpoint(
+    opportunity_id: str,
+    workspace_id: str = Query(..., description="Workspace ID"),
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """List tasks for an opportunity."""
+    try:
+        supabase = await get_authenticated_async_client(user_jwt)
+
+        result = await (
+            supabase.table("crm_opportunity_tasks")
+            .select("*")
+            .eq("opportunity_id", opportunity_id)
+            .eq("workspace_id", workspace_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        tasks = result.data or []
+        return {"tasks": tasks, "count": len(tasks)}
+    except Exception as e:
+        handle_api_exception(e, "Failed to list opportunity tasks", logger)
+
+
+@router.patch("/opportunities/tasks/{task_id}", response_model=OpportunityTaskResponse)
+async def update_opportunity_task_endpoint(
+    task_id: str,
+    body: UpdateOpportunityTaskRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Update an opportunity task (complete, change due date, etc.)."""
+    try:
+        supabase = await get_authenticated_async_client(user_jwt)
+
+        data = body.model_dump(exclude_none=True)
+        if data.get("status") == "done":
+            from datetime import datetime, timezone
+            data["completed_at"] = datetime.now(timezone.utc).isoformat()
+        elif data.get("status") == "pending":
+            data["completed_at"] = None
+
+        result = await (
+            supabase.table("crm_opportunity_tasks")
+            .update(data)
+            .eq("id", task_id)
+            .execute()
+        )
+        tasks = result.data or []
+        if not tasks:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Task not found"
+            )
+        return {"task": tasks[0]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to update opportunity task", logger)
+
+
+# ============================================================================
+# Product Endpoints
+# ============================================================================
+
+@router.get("/products", response_model=ProductListResponse)
+async def list_products_endpoint(
+    workspace_id: str = Query(..., description="Workspace ID"),
+    search: Optional[str] = Query(None, description="Search query"),
+    category: Optional[str] = Query(None, description="Filter by category"),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """List products for a workspace."""
+    try:
+        result = await list_products(workspace_id, user_jwt, search, category, limit, offset)
+        return result
+    except Exception as e:
+        handle_api_exception(e, "Failed to list products", logger)
+
+
+@router.post("/products", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
+async def create_product_endpoint(
+    body: CreateProductRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Create a new product."""
+    try:
+        product = await create_product(
+            body.workspace_id, user_id, user_jwt, body.model_dump()
+        )
+        return {"product": product}
+    except Exception as e:
+        handle_api_exception(e, "Failed to create product", logger)
+
+
+@router.patch("/products/{product_id}", response_model=ProductResponse)
+async def update_product_endpoint(
+    product_id: str,
+    body: UpdateProductRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Update a product."""
+    try:
+        data = body.model_dump(exclude_none=True)
+        product = await update_product(product_id, user_jwt, data)
+        if not product:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Product not found"
+            )
+        return {"product": product}
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to update product", logger)
+
+
+# ============================================================================
+# Quotation Endpoints
+# ============================================================================
+
+@router.get("/quotations", response_model=QuotationListResponse)
+async def list_quotations_endpoint(
+    workspace_id: str = Query(..., description="Workspace ID"),
+    opportunity_id: Optional[str] = Query(None, description="Filter by opportunity"),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """List quotations for a workspace."""
+    try:
+        result = await list_quotations(workspace_id, user_jwt, opportunity_id, limit, offset)
+        return result
+    except Exception as e:
+        handle_api_exception(e, "Failed to list quotations", logger)
+
+
+@router.get("/quotations/{quotation_id}", response_model=QuotationResponse)
+async def get_quotation_endpoint(
+    quotation_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Get quotation detail with lines."""
+    try:
+        quotation = await get_quotation(quotation_id, user_jwt)
+        if not quotation:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Quotation not found"
+            )
+        return {"quotation": quotation}
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to get quotation", logger)
+
+
+@router.post("/quotations", response_model=QuotationResponse, status_code=status.HTTP_201_CREATED)
+async def create_quotation_endpoint(
+    body: CreateQuotationRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Create a new quotation with optional lines."""
+    try:
+        data = body.model_dump()
+        # Convert line models to dicts
+        data["lines"] = [line.model_dump() for line in body.lines] if body.lines else []
+        quotation = await create_quotation(
+            body.workspace_id, user_id, user_jwt, data
+        )
+        return {"quotation": quotation}
+    except Exception as e:
+        handle_api_exception(e, "Failed to create quotation", logger)
+
+
+@router.patch("/quotations/{quotation_id}", response_model=QuotationResponse)
+async def update_quotation_endpoint(
+    quotation_id: str,
+    body: UpdateQuotationRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Update a quotation header."""
+    try:
+        data = body.model_dump(exclude_none=True)
+        quotation = await update_quotation(quotation_id, user_jwt, data)
+        if not quotation:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Quotation not found"
+            )
+        return {"quotation": quotation}
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to update quotation", logger)
+
+
+@router.post("/quotations/{quotation_id}/lines", response_model=QuotationLineResponse, status_code=status.HTTP_201_CREATED)
+async def add_quotation_line_endpoint(
+    quotation_id: str,
+    body: QuotationLineRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Add a line to a quotation."""
+    try:
+        line = await add_quotation_line(quotation_id, user_jwt, body.model_dump())
+        return {"line": line}
+    except Exception as e:
+        handle_api_exception(e, "Failed to add quotation line", logger)
+
+
+@router.patch("/quotation-lines/{line_id}", response_model=QuotationLineResponse)
+async def update_quotation_line_endpoint(
+    line_id: str,
+    body: UpdateQuotationLineRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Update a quotation line."""
+    try:
+        data = body.model_dump(exclude_none=True)
+        line = await update_quotation_line(line_id, user_jwt, data)
+        if not line:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Quotation line not found"
+            )
+        return {"line": line}
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to update quotation line", logger)
+
+
+@router.delete("/quotation-lines/{line_id}", response_model=DeleteResponse)
+async def delete_quotation_line_endpoint(
+    line_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Delete a quotation line."""
+    try:
+        deleted = await delete_quotation_line(line_id, user_jwt)
+        if not deleted:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Quotation line not found"
+            )
+        return {"success": True, "message": "Quotation line deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to delete quotation line", logger)
+
+
+# ============================================================================
+# Workflow Endpoints
+# ============================================================================
+
+@router.get("/workflows", response_model=WorkflowListResponse)
+async def list_workflows_endpoint(
+    workspace_id: str = Query(..., description="Workspace ID"),
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """List all workflows for a workspace."""
+    try:
+        result = await list_workflows(workspace_id, user_jwt)
+        return result
+    except Exception as e:
+        handle_api_exception(e, "Failed to list workflows", logger)
+
+
+@router.post("/workflows", response_model=WorkflowResponse, status_code=status.HTTP_201_CREATED)
+async def create_workflow_endpoint(
+    body: CreateWorkflowRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Create a new workflow with steps."""
+    try:
+        data = body.model_dump()
+        data["steps"] = [s.model_dump() for s in body.steps] if body.steps else []
+        workflow = await create_workflow(
+            body.workspace_id, user_id, user_jwt, data
+        )
+        return {"workflow": workflow}
+    except Exception as e:
+        handle_api_exception(e, "Failed to create workflow", logger)
+
+
+@router.patch("/workflows/{workflow_id}", response_model=WorkflowResponse)
+async def update_workflow_endpoint(
+    workflow_id: str,
+    body: UpdateWorkflowRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Update a workflow."""
+    try:
+        data = body.model_dump(exclude_none=True)
+        if "steps" in data and data["steps"] is not None:
+            data["steps"] = [s if isinstance(s, dict) else s.model_dump() for s in body.steps]
+        workflow = await update_workflow(workflow_id, user_jwt, data)
+        if not workflow:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Workflow not found"
+            )
+        return {"workflow": workflow}
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to update workflow", logger)
+
+
+@router.delete("/workflows/{workflow_id}", response_model=DeleteResponse)
+async def delete_workflow_endpoint(
+    workflow_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Delete a workflow."""
+    try:
+        from api.services.crm.workflows import delete_workflow
+        deleted = await delete_workflow(workflow_id, user_jwt)
+        if not deleted:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Workflow not found"
+            )
+        return {"success": True, "message": "Workflow deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to delete workflow", logger)
+
+
+@router.get("/workflow-runs", response_model=WorkflowRunListResponse)
+async def list_workflow_runs_endpoint(
+    workspace_id: str = Query(..., description="Workspace ID"),
+    workflow_id: Optional[str] = Query(None, description="Filter by workflow"),
+    limit: int = Query(50, ge=1, le=200),
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """List workflow execution runs."""
+    try:
+        result = await list_workflow_runs(workspace_id, user_jwt, workflow_id, limit)
+        return result
+    except Exception as e:
+        handle_api_exception(e, "Failed to list workflow runs", logger)
+
+
+@router.post("/workflows/{workflow_id}/trigger", response_model=WorkflowResponse)
+async def trigger_workflow_endpoint(
+    workflow_id: str,
+    body: TriggerWorkflowRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Manually trigger a workflow."""
+    try:
+        opp_data = {
+            "opportunity_id": body.opportunity_id,
+            "workspace_id": body.workspace_id,
+        }
+        runs = await trigger_workflows(body.workspace_id, "manual", opp_data, user_jwt)
+        return {"workflow": {"triggered_runs": len(runs), "runs": runs}}
+    except Exception as e:
+        handle_api_exception(e, "Failed to trigger workflow", logger)
 
 
 # ============================================================================
