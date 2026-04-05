@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { acceptWorkspaceInvitationByToken } from '../api/client';
 import { useAuthStore } from '../stores/authStore';
+import { useWorkspaceStore } from '../stores/workspaceStore';
 
 type InviteState = 'loading' | 'needs-auth' | 'processing' | 'success' | 'error';
 const PENDING_INVITE_TOKEN_KEY = 'pending_invite_token';
@@ -57,6 +58,7 @@ export default function InviteAcceptPage() {
   const [state, setState] = useState<InviteState>('loading');
   const [message, setMessage] = useState('');
   const [retryCount, setRetryCount] = useState(0);
+  const [acceptedWorkspaceId, setAcceptedWorkspaceId] = useState<string | null>(null);
 
   const attemptedTokenRef = useRef<string | null>(null);
 
@@ -95,13 +97,40 @@ export default function InviteAcceptPage() {
         const result = await acceptWorkspaceInvitationByToken(token);
         if (!isMounted) return;
         clearPendingInviteToken();
+
+        // Mark onboarding as completed so the user is not redirected to
+        // the onboarding wizard — they already have a workspace via the invite.
+        const onboardingCompletedAt = useAuthStore.getState().onboardingCompletedAt;
+        if (!onboardingCompletedAt) {
+          try {
+            await useAuthStore.getState().completeOnboarding();
+          } catch {
+            // Best-effort: the backend already marked it, this just syncs the frontend store.
+          }
+        }
+
+        // Navigate to the invited workspace instead of generic /chat
+        const workspaceId = result.invitation?.workspace_id;
+        if (workspaceId) setAcceptedWorkspaceId(workspaceId);
         const successMessage =
           result.already_processed
             ? 'Invitación ya aceptada. Puedes continuar a Pulse.'
             : 'Invitación aceptada. Ahora eres miembro del espacio de trabajo.';
         setState('success');
         setMessage(successMessage);
-        navigate('/chat', { replace: true });
+
+        // Refresh workspace list so the new workspace appears in sidebar
+        try {
+          await useWorkspaceStore.getState().fetchInitData();
+        } catch {
+          // Best-effort
+        }
+
+        if (workspaceId) {
+          navigate(`/workspace/${workspaceId}/chat`, { replace: true });
+        } else {
+          navigate('/chat', { replace: true });
+        }
       } catch (err) {
         if (!isMounted) return;
         const errorMessage = err instanceof Error ? err.message : 'Error al aceptar la invitación';
@@ -197,7 +226,7 @@ export default function InviteAcceptPage() {
         {state === 'success' && (
           <div className="flex gap-2">
             <button
-              onClick={() => navigate('/chat')}
+              onClick={() => navigate(acceptedWorkspaceId ? `/workspace/${acceptedWorkspaceId}/chat` : '/chat')}
               className="px-4 py-2 text-sm rounded-lg bg-black text-white"
             >
               Abrir Pulse

@@ -636,10 +636,31 @@ async def _accept_invitation(
 
     await _archive_invitation_notifications(invitation["id"], recipient_user_id=user_id)
 
+    # Auto-mark onboarding as completed for invited users who haven't done it yet.
+    # They don't need to create their own workspace — they already have one via
+    # the invitation, so the onboarding wizard would just get in the way.
+    onboarding_completed = False
+    if membership_created:
+        try:
+            user_row = await client.table("users") \
+                .select("onboarding_completed_at") \
+                .eq("id", user_id) \
+                .maybe_single() \
+                .execute()
+            if user_row.data and not user_row.data.get("onboarding_completed_at"):
+                await client.table("users") \
+                    .update({"onboarding_completed_at": _now_iso()}) \
+                    .eq("id", user_id) \
+                    .execute()
+                onboarding_completed = True
+        except Exception as e:
+            logger.warning("Failed to auto-complete onboarding for invited user %s: %s", user_id, e)
+
     return {
         "invitation": invitation,
         "already_processed": not membership_created,
         "membership_created": membership_created,
+        "onboarding_completed": onboarding_completed,
     }
 
 

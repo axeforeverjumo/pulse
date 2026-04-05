@@ -499,15 +499,27 @@ function AppContent() {
     );
   }
 
+  // Check if user has a pending invitation token (set before OAuth redirect).
+  // If so, skip onboarding guards — the invite flow will handle everything.
+  const hasPendingInviteToken = (() => {
+    try {
+      return !!sessionStorage.getItem(PENDING_INVITE_TOKEN_KEY);
+    } catch {
+      return false;
+    }
+  })();
+
   // While authenticated but onboarding status not yet known, show a blank screen
   // to prevent flashing the app before redirecting new users to onboarding.
   // undefined = not yet loaded; null = loaded, not completed; string = completed.
-  if (isAuthenticated && !authLoading && onboardingCompletedAt === undefined && !isInviteRoute && !isShareLinkRoute) {
+  if (isAuthenticated && !authLoading && onboardingCompletedAt === undefined && !isInviteRoute && !isShareLinkRoute && !hasPendingInviteToken && !inviteRedirectInProgressRef.current) {
     return <div className="h-screen w-screen bg-white" />;
   }
 
-  // Check if user needs onboarding (status loaded and not completed)
-  const needsOnboarding = isAuthenticated && onboardingCompletedAt === null;
+  // Check if user needs onboarding (status loaded and not completed).
+  // Skip for users with a pending invite token — they'll complete onboarding
+  // as part of accepting the invitation.
+  const needsOnboarding = isAuthenticated && onboardingCompletedAt === null && !hasPendingInviteToken && !inviteRedirectInProgressRef.current;
 
   // Landing page logic - handle auth state before rendering
   if (location.pathname === "/") {
