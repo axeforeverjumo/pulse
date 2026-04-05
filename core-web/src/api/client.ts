@@ -2637,6 +2637,9 @@ export async function createProjectBoard(data: {
   server_user?: string;
   server_password?: string;
   server_port?: number;
+  deploy_mode?: 'local' | 'external' | 'dedicated';
+  deploy_server_id?: string;
+  deploy_subdomain?: string;
 }): Promise<{ board: ProjectBoard; states: ProjectState[] }> {
   return api('/projects/boards', {
     method: 'POST',

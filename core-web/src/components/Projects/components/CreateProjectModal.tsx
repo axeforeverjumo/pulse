@@ -1,8 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useProjectsStore } from '../../../stores/projectsStore';
 import { useCreateBoard } from '../../../hooks/queries/useProjects';
-import { createGitHubRepo, listGitHubRepos, type GitHubRepo } from '../../../api/client';
+import { createGitHubRepo, listGitHubRepos, listServers, type GitHubRepo, type WorkspaceServer } from '../../../api/client';
 import Modal from '../../Modal/Modal';
+
+type DeployMode = 'local' | 'external' | 'dedicated';
+
+const DEPLOY_OPTIONS: { value: DeployMode; icon: string; label: string; desc: string }[] = [
+  { value: 'local', icon: '🖥️', label: 'Local', desc: 'Servidor principal' },
+  { value: 'external', icon: '🌐', label: 'Externo', desc: 'Servidor de pruebas' },
+  { value: 'dedicated', icon: '🔧', label: 'Dedicado', desc: 'Servidor completo' },
+];
 
 interface CreateProjectModalProps {
   isOpen: boolean;
@@ -15,74 +23,85 @@ export default function CreateProjectModal({
   onClose,
   onCreated,
 }: CreateProjectModalProps) {
+  // Basic fields
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [isDevelopment, setIsDevelopment] = useState(false);
-  const [projectUrl, setProjectUrl] = useState('');
-  const [repositoryUrl, setRepositoryUrl] = useState('');
-  const [repositoryFullName, setRepositoryFullName] = useState('');
-  const [serverHost, setServerHost] = useState('');
-  const [serverIp, setServerIp] = useState('');
-  const [serverUser, setServerUser] = useState('');
-  const [serverPassword, setServerPassword] = useState('');
-  const [serverPort, setServerPort] = useState('');
 
-  // GitHub linkage (ephemeral, not persisted)
-  const [githubToken, setGithubToken] = useState('');
-  const [githubOwner, setGithubOwner] = useState('');
-  const [repos, setRepos] = useState<GitHubRepo[]>([]);
-  const [selectedRepo, setSelectedRepo] = useState('');
+  // Deploy config
+  const [deployMode, setDeployMode] = useState<DeployMode>('local');
+  const [deployServerId, setDeployServerId] = useState('');
+  const [deploySubdomain, setDeploySubdomain] = useState('');
+
+  // Servers from workspace
+  const [servers, setServers] = useState<WorkspaceServer[]>([]);
+  const [loadingServers, setLoadingServers] = useState(false);
+
+  // GitHub
+  const [repoMode, setRepoMode] = useState<'url' | 'create'>('url');
+  const [repositoryUrl, setRepositoryUrl] = useState('');
   const [newRepoName, setNewRepoName] = useState('');
-  const [isLoadingRepos, setIsLoadingRepos] = useState(false);
+  const [githubToken, setGithubToken] = useState('');
+  const [showToken, setShowToken] = useState(false);
   const [isCreatingRepo, setIsCreatingRepo] = useState(false);
   const [githubError, setGithubError] = useState<string | null>(null);
 
   const workspaceAppId = useProjectsStore((state) => state.workspaceAppId);
+  const workspaceId = useProjectsStore((state) => state.workspaceId);
   const createBoard = useCreateBoard(workspaceAppId);
 
-  const canLoadRepos = useMemo(
-    () => githubToken.trim().length >= 20 && !isLoadingRepos,
-    [githubToken, isLoadingRepos]
+  const needsServer = deployMode === 'external' || deployMode === 'dedicated';
+
+  // Parse owner/repo from URL
+  const parsedRepo = useMemo(() => {
+    try {
+      const url = new URL(repositoryUrl.trim());
+      const parts = url.pathname.replace(/^\//, '').replace(/\.git$/, '').split('/');
+      if (parts.length >= 2) return `${parts[0]}/${parts[1]}`;
+    } catch { /* ignore */ }
+    return '';
+  }, [repositoryUrl]);
+
+  // Selected server's wildcard domain for subdomain preview
+  const selectedServer = useMemo(
+    () => servers.find((s) => s.id === deployServerId),
+    [servers, deployServerId]
   );
+  const subdomainPreview = useMemo(() => {
+    if (!deploySubdomain.trim() || !selectedServer?.wildcard_domain) return '';
+    return `${deploySubdomain.trim()}.${selectedServer.wildcard_domain}`;
+  }, [deploySubdomain, selectedServer]);
+
+  // Load servers when dev mode + needs server
+  useEffect(() => {
+    if (!isOpen || !isDevelopment || !needsServer || !workspaceId) return;
+    if (servers.length > 0) return; // already loaded
+    setLoadingServers(true);
+    listServers(workspaceId)
+      .then((res) => {
+        setServers(res.servers || []);
+        // Auto-select default server
+        const def = (res.servers || []).find((s) => s.is_default);
+        if (def) setDeployServerId(def.id);
+      })
+      .catch(() => setServers([]))
+      .finally(() => setLoadingServers(false));
+  }, [isOpen, isDevelopment, needsServer, workspaceId]);
 
   const reset = () => {
     setName('');
     setDescription('');
     setIsDevelopment(false);
-    setProjectUrl('');
+    setDeployMode('local');
+    setDeployServerId('');
+    setDeploySubdomain('');
+    setServers([]);
+    setRepoMode('url');
     setRepositoryUrl('');
-    setRepositoryFullName('');
-    setServerHost('');
-    setServerIp('');
-    setServerUser('');
-    setServerPassword('');
-    setServerPort('');
-    setGithubToken('');
-    setGithubOwner('');
-    setRepos([]);
-    setSelectedRepo('');
     setNewRepoName('');
+    setGithubToken('');
+    setShowToken(false);
     setGithubError(null);
-  };
-
-  const handleLoadRepos = async () => {
-    if (!canLoadRepos) return;
-    setIsLoadingRepos(true);
-    setGithubError(null);
-    try {
-      const result = await listGitHubRepos({
-        token: githubToken.trim(),
-        owner: githubOwner.trim() || undefined,
-      });
-      setRepos(result.repos || []);
-      if ((result.repos || []).length === 0) {
-        setGithubError('No encontré repos para ese token/owner.');
-      }
-    } catch (error) {
-      setGithubError(error instanceof Error ? error.message : 'No pude cargar repositorios');
-    } finally {
-      setIsLoadingRepos(false);
-    }
   };
 
   const handleCreateRepo = async () => {
@@ -92,16 +111,13 @@ export default function CreateProjectModal({
     try {
       const result = await createGitHubRepo({
         token: githubToken.trim(),
-        owner: githubOwner.trim() || undefined,
         name: newRepoName.trim(),
         private: true,
         description: `Repository for ${name.trim() || newRepoName.trim()}`,
       });
       const created = result.repo;
-      setRepos((prev) => [created, ...prev.filter((r) => r.id !== created.id)]);
-      setSelectedRepo(created.full_name);
       setRepositoryUrl(created.html_url || '');
-      setRepositoryFullName(created.full_name || '');
+      setRepoMode('url');
       setNewRepoName('');
     } catch (error) {
       setGithubError(error instanceof Error ? error.message : 'No pude crear el repositorio');
@@ -110,17 +126,8 @@ export default function CreateProjectModal({
     }
   };
 
-  const handleRepoSelect = (fullName: string) => {
-    setSelectedRepo(fullName);
-    const repo = repos.find((r) => r.full_name === fullName);
-    if (!repo) return;
-    setRepositoryUrl(repo.html_url || '');
-    setRepositoryFullName(repo.full_name || '');
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!name.trim()) return;
 
     try {
@@ -128,14 +135,15 @@ export default function CreateProjectModal({
         name: name.trim(),
         description: description.trim() || undefined,
         is_development: isDevelopment,
-        project_url: isDevelopment ? (projectUrl.trim() || undefined) : undefined,
-        repository_url: isDevelopment ? (repositoryUrl.trim() || undefined) : undefined,
-        repository_full_name: isDevelopment ? (repositoryFullName.trim() || undefined) : undefined,
-        server_host: isDevelopment ? (serverHost.trim() || undefined) : undefined,
-        server_ip: isDevelopment ? (serverIp.trim() || undefined) : undefined,
-        server_user: isDevelopment ? (serverUser.trim() || undefined) : undefined,
-        server_password: isDevelopment ? (serverPassword.trim() || undefined) : undefined,
-        server_port: isDevelopment && serverPort.trim() ? Number(serverPort.trim()) : undefined,
+        ...(isDevelopment
+          ? {
+              deploy_mode: deployMode,
+              deploy_server_id: needsServer && deployServerId ? deployServerId : undefined,
+              deploy_subdomain: needsServer && deploySubdomain.trim() ? deploySubdomain.trim() : undefined,
+              repository_url: repositoryUrl.trim() || undefined,
+              repository_full_name: parsedRepo || undefined,
+            }
+          : {}),
       });
       if (result.board && onCreated) {
         onCreated(result.board.id);
@@ -147,34 +155,40 @@ export default function CreateProjectModal({
     }
   };
 
+  const inputCls =
+    'w-full px-3 py-2 text-[13px] text-gray-900 bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-400 transition-colors';
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Nuevo proyecto">
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4" style={{ maxWidth: 480 }}>
+        {/* Name */}
         <div>
-          <label className="block text-[12px] font-medium text-gray-500 mb-2">Nombre</label>
+          <label className="block text-[12px] font-medium text-gray-500 mb-1.5">Nombre</label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g., Pulse Core API"
-            className="w-full px-3 py-2 text-[14px] text-gray-900 bg-transparent border border-gray-200 rounded-lg focus:outline-none focus:border-gray-300 placeholder:text-gray-400"
+            className="w-full px-3 py-2 text-[14px] text-gray-900 bg-transparent border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-400"
             autoFocus
           />
         </div>
 
+        {/* Description */}
         <div>
-          <label className="block text-[12px] font-medium text-gray-500 mb-2">
-            Descripción <span className="text-gray-400 font-normal">(opcional)</span>
+          <label className="block text-[12px] font-medium text-gray-500 mb-1.5">
+            Descripcion <span className="text-gray-400 font-normal">(opcional)</span>
           </label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="¿Qué objetivo tiene este proyecto?"
-            rows={3}
-            className="w-full px-3 py-2 text-[14px] text-gray-900 bg-transparent border border-gray-200 rounded-lg focus:outline-none focus:border-gray-300 placeholder:text-gray-400 resize-none"
+            placeholder="Objetivo del proyecto..."
+            rows={2}
+            className="w-full px-3 py-2 text-[14px] text-gray-900 bg-transparent border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 placeholder:text-gray-400 resize-none"
           />
         </div>
 
+        {/* Development toggle */}
         <label className="flex items-center gap-2 text-[13px] text-gray-700 cursor-pointer select-none">
           <input
             type="checkbox"
@@ -185,156 +199,206 @@ export default function CreateProjectModal({
           Proyecto de desarrollo
         </label>
 
+        {/* Development section */}
         {isDevelopment && (
-          <div className="space-y-3 border border-gray-100 bg-gray-50/50 rounded-xl p-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="sm:col-span-2">
-                <label className="block text-[12px] font-medium text-gray-500 mb-1">URL del proyecto</label>
-                <input
-                  type="url"
-                  value={projectUrl}
-                  onChange={(e) => setProjectUrl(e.target.value)}
-                  placeholder="https://miapp.com"
-                  className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:border-gray-300 bg-white"
-                />
-              </div>
-              <div>
-                <label className="block text-[12px] font-medium text-gray-500 mb-1">Servidor</label>
-                <input
-                  type="text"
-                  value={serverHost}
-                  onChange={(e) => setServerHost(e.target.value)}
-                  placeholder="Producción / Staging"
-                  className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:border-gray-300 bg-white"
-                />
-              </div>
-              <div>
-                <label className="block text-[12px] font-medium text-gray-500 mb-1">IP del servidor</label>
-                <input
-                  type="text"
-                  value={serverIp}
-                  onChange={(e) => setServerIp(e.target.value)}
-                  placeholder="85.215.105.45"
-                  className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:border-gray-300 bg-white"
-                />
-              </div>
-              <div>
-                <label className="block text-[12px] font-medium text-gray-500 mb-1">Usuario servidor</label>
-                <input
-                  type="text"
-                  value={serverUser}
-                  onChange={(e) => setServerUser(e.target.value)}
-                  placeholder="root"
-                  className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:border-gray-300 bg-white"
-                />
-              </div>
-              <div>
-                <label className="block text-[12px] font-medium text-gray-500 mb-1">Puerto</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={65535}
-                  value={serverPort}
-                  onChange={(e) => setServerPort(e.target.value)}
-                  placeholder="22"
-                  className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:border-gray-300 bg-white"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-[12px] font-medium text-gray-500 mb-1">Contraseña servidor (opcional)</label>
-                <input
-                  type="text"
-                  value={serverPassword}
-                  onChange={(e) => setServerPassword(e.target.value)}
-                  placeholder="Si aplica, guárdala aquí temporalmente"
-                  className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:border-gray-300 bg-white"
-                />
+          <div className="space-y-4 border border-gray-100 bg-gray-50/50 rounded-xl p-4">
+            {/* Deploy mode cards */}
+            <div>
+              <label className="block text-[12px] font-medium text-gray-500 mb-2">
+                Modo de despliegue
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {DEPLOY_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setDeployMode(opt.value)}
+                    className={`
+                      flex flex-col items-center gap-1 px-3 py-3 rounded-lg border text-center transition-all cursor-pointer
+                      ${
+                        deployMode === opt.value
+                          ? 'border-gray-900 bg-white shadow-sm ring-1 ring-gray-900/5'
+                          : 'border-gray-200 bg-white hover:border-gray-300'
+                      }
+                    `}
+                  >
+                    <span className="text-lg leading-none">{opt.icon}</span>
+                    <span className="text-[12px] font-medium text-gray-900">{opt.label}</span>
+                    <span className="text-[10px] text-gray-500 leading-tight">{opt.desc}</span>
+                  </button>
+                ))}
               </div>
             </div>
 
-            <div className="border-t border-gray-200 pt-3 space-y-2">
-              <div className="text-[12px] font-medium text-gray-500">Repositorio (GitHub)</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <input
-                  type="password"
-                  value={githubToken}
-                  onChange={(e) => setGithubToken(e.target.value)}
-                  placeholder="GitHub token del cliente"
-                  className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:border-gray-300 bg-white"
-                />
-                <div className="flex gap-2">
+            {/* Server selection (external/dedicated only) */}
+            {needsServer && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[12px] font-medium text-gray-500 mb-1.5">
+                    Servidor
+                  </label>
+                  {loadingServers ? (
+                    <div className="px-3 py-2 text-[13px] text-gray-400 border border-gray-200 rounded-lg bg-white">
+                      Cargando servidores...
+                    </div>
+                  ) : servers.length === 0 ? (
+                    <div className="px-3 py-2 text-[13px] text-gray-500 border border-dashed border-gray-200 rounded-lg bg-white text-center">
+                      No hay servidores configurados.{' '}
+                      <span className="text-gray-900 underline underline-offset-2 cursor-pointer">
+                        Configura uno en Ajustes
+                      </span>
+                    </div>
+                  ) : (
+                    <select
+                      value={deployServerId}
+                      onChange={(e) => setDeployServerId(e.target.value)}
+                      className={inputCls}
+                    >
+                      <option value="">Selecciona un servidor</option>
+                      {servers.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.host})
+                          {s.status === 'verified' ? ' ✓' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {/* Subdomain */}
+                <div>
+                  <label className="block text-[12px] font-medium text-gray-500 mb-1.5">
+                    Subdominio
+                  </label>
                   <input
                     type="text"
-                    value={githubOwner}
-                    onChange={(e) => setGithubOwner(e.target.value)}
-                    placeholder="owner/org (opcional)"
-                    className="flex-1 px-3 py-2 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:border-gray-300 bg-white"
+                    value={deploySubdomain}
+                    onChange={(e) => setDeploySubdomain(e.target.value.replace(/[^a-z0-9-]/gi, '').toLowerCase())}
+                    placeholder="miapp"
+                    className={inputCls}
                   />
+                  {subdomainPreview && (
+                    <p className="mt-1 text-[11px] text-gray-400">
+                      URL: <span className="text-gray-600 font-medium">{subdomainPreview}</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Separator */}
+            <div className="border-t border-gray-200" />
+
+            {/* GitHub section */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] font-medium text-gray-500">Repositorio GitHub</span>
+                <div className="flex gap-1 bg-gray-100 rounded-md p-0.5">
                   <button
                     type="button"
-                    onClick={handleLoadRepos}
-                    disabled={!canLoadRepos}
-                    className="px-3 py-2 text-[12px] font-medium bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40"
+                    onClick={() => setRepoMode('url')}
+                    className={`px-2 py-0.5 text-[11px] rounded transition-colors ${
+                      repoMode === 'url'
+                        ? 'bg-white text-gray-900 shadow-sm font-medium'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
                   >
-                    {isLoadingRepos ? 'Cargando...' : 'Ver repos'}
+                    URL
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRepoMode('create')}
+                    className={`px-2 py-0.5 text-[11px] rounded transition-colors ${
+                      repoMode === 'create'
+                        ? 'bg-white text-gray-900 shadow-sm font-medium'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Crear nuevo
                   </button>
                 </div>
               </div>
 
-              {repos.length > 0 && (
-                <select
-                  value={selectedRepo}
-                  onChange={(e) => handleRepoSelect(e.target.value)}
-                  className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:border-gray-300 bg-white"
-                >
-                  <option value="">Selecciona repositorio</option>
-                  {repos.map((repo) => (
-                    <option key={repo.id} value={repo.full_name}>{repo.full_name}</option>
-                  ))}
-                </select>
+              {repoMode === 'url' ? (
+                <div>
+                  <input
+                    type="url"
+                    value={repositoryUrl}
+                    onChange={(e) => setRepositoryUrl(e.target.value)}
+                    placeholder="https://github.com/owner/repo"
+                    className={inputCls}
+                  />
+                  {parsedRepo && (
+                    <p className="mt-1 text-[11px] text-gray-400">
+                      Repo: <span className="text-gray-600 font-medium">{parsedRepo}</span>
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newRepoName}
+                      onChange={(e) => setNewRepoName(e.target.value)}
+                      placeholder="Nombre del repositorio"
+                      className={`flex-1 ${inputCls}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreateRepo}
+                      disabled={!githubToken.trim() || !newRepoName.trim() || isCreatingRepo}
+                      className="px-3 py-2 text-[12px] font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                    >
+                      {isCreatingRepo ? 'Creando...' : 'Crear'}
+                    </button>
+                  </div>
+                  {!githubToken.trim() && (
+                    <p className="text-[11px] text-amber-600">
+                      Necesitas un token de GitHub para crear repositorios
+                    </p>
+                  )}
+                </div>
               )}
-
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newRepoName}
-                  onChange={(e) => setNewRepoName(e.target.value)}
-                  placeholder="Crear repo nuevo (nombre)"
-                  className="flex-1 px-3 py-2 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:border-gray-300 bg-white"
-                />
-                <button
-                  type="button"
-                  onClick={handleCreateRepo}
-                  disabled={!githubToken.trim() || !newRepoName.trim() || isCreatingRepo}
-                  className="px-3 py-2 text-[12px] font-medium bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40"
-                >
-                  {isCreatingRepo ? 'Creando...' : 'Crear repo'}
-                </button>
-              </div>
-
-              <input
-                type="text"
-                value={repositoryUrl}
-                onChange={(e) => setRepositoryUrl(e.target.value)}
-                placeholder="https://github.com/owner/repo"
-                className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:border-gray-300 bg-white"
-              />
-              <input
-                type="text"
-                value={repositoryFullName}
-                onChange={(e) => setRepositoryFullName(e.target.value)}
-                placeholder="owner/repo"
-                className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:border-gray-300 bg-white"
-              />
 
               {githubError && (
                 <p className="text-[12px] text-red-500">{githubError}</p>
               )}
+
+              {/* Collapsible token */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowToken(!showToken)}
+                  className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg
+                    className={`w-3 h-3 transition-transform ${showToken ? 'rotate-90' : ''}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                  Token GitHub
+                </button>
+                {showToken && (
+                  <input
+                    type="password"
+                    value={githubToken}
+                    onChange={(e) => setGithubToken(e.target.value)}
+                    placeholder="ghp_..."
+                    className={`mt-1.5 ${inputCls}`}
+                  />
+                )}
+              </div>
             </div>
           </div>
         )}
 
-        <div className="flex flex-wrap items-center justify-end gap-2 pt-4 border-t border-gray-100">
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-100">
           <button
             type="button"
             onClick={() => {
