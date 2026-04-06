@@ -98,14 +98,13 @@
 1. **WhatsApp** — integracion real con WhatsApp Business API (webhooks, envio/recepcion, QR flow)
 2. **Attachment upload en compose email** — solo reenviar existentes; no se puede adjuntar archivo local nuevo
 3. **CRM: workflow `ai_action` step** — tipo existe en schema, logica de ejecucion pendiente
-4. **Contexto Pulse nightly cron** — actualizacion manual funciona; cron automatico pendiente
 
 ### Funcionales
-5. **Agent advance CRUD** — actualmente read-only desde Pulse (CRUD solo en OpenClaw)
-6. **Email: reglas server-side con AI** — clasificacion actual es heuristica client-side
-7. **CRM: email thread popup desde OpportunityDetail** — solucion UI pendiente
-8. **CRM: buscar correo existente al vincular a oportunidad** — modal muestra input manual, busqueda en bandeja pendiente
-9. **DevOps: Overview tab** — UI lista, datos reales no implementados
+4. **Agent advance CRUD** — actualmente read-only desde Pulse (CRUD solo en OpenClaw)
+5. **Email: reglas server-side con AI** — clasificacion actual es heuristica client-side (post-sync AI analysis activo, frontend aun usa heuristicas hasta que DB se pueble)
+6. **CRM: email thread popup completo** — muestra metadata; cuerpo del email pendiente (fetch desde email API)
+7. **CRM: buscar correo existente al vincular a oportunidad** — modal muestra input manual, busqueda en bandeja pendiente
+8. **DevOps: Overview tab** — UI lista, datos reales no implementados
 
 ### Roadmap Claude Code Agents (Phases 1-6)
 10. **Claude Code CLI autenticado en server** (Phase 1 — no iniciado)
@@ -122,8 +121,8 @@
 ```
 Auth / Workspace    [==========] 100%  Completo
 Chat                [==========] 100%  Completo
-Email               [========--]  80%  AI categorias client-side; attachment upload pendiente
-CRM                 [=========.]  95%  ai_action step y Contexto cron pendiente
+Email               [=========.]  85%  AI categorias (post-sync + client-side); attachment upload pendiente
+CRM                 [=========.]  97%  ai_action step pendiente; cron Contexto Pulse activo
 Projects            [=========.]  95%  Claude Code integration pendiente (roadmap)
 Messaging (interna) [==========] 100%  Completo
 WhatsApp            [====------]  40%  Estructura lista; integracion real pendiente

@@ -376,7 +376,7 @@ core-web/src/
 - Agent queue para CRM
 - Crear contacto desde email + AI relationship summary
 - Chat context awareness (CRM sub-view)
-- **Contexto Pulse**: tab IA en OpportunityDetail, genera resumen de la oportunidad orientado a ventas (notas, tareas, correos). Actualización manual o nightly.
+- **Contexto Pulse**: tab IA en OpportunityDetail, genera resumen orientado a ventas (notas, tareas, correos). Actualización manual + cron nightly 02:00 UTC (`GET /api/cron/pulse-context` en `/opt/pulse/pulse-cron.sh`).
 - **Correos vinculados**: tabla `crm_opportunity_emails`, sección en OpportunityDetail
 - **Botón Oportunidad en email**: desde EmailView se puede crear oportunidad o vincular correo a existente
 
@@ -387,6 +387,5 @@ core-web/src/
 - Integración calendario para meetings en oportunidades
 - Templates de email para workflows
 - Workflow `ai_action` step (tipo existe, lógica pendiente)
-- Actualización automática nightly de Contexto Pulse (cron)
-- Pop-up de hilo completo al clicar correo vinculado desde OpportunityDetail
+- Pop-up de hilo completo al clicar correo vinculado desde OpportunityDetail (muestra metadata, cuerpo pendiente)
 - Buscar en bandeja al agregar correo a oportunidad existente
