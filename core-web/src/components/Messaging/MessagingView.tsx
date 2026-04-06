@@ -1154,7 +1154,7 @@ export default function MessagingView() {
       <div
         className={`${
           activeChat ? "hidden md:flex" : "flex"
-        } w-full md:w-[340px] md:min-w-[320px] md:max-w-[360px] border-r border-gray-100 dark:border-slate-800 flex-col bg-white dark:bg-slate-900`}
+        } w-full md:w-[340px] md:min-w-[340px] md:max-w-[340px] shrink-0 border-r border-gray-100 dark:border-slate-800 flex-col bg-white dark:bg-slate-900`}
       >
         {/* Header */}
         <div className="h-14 border-b border-gray-100 dark:border-slate-700/60 flex items-center px-4 gap-2.5 bg-white dark:bg-slate-900">
