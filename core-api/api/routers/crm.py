@@ -1043,6 +1043,20 @@ async def get_opportunity_full_endpoint(
         )
         opportunity["messages"] = messages_result.data or []
 
+        # Fetch linked emails
+        try:
+            emails_result = await (
+                supabase.table("crm_opportunity_emails")
+                .select("*")
+                .eq("opportunity_id", opportunity_id)
+                .eq("workspace_id", workspace_id)
+                .order("added_at", desc=True)
+                .execute()
+            )
+            opportunity["linked_emails"] = emails_result.data or []
+        except Exception:
+            opportunity["linked_emails"] = []
+
         return {"opportunity": opportunity}
     except HTTPException:
         raise
@@ -1766,3 +1780,218 @@ async def get_agent_task_endpoint(
         raise
     except Exception as e:
         handle_api_exception(e, "Failed to get agent task", logger)
+
+
+# ============================================================================
+# OPPORTUNITY EMAIL LINKING
+# ============================================================================
+
+class LinkEmailRequest(BaseModel):
+    workspace_id: str
+    email_thread_id: str
+    email_id: str
+    email_subject: Optional[str] = None
+    email_from: Optional[str] = None
+    email_from_name: Optional[str] = None
+    email_date: Optional[str] = None
+
+
+@router.get("/opportunities/{opportunity_id}/emails")
+async def list_opportunity_emails_endpoint(
+    opportunity_id: str,
+    workspace_id: str = Query(...),
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """List email threads linked to an opportunity."""
+    try:
+        supabase = await get_authenticated_async_client(user_jwt)
+        result = await (
+            supabase.table("crm_opportunity_emails")
+            .select("*")
+            .eq("opportunity_id", opportunity_id)
+            .eq("workspace_id", workspace_id)
+            .order("added_at", desc=True)
+            .execute()
+        )
+        return {"emails": result.data or []}
+    except Exception as e:
+        handle_api_exception(e, "Failed to list opportunity emails", logger)
+
+
+@router.post("/opportunities/{opportunity_id}/emails")
+async def link_email_to_opportunity_endpoint(
+    opportunity_id: str,
+    body: LinkEmailRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Link an email thread to an opportunity."""
+    try:
+        supabase = await get_authenticated_async_client(user_jwt)
+        data = {
+            "opportunity_id": opportunity_id,
+            "workspace_id": body.workspace_id,
+            "email_thread_id": body.email_thread_id,
+            "email_id": body.email_id,
+            "email_subject": body.email_subject,
+            "email_from": body.email_from,
+            "email_from_name": body.email_from_name,
+            "email_date": body.email_date,
+            "added_by": user_id,
+        }
+        result = await (
+            supabase.table("crm_opportunity_emails")
+            .upsert(data, on_conflict="opportunity_id,email_thread_id")
+            .execute()
+        )
+        return {"email": (result.data or [{}])[0], "success": True}
+    except Exception as e:
+        handle_api_exception(e, "Failed to link email to opportunity", logger)
+
+
+@router.delete("/opportunities/{opportunity_id}/emails/{thread_id}")
+async def unlink_email_from_opportunity_endpoint(
+    opportunity_id: str,
+    thread_id: str,
+    workspace_id: str = Query(...),
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Unlink an email thread from an opportunity."""
+    try:
+        supabase = await get_authenticated_async_client(user_jwt)
+        await (
+            supabase.table("crm_opportunity_emails")
+            .delete()
+            .eq("opportunity_id", opportunity_id)
+            .eq("email_thread_id", thread_id)
+            .eq("workspace_id", workspace_id)
+            .execute()
+        )
+        return {"success": True}
+    except Exception as e:
+        handle_api_exception(e, "Failed to unlink email from opportunity", logger)
+
+
+# ============================================================================
+# CONTEXTO PULSE (AI SUMMARY)
+# ============================================================================
+
+@router.get("/opportunities/{opportunity_id}/context")
+async def get_opportunity_context_endpoint(
+    opportunity_id: str,
+    workspace_id: str = Query(...),
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Get the current Pulse Context AI summary for an opportunity."""
+    try:
+        supabase = await get_authenticated_async_client(user_jwt)
+        result = await (
+            supabase.table("crm_opportunities")
+            .select("pulse_context, pulse_context_updated_at")
+            .eq("id", opportunity_id)
+            .single()
+            .execute()
+        )
+        data = result.data or {}
+        return {
+            "pulse_context": data.get("pulse_context"),
+            "pulse_context_updated_at": data.get("pulse_context_updated_at"),
+        }
+    except Exception as e:
+        handle_api_exception(e, "Failed to get opportunity context", logger)
+
+
+@router.post("/opportunities/{opportunity_id}/context/refresh")
+async def refresh_opportunity_context_endpoint(
+    opportunity_id: str,
+    workspace_id: str = Query(...),
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Generate or refresh the Pulse Context AI summary for an opportunity."""
+    try:
+        import anthropic
+        from datetime import datetime, timezone
+
+        supabase = await get_authenticated_async_client(user_jwt)
+
+        # Gather all opportunity data
+        from api.services.crm.opportunities import get_opportunity
+        opp = await get_opportunity(opportunity_id, workspace_id, user_jwt)
+        if not opp:
+            raise HTTPException(status_code=404, detail="Opportunity not found")
+
+        # Gather notes
+        note_targets = await supabase.table("crm_note_targets").select("note_id").eq("target_opportunity_id", opportunity_id).execute()
+        note_ids = [nt["note_id"] for nt in (note_targets.data or [])]
+        notes_text = ""
+        if note_ids:
+            notes_result = await supabase.table("crm_notes").select("content, created_at").in_("id", note_ids).is_("deleted_at", "null").order("created_at").execute()
+            notes_text = "\n".join([f"- {n['content']}" for n in (notes_result.data or [])])
+
+        # Gather tasks
+        tasks_result = await supabase.table("crm_opportunity_tasks").select("title, status, due_date").eq("opportunity_id", opportunity_id).execute()
+        tasks_text = "\n".join([f"- [{t['status']}] {t['title']}" + (f" (vence {t['due_date']})" if t.get('due_date') else "") for t in (tasks_result.data or [])])
+
+        # Gather linked emails
+        emails_result = await supabase.table("crm_opportunity_emails").select("email_subject, email_from_name, email_from, email_date").eq("opportunity_id", opportunity_id).execute()
+        emails_text = "\n".join([f"- {e.get('email_from_name') or e.get('email_from', '?')}: {e.get('email_subject', '?')}" for e in (emails_result.data or [])])
+
+        # Build context for AI
+        opp_name = opp.get("name") or opp.get("title", "Sin nombre")
+        amount = opp.get("amount")
+        stage = opp.get("stage", "lead")
+        close_date = opp.get("close_date", "")
+        description = opp.get("description", "")
+
+        prompt = f"""Eres un asistente de ventas. Analiza esta oportunidad y genera un resumen ejecutivo orientado a cerrar la venta. Sé concreto y actionable.
+
+OPORTUNIDAD: {opp_name}
+ETAPA: {stage}
+IMPORTE: {f'{amount:,.0f} €' if amount else 'No definido'}
+FECHA CIERRE: {close_date or 'No definida'}
+DESCRIPCIÓN: {description or 'Sin descripción'}
+
+NOTAS INTERNAS:
+{notes_text or 'Sin notas'}
+
+TAREAS:
+{tasks_text or 'Sin tareas'}
+
+CORREOS VINCULADOS:
+{emails_text or 'Sin correos vinculados'}
+
+Genera un resumen en español de máximo 300 palabras que incluya:
+1. Estado actual de la oportunidad
+2. Próximos pasos recomendados
+3. Riesgos o puntos de atención
+4. Resumen de las interacciones más relevantes"""
+
+        client = anthropic.Anthropic()
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=512,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        context_text = message.content[0].text
+
+        # Save to DB
+        now = datetime.now(timezone.utc).isoformat()
+        await (
+            supabase.table("crm_opportunities")
+            .update({"pulse_context": context_text, "pulse_context_updated_at": now})
+            .eq("id", opportunity_id)
+            .execute()
+        )
+
+        return {
+            "pulse_context": context_text,
+            "pulse_context_updated_at": now,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to refresh opportunity context", logger)

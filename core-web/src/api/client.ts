@@ -3855,3 +3855,43 @@ export async function updateRepoToken(tokenId: string, data: Record<string, any>
 export async function deleteRepoToken(tokenId: string) {
   return api<{ ok: boolean }>(`/servers/tokens/${tokenId}`, { method: 'DELETE' });
 }
+
+// CRM Opportunity Email Linking
+export async function getOpportunityLinkedEmails(opportunityId: string, workspaceId: string) {
+  return api<{ emails: any[] }>(`/crm/opportunities/${opportunityId}/emails?workspace_id=${workspaceId}`);
+}
+
+export async function linkEmailToOpportunity(opportunityId: string, data: {
+  workspace_id: string;
+  email_thread_id: string;
+  email_id: string;
+  email_subject?: string;
+  email_from?: string;
+  email_from_name?: string;
+  email_date?: string;
+}) {
+  return api<{ email: any; success: boolean }>(`/crm/opportunities/${opportunityId}/emails`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function unlinkEmailFromOpportunity(opportunityId: string, threadId: string, workspaceId: string) {
+  return api<{ success: boolean }>(`/crm/opportunities/${opportunityId}/emails/${threadId}?workspace_id=${workspaceId}`, {
+    method: 'DELETE',
+  });
+}
+
+// CRM Contexto Pulse
+export async function getOpportunityContext(opportunityId: string, workspaceId: string) {
+  return api<{ pulse_context: string | null; pulse_context_updated_at: string | null }>(
+    `/crm/opportunities/${opportunityId}/context?workspace_id=${workspaceId}`
+  );
+}
+
+export async function refreshOpportunityContext(opportunityId: string, workspaceId: string) {
+  return api<{ pulse_context: string; pulse_context_updated_at: string }>(
+    `/crm/opportunities/${opportunityId}/context/refresh?workspace_id=${workspaceId}`,
+    { method: 'POST' }
+  );
+}

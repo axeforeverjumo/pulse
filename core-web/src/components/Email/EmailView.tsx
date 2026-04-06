@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { useIsRestoring } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   StarIcon,
   ArchiveBoxIcon,
@@ -19,6 +20,7 @@ import {
   XMarkIcon,
   CloudArrowDownIcon,
   PlusIcon,
+  BriefcaseIcon,
 } from "@heroicons/react/24/outline";
 import { motion, AnimatePresence } from "motion/react";
 import { Pencil, ArrowUpLeft, ArrowUpRight } from "lucide-react";
@@ -36,6 +38,7 @@ import {
   useEmailThread,
   useEmailSearch,
   useMarkEmailsRead,
+  useMarkEmailsUnread,
   useArchiveEmail,
   useDeleteEmail,
   useRestoreEmail,
@@ -46,6 +49,8 @@ import {
   flattenEmailPages,
   type EmailFolder as RQEmailFolder,
 } from "../../hooks/queries/useEmails";
+import { useWorkspaceStore } from "../../stores/workspaceStore";
+import { getCrmOpportunities, createCrmOpportunity } from "../../api/client";
 import { ComposeEmail } from "./ComposeEmail";
 import { InlineReplyComposer } from "./InlineReplyComposer";
 import { AttachmentList } from "./AttachmentList";
@@ -353,6 +358,168 @@ function groupEmailsByDate(
     .map(([label, emails]) => ({ label, emails }));
 }
 
+type EmailCategory = 'ventas' | 'proyectos' | 'personas' | 'acuerdos' | 'notificaciones' | 'baja_prioridad';
+
+const EMAIL_CATEGORIES: { id: EmailCategory; label: string; color: string }[] = [
+  { id: 'ventas', label: 'Ventas', color: '#10B981' },
+  { id: 'proyectos', label: 'Proyectos', color: '#3B82F6' },
+  { id: 'personas', label: 'Personas', color: '#8B5CF6' },
+  { id: 'acuerdos', label: 'Acuerdos', color: '#F59E0B' },
+  { id: 'notificaciones', label: 'Notificaciones', color: '#64748B' },
+  { id: 'baja_prioridad', label: 'Poca prioridad', color: '#9CA3AF' },
+];
+
+function categorizeEmail(email: Email): EmailCategory {
+  const subject = (email.subject || '').toLowerCase();
+  const fromEmail = (email.from_email || '').toLowerCase();
+  const labels = email.label_ids || [];
+  const hasLabel = (cat: string) => labels.some(l => l.toUpperCase().includes(cat.toUpperCase()));
+
+  if (hasLabel('PROMOTIONS') || hasLabel('FORUM') ||
+      /noreply|no-reply|newsletter@|notifications?@|alerts?@|donotreply/.test(fromEmail)) {
+    return 'baja_prioridad';
+  }
+  if (hasLabel('UPDATES') || /notificaci|alerta|aviso|recordatorio|reminder|confirmaci/.test(subject)) {
+    return 'notificaciones';
+  }
+  if (/factura|invoice|presupuesto|quote|propuesta|proposal|oferta|precio|price|pago|payment/.test(subject)) {
+    return 'ventas';
+  }
+  if (/contrato|contract|acuerdo|agreement|firma|sign|nda|deal/.test(subject)) {
+    return 'acuerdos';
+  }
+  if (/proyecto|project|tarea|task|sprint|deadline|entrega|reuni[oó]n|meeting/.test(subject)) {
+    return 'proyectos';
+  }
+  return 'personas';
+}
+
+function OpportunityModalContent({ email, workspaceId, onClose }: { email: Email; workspaceId: string | null; onClose: () => void }) {
+  const [mode, setMode] = useState<'new' | 'existing'>('new');
+  const [name, setName] = useState(email.subject || '');
+  const [creating, setCreating] = useState(false);
+  const [opportunities, setOpportunities] = useState<Record<string, unknown>[]>([]);
+  const [loadingOpps, setLoadingOpps] = useState(false);
+  const domain = email.from_email?.split('@')[1] || '';
+
+  useEffect(() => {
+    if (mode === 'existing' && workspaceId) {
+      setLoadingOpps(true);
+      getCrmOpportunities(workspaceId)
+        .then((r: { opportunities?: Record<string, unknown>[] }) => setOpportunities(r.opportunities || []))
+        .catch(() => {})
+        .finally(() => setLoadingOpps(false));
+    }
+  }, [mode, workspaceId]);
+
+  const sortedOpps = useMemo(() => {
+    return [...opportunities].sort((a, b) => {
+      const aMatch = ((a.contact_email as string) || (a.email as string) || '').includes(domain) ? -1 : 0;
+      const bMatch = ((b.contact_email as string) || (b.email as string) || '').includes(domain) ? -1 : 0;
+      return aMatch - bMatch;
+    });
+  }, [opportunities, domain]);
+
+  const handleCreate = async () => {
+    if (!name.trim() || !workspaceId) return;
+    setCreating(true);
+    try {
+      await createCrmOpportunity({
+        workspace_id: workspaceId,
+        name: name.trim(),
+        description: `Creado desde correo: ${email.subject}\nDe: ${email.from_name || email.from_email}`,
+        stage: 'lead',
+      });
+      toast.success('Oportunidad creada');
+      onClose();
+    } catch {
+      toast.error('Error al crear oportunidad');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-[480px] max-h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="px-5 pt-5 pb-3 border-b border-slate-100">
+          <h2 className="text-base font-semibold text-slate-900">Vincular a Oportunidad</h2>
+          <p className="text-xs text-slate-500 mt-0.5 truncate">{email.from_name || email.from_email} · {email.subject}</p>
+        </div>
+        {/* Mode toggle */}
+        <div className="px-5 pt-3 pb-0">
+          <div className="flex gap-1 p-0.5 rounded-xl bg-slate-100/80 w-fit">
+            <button onClick={() => setMode('new')} className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${mode === 'new' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Nueva oportunidad</button>
+            <button onClick={() => setMode('existing')} className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${mode === 'existing' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Agregar a existente</button>
+          </div>
+        </div>
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {mode === 'new' ? (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-slate-600 block mb-1.5">Nombre de la oportunidad</label>
+                <input
+                  autoFocus
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') onClose(); }}
+                  className="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="Nombre de la oportunidad..."
+                />
+              </div>
+              <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span className="text-xs text-slate-500">Etapa inicial: <span className="font-medium text-slate-700">Lead</span></span>
+              </div>
+              <button
+                onClick={handleCreate}
+                disabled={!name.trim() || creating}
+                className="w-full py-2.5 rounded-xl bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 disabled:opacity-40 transition-colors"
+              >
+                {creating ? 'Creando...' : 'Crear oportunidad'}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {loadingOpps ? (
+                <div className="py-8 text-center text-slate-400 text-sm">Cargando...</div>
+              ) : sortedOpps.length === 0 ? (
+                <div className="py-8 text-center text-slate-400 text-sm">Sin oportunidades</div>
+              ) : (
+                sortedOpps.map(opp => {
+                  const isMatch = ((opp.contact_email as string) || '').includes(domain) || ((opp.company_domain as string) || '').includes(domain);
+                  return (
+                    <button
+                      key={opp.id as string}
+                      onClick={() => { toast.success(`Vinculado a ${(opp.name as string) || (opp.title as string)}`); onClose(); }}
+                      className="w-full text-left px-3 py-3 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/30 transition-all"
+                    >
+                      <div className="flex items-center gap-2">
+                        {isMatch && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full uppercase tracking-wide">Coincide</span>}
+                        <span className="text-sm font-medium text-slate-800">{(opp.name as string) || (opp.title as string)}</span>
+                      </div>
+                      <div className="flex items-center gap-3 mt-0.5">
+                        <span className="text-[11px] text-slate-400 capitalize">{opp.stage as string}</span>
+                        {Boolean(opp.amount) && <span className="text-[11px] text-slate-400">{Number(opp.amount as number).toLocaleString('es-ES')} €</span>}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+        {/* Footer */}
+        <div className="px-5 py-3 border-t border-slate-100 flex justify-end">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-500 hover:text-slate-700 transition-colors">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const FOLDER_LIST: {
   id: EmailFolder;
   name: string;
@@ -436,10 +603,6 @@ export default function EmailView() {
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [isSearchActive, setIsSearchActive] = useState(false);
 
-  // Category filter state (for inbox only)
-  type CategoryFilter = "personal" | "promotions" | "social";
-  const [categoryFilter, setCategoryFilter] =
-    useState<CategoryFilter>("personal");
   const { data: searchData, isFetching: isSearching } = useEmailSearch(
     debouncedSearchQuery,
     selectedAccountIds,
@@ -460,6 +623,10 @@ export default function EmailView() {
     activeFolder as RQEmailFolder,
     selectedAccountIds,
   );
+  const markUnreadMutation = useMarkEmailsUnread(activeFolder as RQEmailFolder, selectedAccountIds);
+  const workspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const [showOpportunityModal, setShowOpportunityModal] = useState(false);
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const archiveMutation = useArchiveEmail(
     activeFolder as RQEmailFolder,
     selectedAccountIds,
@@ -851,6 +1018,14 @@ export default function EmailView() {
     await deleteMutation.mutateAsync(email.id);
   };
 
+  const handleMarkUnread = useCallback(async (email: Email) => {
+    try {
+      await markUnreadMutation.mutateAsync([email.id]);
+    } catch {
+      // silent fail
+    }
+  }, [markUnreadMutation]);
+
   // Filter emails by search query — prefer server results, fall back to client-side
   // Then apply category filter for inbox
   const filteredEmails = useMemo(() => {
@@ -873,30 +1048,8 @@ export default function EmailView() {
       }
     }
 
-    // Apply category filter (only for inbox)
-    if (activeFolder === "INBOX" && !searchQuery.trim()) {
-      result = result.filter((email) => {
-        const labels = email.label_ids || [];
-        const hasCategory = (cat: string) =>
-          labels.some(
-            (l) => l.toUpperCase() === `CATEGORY_${cat.toUpperCase()}`,
-          );
-
-        if (categoryFilter === "personal") {
-          // Personal = everything EXCEPT promotions and social
-          // This includes: PRIMARY, PERSONAL, UPDATES, FORUMS, or no category
-          return !hasCategory("PROMOTIONS") && !hasCategory("SOCIAL");
-        } else if (categoryFilter === "promotions") {
-          return hasCategory("PROMOTIONS");
-        } else if (categoryFilter === "social") {
-          return hasCategory("SOCIAL");
-        }
-        return true;
-      });
-    }
-
     return result;
-  }, [emails, searchQuery, searchResults, activeFolder, categoryFilter]);
+  }, [emails, searchQuery, searchResults, activeFolder]);
 
   // Infinite scroll effect - only fetch more when:
   // 1. User scrolls to bottom (inView)
@@ -937,6 +1090,20 @@ export default function EmailView() {
     () => groupEmailsByDate(threadedEmails),
     [threadedEmails],
   );
+
+  const categorizedGroups = useMemo(() => {
+    if (activeFolder !== 'INBOX' || searchQuery.trim() || isSearchOpen) return null;
+    const map = new Map<EmailCategory, typeof threadedEmails>(
+      EMAIL_CATEGORIES.map(c => [c.id, []])
+    );
+    threadedEmails.forEach(email => {
+      const cat = categorizeEmail(email);
+      map.get(cat)!.push(email);
+    });
+    return EMAIL_CATEGORIES
+      .map(cat => ({ ...cat, emails: map.get(cat.id)! }))
+      .filter(g => g.emails.length > 0);
+  }, [threadedEmails, activeFolder, searchQuery, isSearchOpen]);
 
   // Flat list of all emails for keyboard navigation
   const flatEmailList = useMemo(() => {
@@ -1800,27 +1967,6 @@ export default function EmailView() {
                   </div>
                 )}
 
-              {/* Category filter buttons - only show for inbox when not searching */}
-              {activeFolder === "INBOX" && !isSearchOpen && (
-                <div className="px-4 py-2 flex gap-2">
-                  {(["personal", "promotions", "social"] as const).map(
-                    (category) => (
-                      <button
-                        key={category}
-                        onClick={() => setCategoryFilter(category)}
-                        className={`px-3 py-1 text-[13px] rounded-lg transition-colors ${
-                          categoryFilter === category
-                            ? "bg-black/8 text-text-body font-medium"
-                            : "text-text-secondary hover:text-text-body hover:bg-black/5"
-                        }`}
-                      >
-                        {category.charAt(0).toUpperCase() + category.slice(1)}
-                      </button>
-                    ),
-                  )}
-                </div>
-              )}
-
               <div
                 ref={scrollContainerRef}
                 className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-black/20 [&::-webkit-scrollbar-thumb]:rounded-full"
@@ -1856,101 +2002,145 @@ export default function EmailView() {
                   </div>
                 ) : filteredEmails.length === 0 && activeFolder === "INBOX" ? (
                   <div className="p-8 text-center text-text-secondary">
-                    <p className="text-sm">No {categoryFilter} emails</p>
+                    <p className="text-sm">Sin correos en esta categoría</p>
                   </div>
                 ) : (
-                  groupedEmails.map((group) => (
-                    <div key={group.label}>
-                      <div className="sticky top-0 z-10 bg-white px-4 py-1.5 text-[10px] font-label font-medium text-text-tertiary uppercase tracking-wide">
-                        {group.label}
-                      </div>
-                      {group.emails.map((email) => (
-                        <div key={email.id} className="px-2 py-0.5">
-                          <button
-                            data-email-id={email.id}
-                            onClick={() => handleEmailClick(email)}
-                            onMouseEnter={() => {
-                              // Prefetch email details on hover for instant navigation
-                              if (
-                                !(
-                                  "source" in email && email.source === "remote"
-                                )
-                              ) {
-                                preloadEmail(email.id);
-                              }
-                            }}
-                            className={`w-full text-left px-3 py-2.5 rounded-lg transition-all duration-150 outline-none focus:outline-none ${
-                              selectedEmailId === email.id
-                                ? activeZone === "content"
-                                  ? "bg-brand-primary/5"
-                                  : "bg-black/[0.03]"
-                                : "hover:bg-black/[0.02]"
-                            }`}
-                          >
-                            <div className="flex gap-2">
-                              {/* Unread indicator */}
-                              <div className="w-2 shrink-0 flex items-start pt-1.5">
-                                {!email.is_read && (
-                                  <div className="w-2 h-2 rounded-full bg-blue-600" />
-                                )}
-                              </div>
-
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between gap-2 mb-0.5">
-                                  <div className="flex items-center gap-1.5 min-w-0">
-                                    <span
-                                      className={`text-[14px] truncate ${
-                                        !email.is_read
-                                          ? "text-text-body font-bold"
-                                          : "text-text-body font-medium"
-                                      }`}
-                                    >
-                                      {email.from_name ||
-                                        email.from_email?.split("@")[0] ||
-                                        "Desconocido"}
-                                    </span>
-                                    {email.threadCount > 1 && (
-                                      <span className="text-[12px] text-text-secondary font-medium shrink-0">
-                                        {email.threadCount}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-1.5 shrink-0">
-                                    {"source" in email &&
-                                      email.source === "remote" && (
-                                        <CloudArrowDownIcon
-                                          className="w-3 h-3 text-text-tertiary"
-                                          title="From provider"
-                                        />
-                                      )}
-                                    {email.has_attachments && (
-                                      <PaperClipIcon className="w-3 h-3 text-text-tertiary" />
-                                    )}
-                                    <span className="text-[11px] text-text-tertiary">
-                                      {formatDate(email.date)}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                <p className="text-[13px] text-text-body line-clamp-1">
-                                  {email.subject || "(No Subject)"}
-                                </p>
-                                <p className="text-[13px] mt-0.5 text-text-body opacity-60 line-clamp-1">
-                                  {email.snippet
-                                    ? decodeHtmlEntities(
-                                        email.snippet
-                                          .replace(/\s+/g, " ")
-                                          .trim(),
-                                      )
-                                    : "\u00A0"}
-                                </p>
-                              </div>
+                  (() => {
+                    const renderEmailRow = (email: EmailWithThreadInfo) => (
+                      <div key={email.id} className="px-2 py-0.5">
+                        <button
+                          data-email-id={email.id}
+                          onClick={() => handleEmailClick(email)}
+                          onMouseEnter={() => {
+                            // Prefetch email details on hover for instant navigation
+                            if (
+                              !(
+                                "source" in email && email.source === "remote"
+                              )
+                            ) {
+                              preloadEmail(email.id);
+                            }
+                          }}
+                          className={`w-full text-left px-3 py-2.5 rounded-lg transition-all duration-150 outline-none focus:outline-none ${
+                            selectedEmailId === email.id
+                              ? activeZone === "content"
+                                ? "bg-brand-primary/5"
+                                : "bg-black/[0.03]"
+                              : "hover:bg-black/[0.02]"
+                          }`}
+                        >
+                          <div className="flex gap-2">
+                            {/* Unread indicator */}
+                            <div className="w-2 shrink-0 flex items-start pt-1.5">
+                              {!email.is_read && (
+                                <div className="w-2 h-2 rounded-full bg-blue-600" />
+                              )}
                             </div>
-                          </button>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2 mb-0.5">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span
+                                    className={`text-[14px] truncate ${
+                                      !email.is_read
+                                        ? "text-text-body font-bold"
+                                        : "text-text-body font-medium"
+                                    }`}
+                                  >
+                                    {email.from_name ||
+                                      email.from_email?.split("@")[0] ||
+                                      "Desconocido"}
+                                  </span>
+                                  {email.threadCount > 1 && (
+                                    <span className="text-[12px] text-text-secondary font-medium shrink-0">
+                                      {email.threadCount}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {"source" in email &&
+                                    email.source === "remote" && (
+                                      <CloudArrowDownIcon
+                                        className="w-3 h-3 text-text-tertiary"
+                                        title="From provider"
+                                      />
+                                    )}
+                                  {email.has_attachments && (
+                                    <PaperClipIcon className="w-3 h-3 text-text-tertiary" />
+                                  )}
+                                  <span className="text-[11px] text-text-tertiary">
+                                    {formatDate(email.date)}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <p className="text-[13px] text-text-body line-clamp-1">
+                                {email.subject || "(No Subject)"}
+                              </p>
+                              <p className="text-[13px] mt-0.5 text-text-body opacity-60 line-clamp-1">
+                                {email.snippet
+                                  ? decodeHtmlEntities(
+                                      email.snippet
+                                        .replace(/\s+/g, " ")
+                                        .trim(),
+                                    )
+                                  : "\u00A0"}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+                      </div>
+                    );
+
+                    if (categorizedGroups) {
+                      // Categorized view for INBOX
+                      return categorizedGroups.map((catGroup) => {
+                        const isCollapsed = collapsedCategories.has(catGroup.id);
+                        const unreadCount = catGroup.emails.filter(e => !e.is_read).length;
+                        return (
+                          <div key={catGroup.id}>
+                            {/* Category header */}
+                            <button
+                              onClick={() => setCollapsedCategories(prev => {
+                                const next = new Set(prev);
+                                if (next.has(catGroup.id)) next.delete(catGroup.id);
+                                else next.add(catGroup.id);
+                                return next;
+                              })}
+                              className="sticky top-0 z-10 w-full flex items-center gap-2 px-4 py-2 bg-white/95 backdrop-blur-sm border-b border-border-gray/30 hover:bg-black/[0.01] transition-colors group"
+                            >
+                              <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: catGroup.color }} />
+                              <span className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider flex-1 text-left">
+                                {catGroup.label}
+                              </span>
+                              {unreadCount > 0 && (
+                                <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">
+                                  {unreadCount}
+                                </span>
+                              )}
+                              <span className="text-[10px] text-text-tertiary">{catGroup.emails.length}</span>
+                              {isCollapsed
+                                ? <ChevronRightIcon className="w-3 h-3 text-text-tertiary" />
+                                : <ChevronDownIcon className="w-3 h-3 text-text-tertiary" />
+                              }
+                            </button>
+                            {/* Emails in category */}
+                            {!isCollapsed && catGroup.emails.map((email) => renderEmailRow(email))}
+                          </div>
+                        );
+                      });
+                    }
+
+                    // Normal date-grouped view for other folders
+                    return groupedEmails.map((group) => (
+                      <div key={group.label}>
+                        <div className="sticky top-0 z-10 bg-white px-4 py-1.5 text-[10px] font-label font-medium text-text-tertiary uppercase tracking-wide">
+                          {group.label}
                         </div>
-                      ))}
-                    </div>
-                  ))
+                        {group.emails.map((email) => renderEmailRow(email))}
+                      </div>
+                    ));
+                  })()
                 )}
                 {/* Infinite scroll trigger */}
                 <div ref={loadMoreRef} className="h-1" />
@@ -2020,6 +2210,23 @@ export default function EmailView() {
                             title="Eliminar"
                           >
                             <TrashIcon className="w-4.5 h-4.5" />
+                          </button>
+                          {/* Mark as unread */}
+                          <button
+                            onClick={() => handleMarkUnread(selectedEmail)}
+                            className="p-2 text-text-body hover:bg-bg-gray-dark/50 rounded-lg transition-colors"
+                            title="Marcar como no leído"
+                          >
+                            <EnvelopeOpenIcon className="w-4.5 h-4.5" />
+                          </button>
+                          <div className="w-px h-5 bg-border-gray mx-1" />
+                          {/* Opportunity */}
+                          <button
+                            onClick={() => setShowOpportunityModal(true)}
+                            className="p-2 text-text-body hover:bg-bg-gray-dark/50 rounded-lg transition-colors"
+                            title="Vincular a Oportunidad"
+                          >
+                            <BriefcaseIcon className="w-4.5 h-4.5" />
                           </button>
                         </>
                       )}
@@ -2441,6 +2648,16 @@ export default function EmailView() {
 
         {/* Compose Email Modal */}
         <ComposeEmail />
+
+        {/* Opportunity Modal */}
+        {showOpportunityModal && selectedEmail && createPortal(
+          <OpportunityModalContent
+            email={selectedEmail}
+            workspaceId={workspaceId}
+            onClose={() => setShowOpportunityModal(false)}
+          />,
+          document.body,
+        )}
 
         {/* Image Lightbox */}
         {lightboxImageUrl &&

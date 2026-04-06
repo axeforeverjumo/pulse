@@ -29,7 +29,9 @@ import {
   createOpportunityTask,
   updateOpportunityTask,
   createCrmNote,
+  refreshOpportunityContext,
 } from '../../api/client';
+import { SparklesIcon } from '@heroicons/react/24/outline';
 
 const PIPELINE_STAGES = [
   { id: 'lead', label: 'Lead', color: '#EF4444' },
@@ -51,7 +53,10 @@ interface OpportunityDetailProps {
 export default function OpportunityDetail({ opportunityId, workspaceId, onBack }: OpportunityDetailProps) {
   const [opp, setOpp] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'notes' | 'info'>('notes');
+  const [activeTab, setActiveTab] = useState<'notes' | 'info' | 'pulse'>('notes');
+  const [pulseContext, setPulseContext] = useState<string | null>(null);
+  const [pulseUpdatedAt, setPulseUpdatedAt] = useState<string | null>(null);
+  const [refreshingPulse, setRefreshingPulse] = useState(false);
 
   // Inline editing states
   const [editingName, setEditingName] = useState(false);
@@ -78,6 +83,10 @@ export default function OpportunityDetail({ opportunityId, workspaceId, onBack }
       const data = await getCrmOpportunityFull(opportunityId, workspaceId);
       setOpp(data.opportunity);
       setNameValue(data.opportunity?.name || data.opportunity?.title || '');
+      if (data.opportunity?.pulse_context) {
+        setPulseContext(data.opportunity.pulse_context);
+        setPulseUpdatedAt(data.opportunity.pulse_context_updated_at || null);
+      }
     } catch (err: any) {
       toast.error('Error al cargar oportunidad');
     } finally {
@@ -172,6 +181,20 @@ export default function OpportunityDetail({ opportunityId, workspaceId, onBack }
       loadOpportunity();
     } catch {
       toast.error('Error al actualizar tarea');
+    }
+  };
+
+  const handleRefreshPulse = async () => {
+    setRefreshingPulse(true);
+    try {
+      const result = await refreshOpportunityContext(opportunityId, workspaceId);
+      setPulseContext(result.pulse_context);
+      setPulseUpdatedAt(result.pulse_context_updated_at);
+      toast.success('Contexto Pulse actualizado');
+    } catch {
+      toast.error('Error al generar contexto');
+    } finally {
+      setRefreshingPulse(false);
     }
   };
 
@@ -449,7 +472,7 @@ export default function OpportunityDetail({ opportunityId, workspaceId, onBack }
 
           {/* Tabs: Notes / Additional Info */}
           <div>
-            <div className="flex gap-1 p-0.5 rounded-xl bg-slate-100/80 max-w-xs mb-4">
+            <div className="flex gap-1 p-0.5 rounded-xl bg-slate-100/80 mb-4">
               <button
                 onClick={() => setActiveTab('notes')}
                 className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
@@ -457,7 +480,7 @@ export default function OpportunityDetail({ opportunityId, workspaceId, onBack }
                 }`}
               >
                 <DocumentTextIcon className="w-3.5 h-3.5" />
-                Notas internas
+                Notas
               </button>
               <button
                 onClick={() => setActiveTab('info')}
@@ -466,7 +489,16 @@ export default function OpportunityDetail({ opportunityId, workspaceId, onBack }
                 }`}
               >
                 <InformationCircleIcon className="w-3.5 h-3.5" />
-                Info adicional
+                Info
+              </button>
+              <button
+                onClick={() => setActiveTab('pulse')}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  activeTab === 'pulse' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <SparklesIcon className="w-3.5 h-3.5" />
+                Pulse
               </button>
             </div>
 
@@ -537,6 +569,42 @@ export default function OpportunityDetail({ opportunityId, workspaceId, onBack }
                     </>
                   )}
                 </dl>
+              </div>
+            )}
+
+            {activeTab === 'pulse' && (
+              <div className="space-y-3">
+                {/* Header + refresh button */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-700">Contexto Pulse</p>
+                    {pulseUpdatedAt && (
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        Actualizado: {new Date(pulseUpdatedAt).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={handleRefreshPulse}
+                    disabled={refreshingPulse}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
+                  >
+                    <SparklesIcon className={`w-3.5 h-3.5 ${refreshingPulse ? 'animate-spin' : ''}`} />
+                    {refreshingPulse ? 'Generando...' : 'Actualizar'}
+                  </button>
+                </div>
+
+                {pulseContext ? (
+                  <div className="rounded-xl border border-violet-100 bg-violet-50/40 p-4">
+                    <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{pulseContext}</p>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center">
+                    <SparklesIcon className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="text-sm text-slate-500 font-medium">Sin contexto generado</p>
+                    <p className="text-xs text-slate-400 mt-1">Pulsa "Actualizar" para que la IA analice esta oportunidad</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -652,6 +720,31 @@ export default function OpportunityDetail({ opportunityId, workspaceId, onBack }
               </div>
             )}
           </div>
+
+          {/* ── Correos vinculados ────────────────────────────── */}
+          {opp.linked_emails && opp.linked_emails.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                Correos ({opp.linked_emails.length})
+              </h3>
+              <div className="space-y-1">
+                {opp.linked_emails.map((em: any) => (
+                  <div key={em.id} className="flex items-start gap-2 px-3 py-2.5 rounded-lg border border-slate-100 bg-white hover:border-slate-200 transition-colors">
+                    <EnvelopeIcon className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-slate-700 truncate">{em.email_subject || '(Sin asunto)'}</p>
+                      <p className="text-[10px] text-slate-400 truncate">{em.email_from_name || em.email_from}</p>
+                    </div>
+                    {em.email_date && (
+                      <span className="text-[10px] text-slate-400 shrink-0">
+                        {new Date(em.email_date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Right: Chat / Messages ─────────────────────────── */}
