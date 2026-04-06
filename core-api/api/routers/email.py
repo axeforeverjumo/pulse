@@ -4,7 +4,7 @@ Email router - HTTP endpoints for email operations
 import asyncio
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from typing import Any, Dict, Optional, List
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from api.services.email import (
     fetch_emails,
     get_email_details,
@@ -327,7 +327,8 @@ async def fetch_emails_endpoint(
     query: Optional[str] = None,
     label_ids: List[str] = Query(default=[]),
     account_id: Optional[str] = Query(None, description="Filter by single email account (backward compatible)"),
-    account_ids: List[str] = Query(default=[], description="Filter by multiple email accounts (unified view filter chips)")
+    account_ids: List[str] = Query(default=[], description="Filter by multiple email accounts (unified view filter chips)"),
+    ai_category: Optional[str] = Query(None, description="Filter by AI category (ventas|proyectos|personas|acuerdos|notificaciones|baja_prioridad)"),
 ):
     """
     Fetch emails from database with optional filtering and pagination.
@@ -338,6 +339,7 @@ async def fetch_emails_endpoint(
     - label_ids: Filter by Gmail labels (e.g., INBOX, SENT, DRAFT)
     - account_id: Filter by single email account (backward compatible)
     - account_ids: Filter by multiple email accounts (for filter chips)
+    - ai_category: Filter by AI category (ventas|proyectos|personas|acuerdos|notificaciones|baja_prioridad)
 
     Unified View Behavior:
     - No account_id/account_ids: Returns emails from ALL accounts (unified view)
@@ -358,7 +360,7 @@ async def fetch_emails_endpoint(
             effective_account_ids = [account_id]
         # If both are None/empty, unified view (all accounts)
 
-        logger.info(f"📧 Fetching emails for user {user_id} with labels={effective_labels}, offset={offset}, limit={max_results}, account_ids={effective_account_ids}")
+        logger.info(f"📧 Fetching emails for user {user_id} with labels={effective_labels}, offset={offset}, limit={max_results}, account_ids={effective_account_ids}, ai_category={ai_category}")
         result = await fetch_emails(
             user_id,
             user_jwt,
@@ -366,7 +368,8 @@ async def fetch_emails_endpoint(
             query,
             label_ids=effective_labels,
             offset=offset,
-            account_ids=effective_account_ids
+            account_ids=effective_account_ids,
+            ai_category=ai_category,
         )
         logger.info(f"✅ Fetched {result.get('count', 0)} emails (unified={result.get('unified', False)})")
         return result
@@ -1327,3 +1330,117 @@ User's request: {request.prompt}"""
         )
     except Exception as e:
         handle_api_exception(e, "Failed to generate email with AI", logger)
+
+
+# ============================================================================
+# AI Batch Categorization
+# ============================================================================
+
+class CategorizeBatchRequest(BaseModel):
+    """Request to categorize a batch of emails by ID."""
+    email_ids: List[str] = Field(..., min_length=1, max_length=50)
+
+
+class CategorizeBatchResult(BaseModel):
+    """Per-email categorization result."""
+    id: str
+    category: Optional[str] = None
+    error: Optional[str] = None
+
+
+class CategorizeBatchResponse(BaseModel):
+    """Response for batch categorization."""
+    results: List[CategorizeBatchResult]
+    processed: int = 0
+    errors: int = 0
+
+
+@router.post("/messages/categorize-batch", response_model=CategorizeBatchResponse)
+async def categorize_emails_batch(
+    request: CategorizeBatchRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    AI-powered batch email categorization.
+
+    Accepts up to 50 email IDs, runs Claude Haiku on each to determine category,
+    saves ai_category to DB, and returns the results.
+
+    Categories: ventas | proyectos | personas | acuerdos | notificaciones | baja_prioridad
+
+    Body:
+    - email_ids: list of email UUIDs (max 50)
+
+    Returns:
+    - results: per-email {id, category} objects
+    - processed: number successfully categorized
+    - errors: number that failed
+
+    Requires: Authorization header with user's Supabase JWT
+    """
+    import asyncio
+    from api.services.email.analyze_email_ai import analyze_email_with_ai
+    from lib.supabase_client import get_service_role_client
+
+    # Clamp to 50
+    email_ids = request.email_ids[:50]
+    logger.info(f"🤖 [categorize-batch] user={user_id[:8]}... emails={len(email_ids)}")
+
+    try:
+        # Fetch email data for all requested IDs (verify ownership via user_jwt)
+        auth_supabase = await get_authenticated_async_client(user_jwt)
+        fetch_result = await auth_supabase.table("emails") \
+            .select("id, subject, \"from\", body, snippet") \
+            .eq("user_id", user_id) \
+            .in_("id", email_ids) \
+            .execute()
+
+        fetched = {e["id"]: e for e in (fetch_result.data or [])}
+        logger.info(f"[categorize-batch] Fetched {len(fetched)}/{len(email_ids)} emails from DB")
+
+        results: List[CategorizeBatchResult] = []
+        processed = 0
+        errors = 0
+
+        service_supabase = get_service_role_client()
+
+        for email_id in email_ids:
+            if email_id not in fetched:
+                results.append(CategorizeBatchResult(
+                    id=email_id,
+                    error="Email not found or access denied"
+                ))
+                errors += 1
+                continue
+
+            email_data = fetched[email_id]
+            try:
+                analysis = await asyncio.to_thread(
+                    analyze_email_with_ai,
+                    subject=email_data.get("subject"),
+                    from_address=email_data.get("from"),
+                    body=email_data.get("body"),
+                    snippet=email_data.get("snippet"),
+                )
+                category = analysis.get("category", "notificaciones")
+
+                # Persist to DB using service role (bypass RLS for update)
+                service_supabase.table("emails") \
+                    .update({"ai_category": category}) \
+                    .eq("id", email_id) \
+                    .execute()
+
+                results.append(CategorizeBatchResult(id=email_id, category=category))
+                processed += 1
+
+            except Exception as e:
+                logger.error(f"[categorize-batch] Error on email {email_id[:8]}...: {str(e)}")
+                results.append(CategorizeBatchResult(id=email_id, error=str(e)))
+                errors += 1
+
+        logger.info(f"✅ [categorize-batch] processed={processed}, errors={errors}")
+        return CategorizeBatchResponse(results=results, processed=processed, errors=errors)
+
+    except Exception as e:
+        handle_api_exception(e, "Failed to categorize emails", logger)

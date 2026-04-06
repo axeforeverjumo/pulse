@@ -107,8 +107,6 @@ updated_at (último sync)
 | DELETE | `/api/email/messages/{id}` (→ trash) |
 | POST | `/api/email/messages/{id}/mark-read` |
 | POST | `/api/email/messages/{id}/mark-unread` |
-| POST | `/api/email/messages/{id}/star` |
-| POST | `/api/email/messages/{id}/unstar` |
 
 ### Búsqueda y Sync
 | Método | Ruta | Descripción |
@@ -121,7 +119,7 @@ updated_at (último sync)
 ### AI Compose
 | Método | Ruta | Body |
 |--------|------|------|
-| POST | `/api/email/compose-with-ai` | prompt, subject, to, current_body → {body_html, subject} |
+| POST | `/api/email/compose-ai` | prompt, subject, to, current_body → {body_html, subject} |
 
 ---
 
@@ -248,7 +246,8 @@ core-api/api/services/email/
 - Reply, forward, send
 - Draft CRUD + auto-cleanup
 - Labels (apply/remove)
-- Mark read/unread/starred (incluido botón "Marcar como no leído" en toolbar)
+- Mark read/unread (incluido botón "Marcar como no leído" en toolbar)
+- `is_starred` como campo de filtro en listado (sin endpoint propio de star/unstar)
 - Attachments (view/download)
 - AI summary + importance (post-sync)
 - Email signature

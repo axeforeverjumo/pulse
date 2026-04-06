@@ -21,6 +21,8 @@ import {
   CloudArrowDownIcon,
   PlusIcon,
   BriefcaseIcon,
+  Squares2X2Icon,
+  ListBulletIcon,
 } from "@heroicons/react/24/outline";
 import { motion, AnimatePresence } from "motion/react";
 import { Pencil, ArrowUpLeft, ArrowUpRight } from "lucide-react";
@@ -50,7 +52,7 @@ import {
   type EmailFolder as RQEmailFolder,
 } from "../../hooks/queries/useEmails";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
-import { getCrmOpportunities, createCrmOpportunity } from "../../api/client";
+import { getCrmOpportunities, createCrmOpportunity, linkEmailToOpportunity } from "../../api/client";
 import { ComposeEmail } from "./ComposeEmail";
 import { InlineReplyComposer } from "./InlineReplyComposer";
 import { AttachmentList } from "./AttachmentList";
@@ -398,6 +400,7 @@ function OpportunityModalContent({ email, workspaceId, onClose }: { email: Email
   const [mode, setMode] = useState<'new' | 'existing'>('new');
   const [name, setName] = useState(email.subject || '');
   const [creating, setCreating] = useState(false);
+  const [linking, setLinking] = useState(false);
   const [opportunities, setOpportunities] = useState<Record<string, unknown>[]>([]);
   const [loadingOpps, setLoadingOpps] = useState(false);
   const domain = email.from_email?.split('@')[1] || '';
@@ -436,6 +439,27 @@ function OpportunityModalContent({ email, workspaceId, onClose }: { email: Email
       toast.error('Error al crear oportunidad');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleLinkToExisting = async (opp: Record<string, unknown>) => {
+    if (!workspaceId) return;
+    setLinking(true);
+    try {
+      await linkEmailToOpportunity(opp.id as string, {
+        workspace_id: workspaceId,
+        email_thread_id: email.thread_id || email.id,
+        email_id: email.id,
+        email_subject: email.subject,
+        email_from: email.from_email,
+        email_from_name: email.from_name,
+        email_date: email.date,
+      });
+      toast.success(`Vinculado a ${(opp.name as string) || (opp.title as string)}`);
+      onClose();
+    } catch {
+      toast.error('Error al vincular correo');
+      setLinking(false);
     }
   };
 
@@ -493,8 +517,9 @@ function OpportunityModalContent({ email, workspaceId, onClose }: { email: Email
                   return (
                     <button
                       key={opp.id as string}
-                      onClick={() => { toast.success(`Vinculado a ${(opp.name as string) || (opp.title as string)}`); onClose(); }}
-                      className="w-full text-left px-3 py-3 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/30 transition-all"
+                      onClick={() => handleLinkToExisting(opp)}
+                      disabled={linking}
+                      className="w-full text-left px-3 py-3 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/30 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       <div className="flex items-center gap-2">
                         {isMatch && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full uppercase tracking-wide">Coincide</span>}
@@ -627,6 +652,10 @@ export default function EmailView() {
   const workspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [showOpportunityModal, setShowOpportunityModal] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  const [inboxViewMode, setInboxViewMode] = useState<'grouped' | 'tabs'>(() =>
+    (localStorage.getItem('pulse-inbox-view') as 'grouped' | 'tabs') || 'grouped'
+  );
+  const [activeTabCategory, setActiveTabCategory] = useState<EmailCategory>(EMAIL_CATEGORIES[0].id);
   const archiveMutation = useArchiveEmail(
     activeFolder as RQEmailFolder,
     selectedAccountIds,
@@ -1104,6 +1133,13 @@ export default function EmailView() {
       .map(cat => ({ ...cat, emails: map.get(cat.id)! }))
       .filter(g => g.emails.length > 0);
   }, [threadedEmails, activeFolder, searchQuery, isSearchOpen]);
+
+  // Emails filtered for tabs view (only used in 'tabs' mode)
+  const tabFilteredGroups = useMemo(() => {
+    if (inboxViewMode !== 'tabs' || activeFolder !== 'INBOX' || searchQuery.trim() || isSearchOpen) return null;
+    const filtered = threadedEmails.filter(e => categorizeEmail(e) === activeTabCategory);
+    return groupEmailsByDate(filtered);
+  }, [inboxViewMode, activeTabCategory, threadedEmails, activeFolder, searchQuery, isSearchOpen]);
 
   // Flat list of all emails for keyboard navigation
   const flatEmailList = useMemo(() => {
@@ -1967,6 +2003,67 @@ export default function EmailView() {
                   </div>
                 )}
 
+              {/* View mode toggle + tabs (only for INBOX, not searching) */}
+              {activeFolder === "INBOX" && !isSearchOpen && (
+                <div className="border-b border-border-gray">
+                  {/* Toggle row */}
+                  <div className="px-3 py-1.5 flex items-center justify-between">
+                    <span className="text-[10px] text-text-tertiary uppercase tracking-wide font-medium">
+                      {inboxViewMode === 'grouped' ? 'Vista agrupada' : 'Vista por pestañas'}
+                    </span>
+                    <div className="flex items-center gap-0.5 bg-black/[0.04] rounded-lg p-0.5">
+                      <button
+                        onClick={() => {
+                          setInboxViewMode('grouped');
+                          localStorage.setItem('pulse-inbox-view', 'grouped');
+                        }}
+                        title="Vista agrupada"
+                        className={`p-1.5 rounded-md transition-colors ${inboxViewMode === 'grouped' ? 'bg-white shadow-sm text-text-body' : 'text-text-tertiary hover:text-text-secondary'}`}
+                      >
+                        <Squares2X2Icon className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setInboxViewMode('tabs');
+                          localStorage.setItem('pulse-inbox-view', 'tabs');
+                        }}
+                        title="Vista por pestañas"
+                        className={`p-1.5 rounded-md transition-colors ${inboxViewMode === 'tabs' ? 'bg-white shadow-sm text-text-body' : 'text-text-tertiary hover:text-text-secondary'}`}
+                      >
+                        <ListBulletIcon className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  {/* Tabs row (only in tabs mode) */}
+                  {inboxViewMode === 'tabs' && (
+                    <div className="px-3 pb-2 flex gap-1 flex-wrap">
+                      {EMAIL_CATEGORIES.map(cat => {
+                        const isActive = activeTabCategory === cat.id;
+                        return (
+                          <button
+                            key={cat.id}
+                            onClick={() => setActiveTabCategory(cat.id)}
+                            className={`px-2.5 py-1 text-[12px] rounded-lg transition-colors font-medium ${
+                              isActive
+                                ? 'bg-black/8 text-text-body'
+                                : 'text-text-secondary hover:text-text-body hover:bg-black/5'
+                            }`}
+                          >
+                            {isActive && (
+                              <span
+                                className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle"
+                                style={{ backgroundColor: cat.color }}
+                              />
+                            )}
+                            {cat.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div
                 ref={scrollContainerRef}
                 className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-black/20 [&::-webkit-scrollbar-thumb]:rounded-full"
@@ -2092,8 +2189,27 @@ export default function EmailView() {
                       </div>
                     );
 
+                    // Tabs mode: date-grouped filtered by active tab
+                    if (tabFilteredGroups) {
+                      if (tabFilteredGroups.length === 0) {
+                        return (
+                          <div className="p-8 text-center text-text-secondary">
+                            <p className="text-sm">Sin correos en {EMAIL_CATEGORIES.find(c => c.id === activeTabCategory)?.label}</p>
+                          </div>
+                        );
+                      }
+                      return tabFilteredGroups.map((group) => (
+                        <div key={group.label}>
+                          <div className="sticky top-0 z-10 bg-white px-4 py-1.5 text-[10px] font-label font-medium text-text-tertiary uppercase tracking-wide">
+                            {group.label}
+                          </div>
+                          {group.emails.map((email) => renderEmailRow(email))}
+                        </div>
+                      ));
+                    }
+
                     if (categorizedGroups) {
-                      // Categorized view for INBOX
+                      // Grouped view for INBOX
                       return categorizedGroups.map((catGroup) => {
                         const isCollapsed = collapsedCategories.has(catGroup.id);
                         const unreadCount = catGroup.emails.filter(e => !e.is_read).length;

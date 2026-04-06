@@ -1,36 +1,20 @@
 # Specs Index - Pulse / factoriaCore
-> Última actualización: 2026-04-06 (tarde)
-> Stack: FastAPI (Python) + React/TypeScript + Supabase (PostgreSQL) + Cloudflare R2
+> Ultima actualizacion: 2026-04-06
+> Stack: FastAPI 0.115 (Python 3.11) + React 19 / TypeScript 5.9 + Supabase (PostgreSQL) + Cloudflare R2
 
 ---
 
-## Módulos Documentados
+## Modulos Documentados
 
 | Spec | Estado | Cobertura |
 |------|--------|-----------|
-| [Auth, Workspace, Agents](SPEC_AUTH_WORKSPACE_AGENTS.md) | ✅ Completo | OAuth, invitaciones, members, agents core/advance, queue |
-| [Chat](SPEC_CHAT.md) | ✅ Completo | Conversaciones, streaming, attachments, tools, CLI OAuth |
-| [Email](SPEC_EMAIL.md) | 🔄 Activo | Multi-account, threading, AI categories, mark unread, Oportunidad button |
-| [CRM](SPEC_CRM.md) | 🔄 Activo | Contacts, pipeline, quotations, workflows, Contexto Pulse, email linking |
-| [Projects (Kanban)](SPEC_PROJECTS.md) | ✅ Completo | Boards, issues, deploy modes, agent queue, routines |
-| [Messaging + WhatsApp + DevOps](SPEC_MESSAGING_WHATSAPP_DEVOPS.md) | ✅/⚠️ | Canales ✅ · WhatsApp estructura ✅ · Integración externa ⚠️ · DevOps ✅ |
-
----
-
-## Roadmap Activo (Claude Code Agents)
-
-Ver: [ROADMAP.md](../ROADMAP.md) y [REQUIREMENTS.md](../REQUIREMENTS.md)
-
-**Objetivo:** Transformar los project agents en ejecutores reales de código via Claude Code CLI
-
-| Fase | Estado | Descripción |
-|------|--------|-------------|
-| 1. Claude Code Infrastructure | 🔴 No iniciado | Auth + bridge script en server |
-| 2. Backend Integration | 🔴 No iniciado | Executor, queue routing, comments |
-| 3. Frontend Dev Tasks | 🔴 No iniciado | Badge dev, agent picker, resultados |
-| 4. Rebuild Pipeline | 🔴 No iniciado | Auto-rebuild tras push |
-| 5. Budget & Safety | 🔴 No iniciado | Token tracking, circuit breaker |
-| 6. Paperclip Features | 🔴 No iniciado | Goal ancestry, atomic checkout |
+| [Auth, Workspace, Agents](SPEC_AUTH_WORKSPACE_AGENTS.md) | Completo | OAuth, invitaciones, members, agents core/advance, queue |
+| [Chat](SPEC_CHAT.md) | Completo | Conversaciones, streaming, attachments, tools, CLI OAuth |
+| [Email](SPEC_EMAIL.md) | Activo | Multi-account, threading, AI categories, mark unread, Oportunidad button, CRM linking |
+| [CRM](SPEC_CRM.md) | Completo | Contacts, pipeline, quotations, workflows, Contexto Pulse, email linking |
+| [Projects (Kanban)](SPEC_PROJECTS.md) | Completo | Boards, issues, deploy modes, agent queue, routines |
+| [Messaging + WhatsApp](SPEC_MESSAGING_WHATSAPP_DEVOPS.md) | Messaging completo / WhatsApp pendiente | Canales internos, DMs, threads. WhatsApp estructura lista, integracion externa pendiente |
+| [DevOps](SPEC_DEVOPS.md) | Completo | Servers SSH, SSH keys RSA-4096, repo tokens, verificacion |
 
 ---
 
@@ -38,52 +22,111 @@ Ver: [ROADMAP.md](../ROADMAP.md) y [REQUIREMENTS.md](../REQUIREMENTS.md)
 
 | Componente | Detalle |
 |-----------|---------|
-| Server | 85.215.105.45 (Ubuntu 24.04, 16 cores, 125GB RAM) |
-| Deploy | /opt/pulse, nginx, systemd |
-| DB | Self-hosted Supabase (PostgreSQL + RLS + RPC) |
-| Storage | Cloudflare R2 (imágenes chat, attachments email) |
-| AI | Anthropic Claude via CLI OAuth o API key |
-| OpenClaw | Bridge local 127.0.0.1:4200 (agents advance) |
+| VPS | 85.215.105.45 (Ubuntu 24.04, 16 cores, 125 GB RAM) |
+| Deploy path | `/opt/pulse/` |
+| Reverse proxy | nginx + Let's Encrypt (certbot) |
+| Process manager | systemd (pulse-api, pulse-cron, bridges) |
+| Base de datos | Self-hosted Supabase (PostgreSQL + RLS + RPC + Realtime) |
+| Storage | Cloudflare R2 (imagenes chat, attachments email) |
+| AI — Chat general | `claude-haiku-4-5-20251001` via Anthropic API |
+| AI — Chat dev agents | `claude-sonnet-4-6` via Anthropic API |
+| AI — Email analysis | `claude-haiku-4-5-20251001` |
+| AI — CRM relationship | `claude-sonnet-4-20250514` |
+| AI — Agents core | `claude-haiku-4-5-20251001` (configurable via env `MODEL`) |
+| AI — Agents advance | OpenClaw bridge `127.0.0.1:4200` (GPT Pro flat-rate) |
+| AI — Pulse Agent (dev) | Claude Code CLI OAuth en server, bridge `127.0.0.1:4201` |
+| Cola de jobs | QStash (email sync asincrono) |
+| Rate limiting | slowapi + Redis |
+| Cifrado | Fernet (cryptography 44) para tokens, keys, passwords |
+| Error tracking | Sentry |
 
 ---
 
 ## Convenciones Clave
 
-**Modelos:**
-- Soft-delete via `deleted_at` en CRM
-- JSONB para contenido flexible (blocks, content_parts, payload, config)
-- UUID como PKs
-- RLS policies en Supabase por workspace
+### Modelos de Datos
+- Soft-delete via `deleted_at` en CRM (contactos, empresas, oportunidades)
+- JSONB para contenido flexible: `blocks`, `content_parts`, `payload`, `config`, `verification_details`
+- UUID como PKs en todas las tablas
+- RLS policies en Supabase por `workspace_id` en cada tabla
+- Timestamps: `created_at`, `updated_at` en la mayoria de tablas
 
-**API:**
+### API
 - Base: FastAPI routers en `/core-api/api/routers/`
-- Auth: Supabase JWT en header `Authorization`
-- Rate limits en endpoints AI/críticos
+- Auth: Supabase JWT en header `Authorization: Bearer <token>`
+- Workspace scope: `workspace_id` como query param o en body
+- Rate limits en endpoints AI/criticos (via slowapi)
+- Errores: HTTPException con detalle en ingles (loggeado) + mensaje de usuario
 
-**Frontend:**
-- React Query para server state
-- Zustand para client state
-- Componentes por módulo en `/core-web/src/components/`
-- API client en `/core-web/src/api/client.ts`
+### Frontend
+- React Query para server state (fetch, cache, invalidation)
+- Zustand para client state (UI state, preferences)
+- Componentes por modulo en `/core-web/src/components/`
+- API client unificado en `/core-web/src/api/client.ts`
+- Streaming NDJSON para chat (fetch + ReadableStream)
 
-**AI Models:**
-- Chat general: `claude-haiku-4-5-20251001`
-- Chat dev agents: `claude-sonnet-4-6`
-- Email analysis: `claude-haiku-4-5-20251001`
-- Agent creation: `claude-haiku-4-5-20251001`
-- Claude Code (futuro): CLI OAuth en server
+### Seguridad
+- Tokens, claves SSH y passwords cifrados con Fernet antes de guardar en DB
+- Clave de cifrado en env `TOKEN_ENCRYPTION_KEY`
+- JWT de Supabase requerido en todos los endpoints autenticados
+- Cloudflare Turnstile anti-bot en registro
+- Gitleaks en pre-commit hooks
+
+---
+
+## Decisiones de Arquitectura
+
+| Decision | Razon |
+|----------|-------|
+| Self-hosted Supabase | Control total, sin limites de plan, RLS nativa, Realtime incluido |
+| Cloudflare R2 para storage | Sin egress fees vs S3; compatible S3 API |
+| NDJSON streaming para chat | Mas simple que SSE/WebSocket; compatible con todos los proxies nginx |
+| Supabase Realtime para mensajeria | Evita WebSocket propio; aprovecha infraestructura existente |
+| Fernet para cifrado | Simetrico, auditado, integrado en `cryptography`; suficiente para tokens en reposo |
+| Sistema SSH via subprocess | Simplicidad vs asyncssh; timeout controlado, no requiere dependencia extra |
+| Soft-delete en CRM | Trazabilidad de datos; posibilidad de recuperar registros eliminados |
+| content_parts JSONB en chat | Flexibilidad para diferentes tipos (text, citations, tool_results, images) sin schema rigido |
+| CLI OAuth para Claude Code | $0 extra para el usuario; usa suscripcion existente de $200/mo |
+| Agents tier: core vs advance | Core (Haiku directo, CRUD en Pulse) vs Advance (GPT Pro via OpenClaw, read-only) |
+| QStash para email sync | Desacopla sync asincrono del request-response; permite reintentos automaticos |
 
 ---
 
 ## Pendientes Globales
 
-1. **Claude Code CLI** — autenticación en server + bridge (Roadmap Phase 1-6)
-2. **WhatsApp** — integración real con WhatsApp Business API
-3. **AI Compose Email** — endpoint activo, frontend listo (botón IA + ⌘⌥I)
-4. **Attachment upload en compose** — solo reenviar existentes
-5. **CRM: workflow ai_action step** — tipo existe, logic pendiente
-6. **Agent advance CRUD** — actualmente read-only desde Pulse
-7. **Email categories server-side** — clasificación actual es heurística client-side
-8. **Contexto Pulse nightly cron** — actualización manual ok, cron pendiente
-9. **Email thread popup desde OpportunityDetail** — pendiente
-10. **Vincular correo a oportunidad existente** — modal muestra lista, POST pendiente
+### Prioritarios
+1. **WhatsApp** — integracion real con WhatsApp Business API (webhooks, envio/recepcion, QR flow)
+2. **Attachment upload en compose email** — solo reenviar existentes; no se puede adjuntar archivo local nuevo
+3. **CRM: workflow `ai_action` step** — tipo existe en schema, logica de ejecucion pendiente
+4. **Contexto Pulse nightly cron** — actualizacion manual funciona; cron automatico pendiente
+
+### Funcionales
+5. **Agent advance CRUD** — actualmente read-only desde Pulse (CRUD solo en OpenClaw)
+6. **Email: reglas server-side con AI** — clasificacion actual es heuristica client-side
+7. **CRM: email thread popup desde OpportunityDetail** — solucion UI pendiente
+8. **CRM: buscar correo existente al vincular a oportunidad** — modal muestra input manual, busqueda en bandeja pendiente
+9. **DevOps: Overview tab** — UI lista, datos reales no implementados
+
+### Roadmap Claude Code Agents (Phases 1-6)
+10. **Claude Code CLI autenticado en server** (Phase 1 — no iniciado)
+11. **Backend routing jobs a Claude Code vs OpenClaw** (Phase 2)
+12. **UI badge dev task + filtro en assignee picker** (Phase 3)
+13. **Rebuild pipeline automatico tras push** (Phase 4)
+14. **Budget tracking tokens Claude Code** (Phase 5)
+15. **Goal ancestry + atomic checkout** (Phase 6)
+
+---
+
+## Estado por Modulo (Resumen rapido)
+
+```
+Auth / Workspace    [==========] 100%  Completo
+Chat                [==========] 100%  Completo
+Email               [========--]  80%  AI categorias client-side; attachment upload pendiente
+CRM                 [=========.]  95%  ai_action step y Contexto cron pendiente
+Projects            [=========.]  95%  Claude Code integration pendiente (roadmap)
+Messaging (interna) [==========] 100%  Completo
+WhatsApp            [====------]  40%  Estructura lista; integracion real pendiente
+DevOps              [=========.]  95%  Overview tab pendiente
+Agents core/advance [=========.]  95%  Advance CRUD pendiente
+```

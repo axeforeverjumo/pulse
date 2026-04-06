@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ArrowLeftIcon,
   CurrencyDollarIcon,
@@ -77,6 +78,9 @@ export default function OpportunityDetail({ opportunityId, workspaceId, onBack }
   // Notes
   const [noteContent, setNoteContent] = useState('');
   const [savingNote, setSavingNote] = useState(false);
+
+  // Email popup
+  const [emailPopup, setEmailPopup] = useState<any | null>(null);
 
   const loadOpportunity = useCallback(async () => {
     try {
@@ -285,6 +289,7 @@ export default function OpportunityDetail({ opportunityId, workspaceId, onBack }
   const notes = opp.notes || [];
 
   return (
+    <>
     <div className="flex-1 flex flex-col h-full bg-white/92 md:rounded-[20px] overflow-hidden">
       {/* ── Header ───────────────────────────────────────────── */}
       <div className="shrink-0 border-b border-[#e4edf8]">
@@ -729,7 +734,11 @@ export default function OpportunityDetail({ opportunityId, workspaceId, onBack }
               </h3>
               <div className="space-y-1">
                 {opp.linked_emails.map((em: any) => (
-                  <div key={em.id} className="flex items-start gap-2 px-3 py-2.5 rounded-lg border border-slate-100 bg-white hover:border-slate-200 transition-colors">
+                  <button
+                    key={em.id}
+                    onClick={() => setEmailPopup(em)}
+                    className="w-full flex items-start gap-2 px-3 py-2.5 rounded-lg border border-slate-100 bg-white hover:border-blue-200 hover:bg-blue-50/20 transition-all text-left cursor-pointer"
+                  >
                     <EnvelopeIcon className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-slate-700 truncate">{em.email_subject || '(Sin asunto)'}</p>
@@ -740,7 +749,7 @@ export default function OpportunityDetail({ opportunityId, workspaceId, onBack }
                         {new Date(em.email_date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
                       </span>
                     )}
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -800,5 +809,70 @@ export default function OpportunityDetail({ opportunityId, workspaceId, onBack }
         </div>
       </div>
     </div>
+
+    {emailPopup && createPortal(
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+        onClick={() => setEmailPopup(null)}
+      >
+        <div
+          className="bg-white rounded-2xl shadow-2xl w-[560px] max-h-[80vh] flex flex-col overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="px-5 pt-5 pb-3 border-b border-slate-100 flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <h2 className="text-base font-semibold text-slate-900 line-clamp-2">{emailPopup.email_subject || '(Sin asunto)'}</h2>
+              <div className="flex items-center gap-3 mt-1">
+                <span className="text-xs text-slate-500">{emailPopup.email_from_name || emailPopup.email_from}</span>
+                {emailPopup.email_date && (
+                  <span className="text-xs text-slate-400">
+                    {new Date(emailPopup.email_date).toLocaleString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
+              </div>
+            </div>
+            <button onClick={() => setEmailPopup(null)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors shrink-0">
+              <XCircleIcon className="w-5 h-5" />
+            </button>
+          </div>
+          {/* Info */}
+          <div className="flex-1 overflow-y-auto px-5 py-4">
+            <dl className="space-y-3 text-sm">
+              <div>
+                <dt className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">De</dt>
+                <dd className="text-slate-700">{emailPopup.email_from_name ? `${emailPopup.email_from_name} <${emailPopup.email_from}>` : emailPopup.email_from}</dd>
+              </div>
+              <div>
+                <dt className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Asunto</dt>
+                <dd className="text-slate-700">{emailPopup.email_subject || '(Sin asunto)'}</dd>
+              </div>
+              {emailPopup.email_date && (
+                <div>
+                  <dt className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Fecha</dt>
+                  <dd className="text-slate-700">{new Date(emailPopup.email_date).toLocaleString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</dd>
+                </div>
+              )}
+              <div>
+                <dt className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Thread ID</dt>
+                <dd className="text-[11px] text-slate-400 font-mono">{emailPopup.email_thread_id}</dd>
+              </div>
+            </dl>
+            <div className="mt-4 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2.5">
+              <p className="text-xs text-amber-700 flex items-center gap-1.5">
+                <EnvelopeIcon className="w-3.5 h-3.5 shrink-0" />
+                Para ver el contenido completo abre este correo en la bandeja de entrada
+              </p>
+            </div>
+          </div>
+          {/* Footer */}
+          <div className="px-5 py-3 border-t border-slate-100 flex justify-end">
+            <button onClick={() => setEmailPopup(null)} className="px-4 py-2 text-sm text-slate-500 hover:text-slate-700 transition-colors">Cerrar</button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
+    </>
   );
 }

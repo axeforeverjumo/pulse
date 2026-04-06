@@ -1457,6 +1457,66 @@ async def cron_process_crm_workflows(authorization: str = Header(None)):
         )
 
 
+class PulseContextCronResponse(BaseModel):
+    """Response for Pulse Context nightly cron job."""
+    status: str
+    processed: int = 0
+    skipped: int = 0
+    errors: int = 0
+    duration_seconds: Optional[float] = None
+
+
+@router.get("/pulse-context", response_model=PulseContextCronResponse)
+async def cron_pulse_context(authorization: str = Header(None)):
+    """
+    CRON JOB: Nightly Pulse Context AI refresh for active CRM opportunities
+
+    RUNS: Daily at 02:00 UTC
+
+    PURPOSE: Generates / refreshes the AI Pulse Context summary for every active
+    CRM opportunity (stage != lost, deleted_at IS NULL) that was updated in the
+    last 7 days or has never had a context generated.
+    Processes all workspaces using service_role (bypasses RLS).
+    """
+    logger.info("=" * 80)
+    logger.info("CRON: Starting nightly Pulse Context refresh")
+
+    if not verify_cron_auth(authorization):
+        logger.warning("Unauthorized cron attempt for pulse-context")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+
+    start_time = datetime.now(timezone.utc)
+
+    try:
+        from api.services.crm.pulse_context_cron import refresh_all_pulse_contexts
+
+        result = refresh_all_pulse_contexts()
+
+        duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+        logger.info(
+            f"CRON [pulse-context]: Done in {duration:.2f}s — "
+            f"processed={result['processed']}, skipped={result['skipped']}, errors={result['errors']}"
+        )
+        logger.info("=" * 80)
+
+        return {
+            "status": "completed",
+            "processed": result["processed"],
+            "skipped": result["skipped"],
+            "errors": result["errors"],
+            "duration_seconds": duration,
+        }
+
+    except Exception as e:
+        logger.error(f"CRON [pulse-context]: Failed: {str(e)}")
+        logger.exception("Full traceback:")
+        logger.info("=" * 80)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Pulse Context cron failed: {str(e)}"
+        )
+
+
 @router.get("/health", response_model=CronHealthResponse)
 async def cron_health():
     """
@@ -1522,6 +1582,11 @@ async def cron_health():
                 "name": "process-crm-workflows",
                 "schedule": "Every 5 minutes",
                 "description": "Resumes CRM workflow runs whose wait step has elapsed"
+            },
+            {
+                "name": "pulse-context",
+                "schedule": "Daily at 2:00 AM UTC",
+                "description": "AI Pulse Context refresh for active CRM opportunities"
             }
         ]
     }

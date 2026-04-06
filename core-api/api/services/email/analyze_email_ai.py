@@ -28,10 +28,15 @@ def get_anthropic_client():
     return anthropic_client
 
 
+# Valid AI categories for emails
+AI_CATEGORIES = {"ventas", "proyectos", "personas", "acuerdos", "notificaciones", "baja_prioridad"}
+
+
 # Pydantic model for structured output
 class EmailAnalysis(BaseModel):
     summary: str  # 3-12 word specific summary
     important: bool  # True if important, False otherwise
+    category: str  # One of: ventas|proyectos|personas|acuerdos|notificaciones|baja_prioridad
 
 
 def analyze_email_with_ai(
@@ -79,11 +84,12 @@ def analyze_email_with_ai(
 Your JSON response must have exactly these fields:
 - "summary": A specific 3-12 word description of what the email is actually about. Be SPECIFIC, not generic.
 - "important": boolean (true or false)
+- "category": one of exactly these values: "ventas", "proyectos", "personas", "acuerdos", "notificaciones", "baja_prioridad"
 
 SUMMARY RULES - Be specific about the actual content:
 ✅ GOOD examples (specific):
 - "asking for update on new designer hire"
-- "warning about unknown sign-in from new device"  
+- "warning about unknown sign-in from new device"
 - "invoice #4521 for October consulting work"
 - "rescheduling tomorrow's 2pm product review"
 - "John requesting feedback on landing page mockups"
@@ -114,6 +120,14 @@ Mark as NOT important (false) if:
 - Automated/transactional
 - Spam or bulk mail
 - Social media notifications
+
+CATEGORY RULES — choose the single best fit:
+- "ventas": Sales opportunities, proposals, quotes, pricing, potential deals, lead follow-ups
+- "proyectos": Project updates, tasks, deliverables, deadlines, team coordination on active work
+- "personas": HR, recruitment, team introductions, people management, personal matters
+- "acuerdos": Contracts, NDAs, legal documents, agreements to sign or review
+- "notificaciones": System alerts, automated confirmations, account notifications, service updates
+- "baja_prioridad": Newsletters, marketing, promotions, social media digests, bulk mail
 
 You MUST respond with valid JSON only. No markdown, no code fences, no explanation. Just the JSON object."""
 
@@ -153,19 +167,27 @@ You MUST respond with valid JSON only. No markdown, no code fences, no explanati
             summary = " ".join(summary_words[:12])
         elif len(summary_words) == 0:
             summary = "email"
-        
+
+        # Validate category — fall back to "notificaciones" if model returns unexpected value
+        category = email_analysis.category.strip().lower()
+        if category not in AI_CATEGORIES:
+            logger.warning(f"Unexpected category '{category}' from AI, defaulting to 'notificaciones'")
+            category = "notificaciones"
+
         return {
             "summary": summary.lower(),  # Normalize to lowercase
-            "important": email_analysis.important
+            "important": email_analysis.important,
+            "category": category,
         }
-        
+
     except Exception as e:
         # Log error and return safe defaults
         logger.error(f"Error analyzing email with AI: {str(e)}")
         logger.debug(traceback.format_exc())
         return {
             "summary": "unread email",
-            "important": False
+            "important": False,
+            "category": "notificaciones",
         }
 
 
@@ -200,7 +222,8 @@ def analyze_and_update_email(email_id: str, email_data: Dict) -> bool:
         supabase.table("emails").update({
             "ai_analyzed": True,
             "ai_summary": analysis["summary"],
-            "ai_important": analysis["important"]
+            "ai_important": analysis["important"],
+            "ai_category": analysis.get("category"),
         }).eq("id", email_id).execute()
 
         return True

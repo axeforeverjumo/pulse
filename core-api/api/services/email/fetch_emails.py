@@ -57,7 +57,8 @@ async def fetch_emails(
     include_spam_trash: bool = False,
     group_by_thread: bool = True,
     offset: int = 0,
-    account_ids: Optional[List[str]] = None
+    account_ids: Optional[List[str]] = None,
+    ai_category: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Fetch emails from database with unified multi-account support (async).
@@ -76,6 +77,7 @@ async def fetch_emails(
         offset: Number of emails to skip for pagination (default 0)
         account_ids: Filter by specific email accounts (ext_connection_ids).
                     If None, fetches from ALL accounts (unified view).
+        ai_category: Optional AI category filter (ventas|proyectos|personas|acuerdos|notificaciones|baja_prioridad).
 
     Returns:
         Dict with emails list, metadata, and accounts_status
@@ -100,6 +102,19 @@ async def fetch_emails(
             if label_ids and len(label_ids) > 0:
                 label_filter = normalize_label_filter(label_ids[0])
 
+            # If ai_category filter is requested, resolve matching thread_ids first
+            ai_category_thread_ids: Optional[set] = None
+            if ai_category:
+                cat_q = auth_supabase.table('emails') \
+                    .select('thread_id') \
+                    .eq('user_id', user_id) \
+                    .eq('ai_category', ai_category)
+                if effective_account_ids:
+                    cat_q = cat_q.in_('ext_connection_id', effective_account_ids)
+                cat_result = await cat_q.execute()
+                ai_category_thread_ids = {r['thread_id'] for r in (cat_result.data or []) if r.get('thread_id')}
+                logger.info(f"📧 ai_category='{ai_category}' matches {len(ai_category_thread_ids)} thread(s)")
+
             # Call the unified Postgres function for threaded emails
             result = await auth_supabase.rpc(
                 'get_email_threads_unified',
@@ -113,6 +128,10 @@ async def fetch_emails(
             ).execute()
 
             threads = result.data or []
+
+            # Post-filter by ai_category if needed
+            if ai_category_thread_ids is not None:
+                threads = [t for t in threads if t.get('thread_id') in ai_category_thread_ids]
 
             logger.info(f"✅ Found {len(threads)} email threads in database (unified: {is_unified})")
 
@@ -139,6 +158,7 @@ async def fetch_emails(
                     'ai_summary': t.get('ai_summary'),
                     'ai_important': t.get('ai_important'),
                     'ai_analyzed': t.get('ai_analyzed', False),
+                    'ai_category': t.get('ai_category'),
                     'ext_connection_id': t.get('ext_connection_id'),
                     # Account info for unified view display
                     'account_email': t.get('account_email'),
@@ -168,7 +188,7 @@ async def fetch_emails(
                 .select(
                     'external_id, gmail_draft_id, thread_id, subject, "from", "to", cc, '
                     'snippet, labels, normalized_labels, is_read, received_at, '
-                    'ai_summary, ai_important, ai_analyzed, has_attachments, ext_connection_id, '
+                    'ai_summary, ai_important, ai_analyzed, ai_category, has_attachments, ext_connection_id, '
                     'ext_connections!inner(provider_email, provider, metadata)'
                 )\
                 .eq('user_id', user_id)
@@ -189,6 +209,10 @@ async def fetch_emails(
                 db_query = db_query.not_.cs('normalized_labels', ['trash'])\
                     .not_.cs('normalized_labels', ['spam'])\
                     .not_.cs('normalized_labels', ['draft'])
+
+            # AI category filter
+            if ai_category:
+                db_query = db_query.eq('ai_category', ai_category)
 
             # Text search in subject/from if query is provided
             if query:
@@ -232,6 +256,7 @@ async def fetch_emails(
                     'ai_summary': e.get('ai_summary'),
                     'ai_important': e.get('ai_important'),
                     'ai_analyzed': e.get('ai_analyzed', False),
+                    'ai_category': e.get('ai_category'),
                     'has_attachments': e.get('has_attachments', False),
                     # We avoid selecting the full attachments payload in list responses.
                     # For list view we only need the presence indicator.

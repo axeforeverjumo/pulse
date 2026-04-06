@@ -161,7 +161,7 @@ role: from|to|cc|bcc
 | DELETE | `/contacts/{id}` | Soft-delete |
 | POST | `/contacts/from-email` | Crear desde email (AI relationship summary) |
 
-**Crear desde email:** Extrae nombre del email, busca historial, Claude genera ai_relationship_summary, tags: ["from-email"]
+**Crear desde email:** Extrae nombre del email, busca historial, Claude (`claude-sonnet-4-20250514`) genera ai_relationship_summary, tags: ["from-email"]
 
 ### Empresas
 | Método | Ruta |
@@ -185,6 +185,9 @@ role: from|to|cc|bcc
 | DELETE | `/opportunities/{id}` | Soft-delete |
 | POST | `/opportunities/{id}/messages` | Agregar mensaje |
 | GET | `/opportunities/{id}/messages` | Listar mensajes |
+| GET | `/opportunities/{id}/emails` | Listar correos vinculados |
+| POST | `/opportunities/{id}/emails` | Vincular thread de email |
+| DELETE | `/opportunities/{id}/emails/{thread_id}` | Desvincular email |
 
 **Workflow triggers en cambio de stage:**
 - `new_lead` → stage=lead (al crear)

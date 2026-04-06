@@ -1,5 +1,6 @@
-# SPEC: Messaging, WhatsApp y DevOps
-> Estado: Messaging COMPLETO | WhatsApp integración externa PENDIENTE | DevOps COMPLETO | Última revisión: 2026-04-06
+# SPEC: Messaging y WhatsApp
+> Estado: Messaging COMPLETO | WhatsApp integración externa PENDIENTE | Última revisión: 2026-04-06
+> Nota: DevOps tiene spec propio en [SPEC_DEVOPS.md](SPEC_DEVOPS.md)
 
 ---
 
