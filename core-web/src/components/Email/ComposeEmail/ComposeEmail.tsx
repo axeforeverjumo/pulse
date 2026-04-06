@@ -15,10 +15,11 @@ import {
   PaperClipIcon,
   LinkIcon,
   ListBulletIcon,
+  SparklesIcon,
 } from "@heroicons/react/24/outline";
 import { useEmailStore } from "../../../stores/emailStore";
 import { emailKeys } from "../../../hooks/queries/keys";
-import { type EmailAttachmentUpload } from "../../../api/client";
+import { type EmailAttachmentUpload, composeEmailWithAI } from "../../../api/client";
 import ChipInput, { type ChipInputRef } from "./ChipInput";
 
 const COMPOSE_WIDTH = 520;
@@ -51,6 +52,12 @@ export default function ComposeEmail() {
   const [attachments, setAttachments] = useState<File[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const addFilesRef = useRef<(files: FileList | File[]) => void>(() => {});
+
+  // AI compose state
+  const [showAIPanel, setShowAIPanel] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const aiInputRef = useRef<HTMLTextAreaElement>(null);
 
   // Track if the editor itself triggered the update to avoid sync loops
   const isEditorUpdateRef = useRef(false);
@@ -123,6 +130,31 @@ export default function ComposeEmail() {
     queryClient.invalidateQueries({ queryKey: emailKeys.folders() });
     queryClient.invalidateQueries({ queryKey: [...emailKeys.all, 'counts'] });
   }, [closeCompose, queryClient]);
+
+  const generateWithAI = useCallback(async () => {
+    if (!aiPrompt.trim() || isGenerating) return;
+    setIsGenerating(true);
+    try {
+      const result = await composeEmailWithAI({
+        prompt: aiPrompt.trim(),
+        subject: draft.subject || undefined,
+        to: draft.to,
+        current_body: editor?.getText() || undefined,
+      });
+      if (editor && result.body_html) {
+        editor.commands.setContent(result.body_html);
+      }
+      if (result.subject && !draft.subject) {
+        updateComposeDraft('subject', result.subject);
+      }
+      setShowAIPanel(false);
+      setAiPrompt('');
+    } catch {
+      toast.error('Error al generar con IA');
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [aiPrompt, isGenerating, editor, draft.subject, draft.to, updateComposeDraft]);
 
   const addLink = useCallback(() => {
     if (!editor) return;
@@ -246,16 +278,32 @@ export default function ComposeEmail() {
         handleSend();
       }
 
-      // Escape to minimize
-      if (e.key === "Escape" && !isMinimized) {
+      // Cmd+Option+I (Mac) or Ctrl+Alt+I (Win) to toggle AI panel
+      if ((e.metaKey || e.ctrlKey) && e.altKey && e.key === "i") {
         e.preventDefault();
-        toggleComposeMinimize();
+        setShowAIPanel((prev) => {
+          if (!prev) setTimeout(() => aiInputRef.current?.focus(), 50);
+          return !prev;
+        });
+      }
+
+      // Escape to minimize or close AI panel
+      if (e.key === "Escape") {
+        if (showAIPanel) {
+          e.preventDefault();
+          setShowAIPanel(false);
+          return;
+        }
+        if (!isMinimized) {
+          e.preventDefault();
+          toggleComposeMinimize();
+        }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, isMinimized, handleSend, toggleComposeMinimize]);
+  }, [isOpen, isMinimized, showAIPanel, handleSend, toggleComposeMinimize]);
 
   return createPortal(
     <AnimatePresence>
@@ -423,6 +471,57 @@ export default function ComposeEmail() {
             </div>
             <div className="mx-4 border-t border-border-gray" />
 
+            {/* AI Compose Panel */}
+            <AnimatePresence>
+              {showAIPanel && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
+                  className="overflow-hidden border-b border-border-gray"
+                >
+                  <div className="px-4 py-3 bg-violet-50">
+                    <div className="flex items-center gap-2 mb-2">
+                      <SparklesIcon className="w-4 h-4 text-violet-600 shrink-0" />
+                      <span className="text-xs font-medium text-violet-700">Escribe qué quieres decir y la IA redactará el correo</span>
+                      <span className="ml-auto text-[10px] text-violet-400">⌘⌥I</span>
+                    </div>
+                    <textarea
+                      ref={aiInputRef}
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          generateWithAI();
+                        }
+                      }}
+                      placeholder="Ej: Pedir reunión para discutir el proyecto X la próxima semana..."
+                      rows={2}
+                      className="w-full text-sm bg-white border border-violet-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-300 resize-none placeholder:text-violet-300"
+                    />
+                    <div className="flex items-center justify-end gap-2 mt-2">
+                      <button
+                        onClick={() => { setShowAIPanel(false); setAiPrompt(''); }}
+                        className="text-xs text-violet-400 hover:text-violet-600 transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={generateWithAI}
+                        disabled={!aiPrompt.trim() || isGenerating}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white text-xs font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors"
+                      >
+                        <SparklesIcon className={`w-3.5 h-3.5 ${isGenerating ? "animate-pulse" : ""}`} />
+                        {isGenerating ? "Generando..." : "Generar correo"}
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Editor with drag-and-drop */}
             <div
               className={`flex-1 overflow-y-auto min-h-[200px] max-h-[300px] relative ${isDragOver ? "ring-2 ring-inset ring-brand-primary/40 bg-brand-primary/5" : ""}`}
@@ -569,6 +668,23 @@ export default function ComposeEmail() {
                   title="Attach files"
                 >
                   <PaperClipIcon className="w-4.5 h-4.5" />
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAIPanel((prev) => {
+                      if (!prev) setTimeout(() => aiInputRef.current?.focus(), 50);
+                      return !prev;
+                    });
+                  }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    showAIPanel
+                      ? "bg-violet-100 text-violet-700"
+                      : "text-text-secondary hover:text-violet-600 hover:bg-violet-50"
+                  }`}
+                  title="Ayuda IA (⌘⌥I)"
+                >
+                  <SparklesIcon className="w-4 h-4" />
+                  <span className="hidden sm:inline">IA</span>
                 </button>
               </div>
               <button

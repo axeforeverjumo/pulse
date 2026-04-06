@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { toast } from 'sonner';
 import { ArrowDownIcon, ClockIcon, TrashIcon, EllipsisHorizontalIcon, PencilIcon } from '@heroicons/react/24/outline';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus } from 'lucide-react';
 import { Icon } from '../ui/Icon';
-import { getMessages, createConversation, type Message, type ContentPart } from '../../api/client';
+import { getMessages, createConversation, invokeAgent, waitForAgentTask, type Message, type ContentPart } from '../../api/client';
 import { useConversationStore } from '../../stores/conversationStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -48,6 +49,7 @@ export default function ChatView() {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState('');
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [agentWaitingLabel, setAgentWaitingLabel] = useState<string | null>(null);
   const showPreviousChats = useUIStore((state) => state.isChatHistoryOpen);
   const setShowPreviousChats = useUIStore((state) => state.setChatHistoryOpen);
   const [openConversationMenuId, setOpenConversationMenuId] = useState<string | null>(null);
@@ -323,7 +325,7 @@ export default function ChatView() {
   const handleSubmitWithAttachments = async () => {
     const hasText = input.trim().length > 0;
     const hasAttachments = pendingAttachments.length > 0;
-    if ((!hasText && !hasAttachments) || loading) return;
+    if ((!hasText && !hasAttachments) || loading || agentWaitingLabel) return;
 
     let attachmentIds: string[] | undefined;
     let attachmentParts: ContentPart[] | undefined;
@@ -350,16 +352,55 @@ export default function ChatView() {
       clearAll();
     }
 
-    // Append mention hints so the AI knows which documents the user referenced
-    let userMessage = input.trim();
-    if (mentions.length > 0) {
-      const mentionHints = mentions
-        .map((m) => `[User referenced: ${m.displayName} (${m.entityType}, id: ${m.entityId})]`)
-        .join('\n');
-      userMessage = `${userMessage}\n\n${mentionHints}`;
-    }
+    const agentMentions = mentions.filter((m) => m.entityType === 'agent');
+    const rawMessage = input.trim();
     setInput('');
     setMentions([]);
+
+    // If agents are mentioned, invoke them and WAIT for all to finish before
+    // sending to the main chat so Claude can synthesize real results.
+    let agentResultsBlock = '';
+    if (agentMentions.length > 0) {
+      try {
+        const agentNames = agentMentions.map((m) => m.displayName).join(', ');
+        setAgentWaitingLabel(`Esperando respuesta de ${agentNames}…`);
+
+        const tasks = await Promise.all(
+          agentMentions.map((m) => invokeAgent(m.entityId, rawMessage))
+        );
+
+        const completedTasks = await Promise.all(
+          tasks.map((task, i) =>
+            waitForAgentTask(agentMentions[i].entityId, task.id, { timeoutMs: 90_000 })
+          )
+        );
+
+        // Build a context block with each agent's output for Claude
+        const results = completedTasks.map((task, i) => {
+          const output = task.output?.response as string | undefined;
+          const name = agentMentions[i].displayName;
+          if (task.status === 'failed') return `[${name}]: Error — ${task.error || 'tarea fallida'}`;
+          return `[Respuesta de ${name}]:\n${output || '(sin respuesta)'}`;
+        });
+        agentResultsBlock = `\n\n---\nResultados de agentes invocados:\n${results.join('\n\n')}`;
+      } catch (err) {
+        toast.error('Tiempo de espera agotado para uno o más agentes');
+      } finally {
+        setAgentWaitingLabel(null);
+      }
+    }
+
+    // Build full message: user text + non-agent mention hints + agent results
+    let userMessage = rawMessage;
+    const nonAgentHints = mentions
+      .filter((m) => m.entityType !== 'agent')
+      .map((m) => `[User referenced: ${m.displayName} (${m.entityType}, id: ${m.entityId})]`);
+    if (nonAgentHints.length > 0) {
+      userMessage += `\n\n${nonAgentHints.join('\n')}`;
+    }
+    if (agentResultsBlock) {
+      userMessage += agentResultsBlock;
+    }
 
     // Create conversation if needed (silently update URL, no re-render)
     let convId = activeConversationRef.current;
@@ -618,7 +659,16 @@ export default function ChatView() {
                 className="absolute left-0 right-0"
                 style={{ top: aiResponseTop }}
               >
-                {isWaitingForResponse ? (
+                {agentWaitingLabel ? (
+                  <div className="group py-4">
+                    <div className="max-w-3xl mx-auto px-4">
+                      <div className="max-w-[85%] flex items-center gap-2">
+                        <span className="inline-block w-3 h-3 bg-violet-500 rounded-full animate-pulse" />
+                        <span className="text-sm text-text-tertiary animate-pulse">{agentWaitingLabel}</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : isWaitingForResponse ? (
                   // Waiting indicator with optional status text
                   <div className="group py-4">
                     <div className="max-w-3xl mx-auto px-4">

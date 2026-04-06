@@ -1254,3 +1254,76 @@ async def analyze_emails_endpoint(
         }
     except Exception as e:
         handle_api_exception(e, "Failed to analyze emails", logger)
+
+
+# AI Compose endpoint
+class ComposeAIRequest(BaseModel):
+    prompt: str  # What the user wants to write
+    subject: Optional[str] = None
+    to: Optional[List[str]] = []
+    current_body: Optional[str] = None  # Existing body text for context
+
+class ComposeAIResponse(BaseModel):
+    body_html: str
+    body_text: str
+    subject: Optional[str] = None
+
+@router.post("/compose-ai", response_model=ComposeAIResponse)
+async def compose_email_with_ai(
+    request: ComposeAIRequest,
+    user_id: str = Depends(get_current_user_id)
+):
+    """
+    Generate email body using AI based on user's prompt and context.
+    """
+    import anthropic
+    from api.config import settings
+
+    try:
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+
+        context_parts = []
+        if request.to:
+            context_parts.append(f"To: {', '.join(request.to)}")
+        if request.subject:
+            context_parts.append(f"Subject: {request.subject}")
+        if request.current_body and request.current_body.strip():
+            context_parts.append(f"Draft so far:\n{request.current_body.strip()}")
+
+        context_block = "\n".join(context_parts)
+        context_section = f"\nContext:\n{context_block}\n" if context_block else ""
+
+        system_prompt = """You are an expert email writer. Generate professional, clear, and concise emails.
+Respond with JSON only containing:
+- "subject": improved subject line (or null if no change needed)
+- "body_html": the email body in clean HTML (use <p> tags for paragraphs, <br> for line breaks, avoid complex HTML)
+- "body_text": plain text version of the body
+
+Rules:
+- Match the tone to the context (professional unless specified otherwise)
+- Be concise and to the point
+- Write in the same language as the prompt
+- Do not include salutation/greeting or signature unless explicitly asked
+- Return valid JSON only, no markdown fences"""
+
+        user_prompt = f"""Write an email with the following intent:{context_section}
+User's request: {request.prompt}"""
+
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1500,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_prompt}],
+            temperature=0.7,
+        )
+
+        import json
+        result = json.loads(response.content[0].text)
+
+        return ComposeAIResponse(
+            body_html=result.get("body_html", ""),
+            body_text=result.get("body_text", ""),
+            subject=result.get("subject"),
+        )
+    except Exception as e:
+        handle_api_exception(e, "Failed to generate email with AI", logger)

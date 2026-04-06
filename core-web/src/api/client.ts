@@ -1386,6 +1386,18 @@ export async function sendDraft(draftId: string): Promise<Record<string, unknown
   return api(`/email/drafts/${draftId}/send`, { method: 'POST' });
 }
 
+export async function composeEmailWithAI(data: {
+  prompt: string;
+  subject?: string;
+  to?: string[];
+  current_body?: string;
+}): Promise<{ body_html: string; body_text: string; subject?: string }> {
+  return api('/email/compose-ai', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
 // ============================================================================
 // Calendar Types & API Functions
 // ============================================================================
@@ -3185,6 +3197,24 @@ export async function invokeAgent(agentId: string, instruction: string, channelI
 
 export async function getAgentTasks(agentId: string): Promise<{ tasks: AgentTask[]; count: number }> {
   return api(`/agents/${agentId}/tasks`);
+}
+
+/** Poll until the given task reaches a terminal status (completed | failed). */
+export async function waitForAgentTask(
+  agentId: string,
+  taskId: string,
+  { intervalMs = 2000, timeoutMs = 120_000 }: { intervalMs?: number; timeoutMs?: number } = {},
+): Promise<AgentTask> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const { tasks } = await getAgentTasks(agentId);
+    const task = tasks.find((t) => t.id === taskId);
+    if (task && (task.status === 'completed' || task.status === 'failed')) {
+      return task;
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  throw new Error(`Agent task ${taskId} timed out after ${timeoutMs}ms`);
 }
 
 export async function getTaskSteps(agentId: string, taskId: string): Promise<{ steps: AgentTaskStep[]; count: number }> {
