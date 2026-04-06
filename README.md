@@ -186,6 +186,22 @@ Configuraciones de equipo predefinidas para arrancar rapido:
 | **Supabase** | SDK nativo | Auth, base de datos, realtime, almacenamiento |
 | **E2B** | REST API | Sandboxes de ejecucion segura de codigo (listo) |
 
+## Documentacion Tecnica (Specs)
+
+Las especificaciones tecnicas detalladas de cada modulo viven en `.planning/specs/`. Son la fuente de verdad para agentes y desarrolladores: modelos de datos, endpoints, componentes y estado actual de cada area.
+
+| Spec | Contenido |
+|------|-----------|
+| [INDEX.md](.planning/specs/INDEX.md) | Indice maestro, infraestructura, convenciones globales |
+| [Auth, Workspace, Agents](.planning/specs/SPEC_AUTH_WORKSPACE_AGENTS.md) | OAuth, invitaciones, members, agents core/advance, queue |
+| [Chat](.planning/specs/SPEC_CHAT.md) | Conversaciones streaming, tools, attachments, CLI OAuth |
+| [Email](.planning/specs/SPEC_EMAIL.md) | Multi-account Gmail/Outlook, drafts, AI summary, compose |
+| [CRM](.planning/specs/SPEC_CRM.md) | Contactos, pipeline, quotations, workflows, agent queue |
+| [Projects](.planning/specs/SPEC_PROJECTS.md) | Boards kanban, deploy modes, routines cron, approval gates |
+| [Messaging + WhatsApp + DevOps](.planning/specs/SPEC_MESSAGING_WHATSAPP_DEVOPS.md) | Canales, WhatsApp AutoMode, servers SSH, repo tokens |
+
+El roadmap activo (Claude Code Agents) esta en [.planning/ROADMAP.md](.planning/ROADMAP.md).
+
 ## Estructura del Proyecto
 
 ```
@@ -202,7 +218,12 @@ factoriaCore/
 │   │   ├── stores/            # Stores Zustand
 │   │   └── hooks/             # Hooks personalizados
 │   └── public/
-└── core-image-proxy/          # Cloudflare Worker (proxy de imagenes con firma HMAC)
+├── core-image-proxy/          # Cloudflare Worker (proxy de imagenes con firma HMAC)
+└── .planning/
+    ├── specs/                 # Specs tecnicas por modulo (ver tabla arriba)
+    ├── ROADMAP.md             # Fases del proyecto Claude Code Agents
+    ├── REQUIREMENTS.md        # Requisitos detallados
+    └── STATE.md               # Estado actual y decisiones de arquitectura
 ```
 
 ## Primeros Pasos

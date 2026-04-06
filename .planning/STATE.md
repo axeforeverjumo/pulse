@@ -66,8 +66,42 @@ None yet.
 - Claude Code CLI needs `claude login` on the server (requires authentication flow)
 - GITHUB_TOKEN scope needs to cover all target repos
 
+## Module Specs (completed 2026-04-06)
+
+Full specs generated for all platform modules. See: `.planning/specs/INDEX.md`
+
+| Spec | Archivo |
+|------|---------|
+| Auth + Workspace + Agents | specs/SPEC_AUTH_WORKSPACE_AGENTS.md |
+| Chat | specs/SPEC_CHAT.md |
+| Email | specs/SPEC_EMAIL.md |
+| CRM | specs/SPEC_CRM.md |
+| Projects (Kanban) | specs/SPEC_PROJECTS.md |
+| Messaging + WhatsApp + DevOps | specs/SPEC_MESSAGING_WHATSAPP_DEVOPS.md |
+
 ## Session Continuity
 
-Last session: 2026-04-03
-Stopped at: Architecture changed to Claude Code CLI; roadmap, requirements, and state updated; ready to plan Phase 1
+Last session: 2026-04-06 (tarde)
+Stopped at: Email + CRM features deployed. Specs actualizados.
+
+### Sesión 2026-04-06 (tarde) — Entregables
+
+**Email (EmailView.tsx):**
+- Botón "Marcar como no leído" en toolbar
+- Categorías IA colapsables en INBOX: Ventas, Proyectos, Personas, Acuerdos, Notificaciones, Poca prioridad (heurístico client-side)
+- Botón Oportunidad → modal crear nueva oportunidad / agregar a existente (filtro por dominio)
+
+**CRM (OpportunityDetail.tsx):**
+- Tab "Pulse" → resumen IA con Claude Haiku (notas + tareas + correos vinculados)
+- Sección correos vinculados en detalle de oportunidad
+
+**Backend (crm.py):**
+- GET/POST/DELETE /crm/opportunities/{id}/emails
+- GET/POST /crm/opportunities/{id}/context/refresh
+
+**DB:**
+- Migración 20260406000004 aplicada en producción
+- Tabla crm_opportunity_emails creada
+- Columnas pulse_context, tags, custom_fields añadidas a crm_opportunities
+
 Resume file: None
