@@ -33,6 +33,11 @@ import {
   refreshOpportunityContext,
 } from '../../api/client';
 import { SparklesIcon } from '@heroicons/react/24/outline';
+import ScoreBadge from './ScoreBadge';
+import ExtractActionsDialog from './ExtractActionsDialog';
+import SuggestionsPanel from './SuggestionsPanel';
+import SalesCoachPanel from './SalesCoachPanel';
+import SentimentBadge from './SentimentBadge';
 
 const PIPELINE_STAGES = [
   { id: 'lead', label: 'Lead', color: '#EF4444' },
@@ -78,6 +83,11 @@ export default function OpportunityDetail({ opportunityId, workspaceId, onBack }
   // Notes
   const [noteContent, setNoteContent] = useState('');
   const [savingNote, setSavingNote] = useState(false);
+
+  // AI Extraction dialog
+  const [showExtractDialog, setShowExtractDialog] = useState(false);
+  // Sales Coach panel
+  const [showCoach, setShowCoach] = useState(false);
 
   // Email popup
   const [emailPopup, setEmailPopup] = useState<any | null>(null);
@@ -317,6 +327,10 @@ export default function OpportunityDetail({ opportunityId, workspaceId, onBack }
                 {opp.name || opp.title || 'Sin nombre'}
               </h1>
             )}
+            {opp.lead_score > 0 && <ScoreBadge score={opp.lead_score} size="md" showLabel />}
+            {opp.health_score != null && opp.health_score !== 50 && (
+              <SentimentBadge healthScore={opp.health_score} sentiment={opp.sentiment_data?.overall_sentiment} size="md" />
+            )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {!isWon && !isLost && (
@@ -334,6 +348,22 @@ export default function OpportunityDetail({ opportunityId, workspaceId, onBack }
                 >
                   <XCircleIcon className="w-3.5 h-3.5" />
                   Perdido
+                </button>
+                <button
+                  onClick={() => setShowExtractDialog(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-violet-50 text-violet-700 hover:bg-violet-100 transition-colors"
+                >
+                  <SparklesIcon className="w-3.5 h-3.5" />
+                  Analizar con IA
+                </button>
+                <button
+                  onClick={() => setShowCoach(!showCoach)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                    showCoach ? 'bg-violet-600 text-white' : 'bg-violet-50 text-violet-700 hover:bg-violet-100'
+                  }`}
+                >
+                  <SparklesIcon className="w-3.5 h-3.5" />
+                  Coach
                 </button>
               </>
             )}
@@ -899,6 +929,24 @@ export default function OpportunityDetail({ opportunityId, workspaceId, onBack }
         </div>
       </div>,
       document.body
+    )}
+    {showCoach && (
+      <div className="fixed right-0 top-0 bottom-0 w-[360px] z-40 shadow-2xl">
+        <SalesCoachPanel
+          opportunityId={opportunityId}
+          workspaceId={workspaceId}
+          onClose={() => setShowCoach(false)}
+        />
+      </div>
+    )}
+    {showExtractDialog && (
+      <ExtractActionsDialog
+        opportunityId={opportunityId}
+        opportunityName={opp?.name || opp?.title || 'Sin nombre'}
+        workspaceId={workspaceId}
+        onClose={() => setShowExtractDialog(false)}
+        onApplied={() => fetchOpportunity()}
+      />
     )}
     </>
   );

@@ -3821,9 +3821,101 @@ export async function applyCrmExtraction(opportunityId: string, data: {
   });
 }
 
+// CRM Sequences
+export async function getCrmSequences(workspaceId: string) {
+  return api<{ sequences: any[] }>(`/crm/sequences?workspace_id=${workspaceId}`);
+}
+export async function getCrmSequence(sequenceId: string) {
+  return api<{ sequence: any }>(`/crm/sequences/${sequenceId}`);
+}
+export async function createCrmSequence(data: any) {
+  return api<{ sequence: any }>('/crm/sequences', { method: 'POST', body: JSON.stringify(data) });
+}
+export async function updateCrmSequence(sequenceId: string, data: any) {
+  return api<{ sequence: any }>(`/crm/sequences/${sequenceId}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+export async function deleteCrmSequence(sequenceId: string) {
+  return api<any>(`/crm/sequences/${sequenceId}`, { method: 'DELETE' });
+}
+export async function enrollInSequence(sequenceId: string, data: { workspace_id: string; contact_id: string; opportunity_id?: string }) {
+  return api<any>(`/crm/sequences/${sequenceId}/enroll`, { method: 'POST', body: JSON.stringify(data) });
+}
+
+// CRM SDR Agent
+export async function qualifyCrmLead(opportunityId: string, workspaceId: string) {
+  return api<any>(`/crm/opportunities/${opportunityId}/qualify`, { method: 'POST', body: JSON.stringify({ workspace_id: workspaceId }) });
+}
+export async function suggestCrmAction(opportunityId: string, workspaceId: string) {
+  return api<any>(`/crm/opportunities/${opportunityId}/suggest-action`, { method: 'POST', body: JSON.stringify({ workspace_id: workspaceId }) });
+}
+export async function draftCrmFollowup(opportunityId: string, workspaceId: string, instructions?: string) {
+  return api<any>(`/crm/opportunities/${opportunityId}/draft-followup`, { method: 'POST', body: JSON.stringify({ workspace_id: workspaceId, instructions }) });
+}
+
+// CRM Sentiment & Coach
+export async function analyzeCrmSentiment(opportunityId: string, workspaceId: string) {
+  return api<any>(`/crm/opportunities/${opportunityId}/sentiment?workspace_id=${workspaceId}`, { method: 'POST' });
+}
+export async function getCrmCoachAdvice(opportunityId: string, workspaceId: string) {
+  return api<any>(`/crm/opportunities/${opportunityId}/coach?workspace_id=${workspaceId}`, { method: 'POST' });
+}
+
 // CRM AI - Forecast
 export async function getCrmForecast(workspaceId: string) {
   return api<any>(`/crm/forecast?workspace_id=${workspaceId}`);
+}
+
+// CRM Campaigns
+export async function getCrmCampaigns(workspaceId: string) {
+  return api<{ campaigns: any[] }>(`/crm/campaigns?workspace_id=${workspaceId}`);
+}
+export async function getCrmCampaign(campaignId: string) {
+  return api<{ campaign: any }>(`/crm/campaigns/${campaignId}`);
+}
+export async function createCrmCampaign(data: any) {
+  return api<{ campaign: any }>('/crm/campaigns', { method: 'POST', body: JSON.stringify(data) });
+}
+export async function updateCrmCampaign(campaignId: string, data: any) {
+  return api<{ campaign: any }>(`/crm/campaigns/${campaignId}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+export async function deleteCrmCampaign(campaignId: string) {
+  return api<any>(`/crm/campaigns/${campaignId}`, { method: 'DELETE' });
+}
+export async function populateCampaignRecipients(campaignId: string, workspaceId: string) {
+  return api<any>(`/crm/campaigns/${campaignId}/populate?workspace_id=${workspaceId}`, { method: 'POST' });
+}
+export async function sendCrmCampaign(campaignId: string) {
+  return api<any>(`/crm/campaigns/${campaignId}/send`, { method: 'POST' });
+}
+
+// CRM Forms
+export async function getCrmForms(workspaceId: string) {
+  return api<{ forms: any[] }>(`/crm/forms?workspace_id=${workspaceId}`);
+}
+export async function getCrmForm(formId: string) {
+  return api<{ form: any }>(`/crm/forms/${formId}`);
+}
+export async function createCrmForm(data: any) {
+  return api<{ form: any }>('/crm/forms', { method: 'POST', body: JSON.stringify(data) });
+}
+export async function updateCrmForm(formId: string, data: any) {
+  return api<{ form: any }>(`/crm/forms/${formId}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+export async function deleteCrmForm(formId: string) {
+  return api<any>(`/crm/forms/${formId}`, { method: 'DELETE' });
+}
+export async function getCrmFormSubmissions(formId: string) {
+  return api<{ submissions: any[]; count: number }>(`/crm/forms/${formId}/submissions`);
+}
+
+// CRM Team Activity
+export async function getCrmTeamActivity(workspaceId: string, days = 7) {
+  return api<any>(`/crm/team-activity?workspace_id=${workspaceId}&days=${days}`);
+}
+
+// CRM Agent Builder
+export async function buildCrmAgent(workspaceId: string, description: string) {
+  return api<any>(`/crm/agents/build?workspace_id=${workspaceId}&description=${encodeURIComponent(description)}`, { method: 'POST' });
 }
 
 // CRM Dashboard

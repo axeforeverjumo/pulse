@@ -12,7 +12,7 @@ interface CrmState {
   selectedCompany: any | null;
   selectedOpportunity: any | null;
   isLoading: boolean;
-  activeView: 'contacts' | 'companies' | 'pipeline' | 'products' | 'notes' | 'workflows';
+  activeView: 'dashboard' | 'contacts' | 'companies' | 'pipeline' | 'products' | 'notes' | 'sequences' | 'campaigns' | 'forms' | 'workflows' | 'team';
   searchQuery: string;
 
   setActiveView: (view: CrmState['activeView']) => void;
@@ -39,7 +39,7 @@ export const useCrmStore = create<CrmState>()((set) => ({
   selectedCompany: null,
   selectedOpportunity: null,
   isLoading: false,
-  activeView: 'pipeline',
+  activeView: 'dashboard',
   searchQuery: '',
 
   setActiveView: (view) => set({ activeView: view }),

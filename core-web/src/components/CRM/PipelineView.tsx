@@ -417,11 +417,20 @@ export default function PipelineView({ workspaceId }: PipelineViewProps) {
                         draggedId === opp.id ? 'opacity-30' : ''
                       }`}
                     >
-                      {/* Title + Agent button */}
+                      {/* Title + Score + Agent button */}
                       <div className="flex items-start justify-between gap-1 mb-3">
-                        <h4 className="font-medium text-[13px] text-gray-900 leading-snug line-clamp-2 flex-1">
-                          {opp.name || 'Sin nombre'}
-                        </h4>
+                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                          <h4 className="font-medium text-[13px] text-gray-900 leading-snug line-clamp-2 flex-1">
+                            {opp.name || 'Sin nombre'}
+                          </h4>
+                          {opp.lead_score > 0 && (
+                            <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                              opp.lead_score >= 70 ? 'bg-emerald-100 text-emerald-700' :
+                              opp.lead_score >= 40 ? 'bg-amber-100 text-amber-700' :
+                              'bg-red-100 text-red-700'
+                            }`}>{opp.lead_score}</span>
+                          )}
+                        </div>
                         {/* Agent assign button */}
                         <button
                           type="button"

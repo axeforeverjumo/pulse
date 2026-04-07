@@ -9,6 +9,11 @@ import {
   CubeIcon,
   BoltIcon,
   XMarkIcon,
+  CurrencyDollarIcon,
+  EnvelopeIcon,
+  MegaphoneIcon,
+  ClipboardDocumentListIcon,
+  UsersIcon,
 } from '@heroicons/react/24/outline';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useCrmStore } from '../../stores/crmStore';
@@ -22,17 +27,27 @@ import OpportunityDetail from './OpportunityDetail';
 import NotesView from './NotesView';
 import ProductsView from './ProductsView';
 import WorkflowsView from './WorkflowsView';
+import DashboardView from './DashboardView';
+import SequenceBuilder from './SequenceBuilder';
+import CampaignBuilder from './CampaignBuilder';
+import FormBuilder from './FormBuilder';
+import TeamActivityView from './TeamActivityView';
 import { HeaderButtons } from '../MiniAppHeader';
 import { toast } from 'sonner';
 import { createCrmContact, createCrmCompany } from '../../api/client';
 
 const tabs = [
-  { id: 'pipeline' as const, label: 'Pipeline', icon: ChartBarIcon },
+  { id: 'dashboard' as const, label: 'Dashboard', icon: ChartBarIcon },
+  { id: 'pipeline' as const, label: 'Pipeline', icon: CurrencyDollarIcon },
   { id: 'products' as const, label: 'Productos', icon: CubeIcon },
   { id: 'contacts' as const, label: 'Contactos', icon: UserGroupIcon },
   { id: 'companies' as const, label: 'Empresas', icon: BuildingOfficeIcon },
   { id: 'notes' as const, label: 'Notas', icon: DocumentTextIcon },
+  { id: 'sequences' as const, label: 'Secuencias', icon: EnvelopeIcon },
+  { id: 'campaigns' as const, label: 'Campañas', icon: MegaphoneIcon },
+  { id: 'forms' as const, label: 'Formularios', icon: ClipboardDocumentListIcon },
   { id: 'workflows' as const, label: 'Automatizaciones', icon: BoltIcon },
+  { id: 'team' as const, label: 'Equipo', icon: UsersIcon },
 ];
 
 export default function CrmView() {
@@ -208,6 +223,9 @@ export default function CrmView() {
 
           {/* View content */}
           <div className="flex-1 min-h-0 overflow-hidden">
+            {activeView === 'dashboard' && (
+              <DashboardView workspaceId={effectiveWorkspaceId} />
+            )}
             {activeView === 'pipeline' && (
               <PipelineView workspaceId={effectiveWorkspaceId} />
             )}
@@ -229,8 +247,20 @@ export default function CrmView() {
             {activeView === 'notes' && (
               <NotesView workspaceId={effectiveWorkspaceId} />
             )}
+            {activeView === 'sequences' && (
+              <SequenceBuilder workspaceId={effectiveWorkspaceId} />
+            )}
+            {activeView === 'campaigns' && (
+              <CampaignBuilder workspaceId={effectiveWorkspaceId} />
+            )}
+            {activeView === 'forms' && (
+              <FormBuilder workspaceId={effectiveWorkspaceId} />
+            )}
             {activeView === 'workflows' && (
               <WorkflowsView workspaceId={effectiveWorkspaceId} />
+            )}
+            {activeView === 'team' && (
+              <TeamActivityView workspaceId={effectiveWorkspaceId} />
             )}
           </div>
         </div>

@@ -147,6 +147,18 @@ async def create_opportunity(
     # Remove None values to avoid inserting nulls for columns with defaults
     record = {k: v for k, v in record.items() if v is not None}
 
+    # Apply assignment rules if no owner specified
+    if not record.get("owner_id"):
+        try:
+            from api.services.crm.assignment import apply_assignment_rules
+            assigned_owner = await apply_assignment_rules(
+                workspace_id, "opportunity", {**record, **data}, user_jwt
+            )
+            if assigned_owner:
+                record["owner_id"] = assigned_owner
+        except Exception as ar_err:
+            logger.warning(f"Assignment rules failed (non-blocking): {ar_err}")
+
     result = await (
         supabase.table("crm_opportunities")
         .insert(record)
