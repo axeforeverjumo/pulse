@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 LOST_STAGES = {"lost", "closed_lost"}
 
 
-def _build_prompt(opp: Dict[str, Any], notes_text: str, tasks_text: str, emails_text: str) -> str:
+def _build_prompt(opp: Dict[str, Any], notes_text: str, tasks_text: str, emails_text: str, whatsapp_text: str = "") -> str:
     """Build the Claude prompt for a given opportunity row."""
     opp_name = opp.get("name") or opp.get("title", "Sin nombre")
     amount = opp.get("amount")
@@ -42,6 +42,9 @@ TAREAS:
 CORREOS VINCULADOS:
 {emails_text or 'Sin correos vinculados'}
 
+CONVERSACIONES WHATSAPP VINCULADAS:
+{whatsapp_text or 'Sin chats vinculados'}
+
 Genera un resumen en español de máximo 300 palabras que incluya:
 1. Estado actual de la oportunidad
 2. Próximos pasos recomendados
@@ -49,7 +52,7 @@ Genera un resumen en español de máximo 300 palabras que incluya:
 4. Resumen de las interacciones más relevantes"""
 
 
-def _gather_related_data(supabase, opportunity_id: str) -> tuple[str, str, str]:
+def _gather_related_data(supabase, opportunity_id: str) -> tuple[str, str, str, str]:
     """
     Fetch notes, tasks, and linked emails for an opportunity using service role.
     Returns (notes_text, tasks_text, emails_text).
@@ -91,7 +94,30 @@ def _gather_related_data(supabase, opportunity_id: str) -> tuple[str, str, str]:
         for e in (emails_result.data or [])
     ])
 
-    return notes_text, tasks_text, emails_text
+    # Linked WhatsApp chats
+    whatsapp_text = ""
+    try:
+        chats_linked = supabase.table("crm_opportunity_chats") \
+            .select("chat_id, contact_name") \
+            .eq("opportunity_id", opportunity_id) \
+            .limit(3) \
+            .execute()
+        wa_lines = []
+        for cl in (chats_linked.data or []):
+            msgs = supabase.table("external_messages") \
+                .select("content, direction") \
+                .eq("chat_id", cl["chat_id"]) \
+                .order("created_at", desc=True) \
+                .limit(15) \
+                .execute()
+            for m in reversed(msgs.data or []):
+                who = "Yo" if m.get("direction") == "out" else (cl.get("contact_name") or "Contacto")
+                wa_lines.append(f"- [{who}] {(m.get('content') or '')[:200]}")
+        whatsapp_text = "\n".join(wa_lines[:30])
+    except Exception:
+        pass
+
+    return notes_text, tasks_text, emails_text, whatsapp_text
 
 
 def refresh_all_pulse_contexts() -> Dict[str, Any]:
@@ -159,8 +185,8 @@ def refresh_all_pulse_contexts() -> Dict[str, Any]:
             opp_id = opp["id"]
             opp_name = opp.get("name") or opp.get("title", opp_id)
             try:
-                notes_text, tasks_text, emails_text = _gather_related_data(supabase, opp_id)
-                prompt = _build_prompt(opp, notes_text, tasks_text, emails_text)
+                notes_text, tasks_text, emails_text, whatsapp_text = _gather_related_data(supabase, opp_id)
+                prompt = _build_prompt(opp, notes_text, tasks_text, emails_text, whatsapp_text)
 
                 response = ai_client.chat.completions.create(
                     model="gpt-5.4-mini",

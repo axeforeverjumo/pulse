@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { api, getWorkspaceAgents, type AgentInstance } from "../../api/client";
 import { API_BASE } from "../../lib/apiBase";
 import { useAuthStore } from "../../stores/authStore";
@@ -12,7 +12,13 @@ import {
   QrCodeIcon,
   UserGroupIcon,
   BellSlashIcon,
+  BriefcaseIcon,
+  CalendarDaysIcon,
+  ClipboardDocumentListIcon,
 } from "@heroicons/react/24/outline";
+import ChatOpportunityModal from "./ChatOpportunityModal";
+import ChatCalendarModal from "./ChatCalendarModal";
+import ChatTaskModal from "./ChatTaskModal";
 import { PlayIcon, PauseIcon } from "@heroicons/react/24/solid";
 
 interface ExternalAccount {
@@ -337,6 +343,7 @@ function InlineAudioPlayer({
 
 export default function MessagingView() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
+  const [searchParams] = useSearchParams();
   const [accounts, setAccounts] = useState<ExternalAccount[]>([]);
   const [chats, setChats] = useState<ExternalChat[]>([]);
   const [activeChat, setActiveChat] = useState<ExternalChat | null>(null);
@@ -362,6 +369,9 @@ export default function MessagingView() {
   const [qrCode, setQrCode] = useState("");
   const [qrLoading, setQrLoading] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
+  const [showCrmModal, setShowCrmModal] = useState(false);
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [showTaskModal, setShowTaskModal] = useState(false);
   const [linkError, setLinkError] = useState("");
   const [resolvedMediaUrls, setResolvedMediaUrls] = useState<Record<string, string>>({});
   const [mediaMimeByMessage, setMediaMimeByMessage] = useState<Record<string, string>>({});
@@ -719,6 +729,16 @@ export default function MessagingView() {
       setChats((prev) =>
         areChatsEqual(prev, incomingChats) ? prev : incomingChats,
       );
+
+      // Deep link: auto-select chat from URL param (e.g. from CRM)
+      const targetChatId = searchParams.get("chatId");
+      if (targetChatId) {
+        const target = incomingChats.find((c) => c.id === targetChatId);
+        if (target) {
+          setActiveChat(target);
+          return;
+        }
+      }
 
       setActiveChat((prev) => {
         if (!prev) return null;
@@ -1529,6 +1549,31 @@ export default function MessagingView() {
                     IA activa
                   </span>
                 )}
+
+                {/* Quick action buttons */}
+                <div className="flex items-center gap-0.5 shrink-0 ml-auto">
+                  <button
+                    onClick={() => setShowCrmModal(true)}
+                    title="Vincular a CRM"
+                    className="p-1.5 rounded-lg text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                  >
+                    <BriefcaseIcon className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setShowCalendarModal(true)}
+                    title="Crear evento"
+                    className="p-1.5 rounded-lg text-slate-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+                  >
+                    <CalendarDaysIcon className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setShowTaskModal(true)}
+                    title="Crear tarea"
+                    className="p-1.5 rounded-lg text-slate-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+                  >
+                    <ClipboardDocumentListIcon className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               {/* Agent controls row */}
@@ -1855,6 +1900,28 @@ export default function MessagingView() {
           </div>
         )}
       </div>
+
+      {/* Modals */}
+      {showCrmModal && activeChat && workspaceId && (
+        <ChatOpportunityModal
+          chat={activeChat}
+          workspaceId={workspaceId}
+          onClose={() => setShowCrmModal(false)}
+        />
+      )}
+      {showCalendarModal && activeChat && (
+        <ChatCalendarModal
+          contactName={activeChat.contact_name}
+          onClose={() => setShowCalendarModal(false)}
+        />
+      )}
+      {showTaskModal && activeChat && workspaceId && (
+        <ChatTaskModal
+          contactName={activeChat.contact_name}
+          workspaceId={workspaceId}
+          onClose={() => setShowTaskModal(false)}
+        />
+      )}
     </div>
   );
 }

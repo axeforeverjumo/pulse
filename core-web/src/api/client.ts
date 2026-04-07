@@ -3882,6 +3882,31 @@ export async function unlinkEmailFromOpportunity(opportunityId: string, threadId
   });
 }
 
+// CRM Opportunity Chat Linking (WhatsApp/Telegram)
+export async function linkChatToOpportunity(opportunityId: string, data: {
+  workspace_id: string;
+  chat_id: string;
+  contact_name?: string;
+  contact_phone?: string;
+  remote_jid?: string;
+  is_group?: boolean;
+}) {
+  return api<{ chat: any; success: boolean }>(`/crm/opportunities/${opportunityId}/chats`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getOpportunityLinkedChats(opportunityId: string, workspaceId: string) {
+  return api<{ chats: any[] }>(`/crm/opportunities/${opportunityId}/chats?workspace_id=${workspaceId}`);
+}
+
+export async function unlinkChatFromOpportunity(opportunityId: string, chatId: string, workspaceId: string) {
+  return api<{ success: boolean }>(`/crm/opportunities/${opportunityId}/chats/${chatId}?workspace_id=${workspaceId}`, {
+    method: 'DELETE',
+  });
+}
+
 // CRM Contexto Pulse
 export async function getOpportunityContext(opportunityId: string, workspaceId: string) {
   return api<{ pulse_context: string | null; pulse_context_updated_at: string | null }>(

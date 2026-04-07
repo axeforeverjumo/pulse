@@ -1057,6 +1057,20 @@ async def get_opportunity_full_endpoint(
         except Exception:
             opportunity["linked_emails"] = []
 
+        # Fetch linked WhatsApp/Telegram chats
+        try:
+            chats_result = await (
+                supabase.table("crm_opportunity_chats")
+                .select("*")
+                .eq("opportunity_id", opportunity_id)
+                .eq("workspace_id", workspace_id)
+                .order("added_at", desc=True)
+                .execute()
+            )
+            opportunity["linked_chats"] = chats_result.data or []
+        except Exception:
+            opportunity["linked_chats"] = []
+
         return {"opportunity": opportunity}
     except HTTPException:
         raise
@@ -1875,6 +1889,96 @@ async def unlink_email_from_opportunity_endpoint(
 
 
 # ============================================================================
+# OPPORTUNITY WHATSAPP/CHAT LINKING
+# ============================================================================
+
+class LinkChatRequest(BaseModel):
+    workspace_id: str
+    chat_id: str
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    remote_jid: Optional[str] = None
+    is_group: bool = False
+
+
+@router.get("/opportunities/{opportunity_id}/chats")
+async def list_opportunity_chats_endpoint(
+    opportunity_id: str,
+    workspace_id: str = Query(...),
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """List WhatsApp/Telegram chats linked to an opportunity."""
+    try:
+        supabase = await get_authenticated_async_client(user_jwt)
+        result = await (
+            supabase.table("crm_opportunity_chats")
+            .select("*")
+            .eq("opportunity_id", opportunity_id)
+            .eq("workspace_id", workspace_id)
+            .order("added_at", desc=True)
+            .execute()
+        )
+        return {"chats": result.data or []}
+    except Exception as e:
+        handle_api_exception(e, "Failed to list opportunity chats", logger)
+
+
+@router.post("/opportunities/{opportunity_id}/chats")
+async def link_chat_to_opportunity_endpoint(
+    opportunity_id: str,
+    body: LinkChatRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Link a WhatsApp/Telegram chat to an opportunity."""
+    try:
+        supabase = await get_authenticated_async_client(user_jwt)
+        data = {
+            "opportunity_id": opportunity_id,
+            "workspace_id": body.workspace_id,
+            "chat_id": body.chat_id,
+            "contact_name": body.contact_name,
+            "contact_phone": body.contact_phone,
+            "remote_jid": body.remote_jid,
+            "is_group": body.is_group,
+            "added_by": user_id,
+        }
+        result = await (
+            supabase.table("crm_opportunity_chats")
+            .upsert(data, on_conflict="opportunity_id,chat_id")
+            .execute()
+        )
+        return {"chat": (result.data or [{}])[0], "success": True}
+    except Exception as e:
+        handle_api_exception(e, "Failed to link chat to opportunity", logger)
+
+
+@router.delete("/opportunities/{opportunity_id}/chats/{chat_id}")
+async def unlink_chat_from_opportunity_endpoint(
+    opportunity_id: str,
+    chat_id: str,
+    workspace_id: str = Query(...),
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Unlink a chat from an opportunity."""
+    try:
+        supabase = await get_authenticated_async_client(user_jwt)
+        await (
+            supabase.table("crm_opportunity_chats")
+            .delete()
+            .eq("opportunity_id", opportunity_id)
+            .eq("chat_id", chat_id)
+            .eq("workspace_id", workspace_id)
+            .execute()
+        )
+        return {"success": True}
+    except Exception as e:
+        handle_api_exception(e, "Failed to unlink chat from opportunity", logger)
+
+
+# ============================================================================
 # CONTEXTO PULSE (AI SUMMARY)
 # ============================================================================
 
@@ -1940,6 +2044,20 @@ async def refresh_opportunity_context_endpoint(
         emails_result = await supabase.table("crm_opportunity_emails").select("email_subject, email_from_name, email_from, email_date").eq("opportunity_id", opportunity_id).execute()
         emails_text = "\n".join([f"- {e.get('email_from_name') or e.get('email_from', '?')}: {e.get('email_subject', '?')}" for e in (emails_result.data or [])])
 
+        # Gather linked WhatsApp chats messages
+        whatsapp_text = ""
+        try:
+            chats_linked = await supabase.table("crm_opportunity_chats").select("chat_id, contact_name").eq("opportunity_id", opportunity_id).limit(3).execute()
+            wa_lines = []
+            for cl in (chats_linked.data or []):
+                msgs = await supabase.table("external_messages").select("content, direction, created_at").eq("chat_id", cl["chat_id"]).order("created_at", desc=True).limit(15).execute()
+                for m in reversed(msgs.data or []):
+                    who = "Yo" if m.get("direction") == "out" else (cl.get("contact_name") or "Contacto")
+                    wa_lines.append(f"- [{who}] {(m.get('content') or '')[:200]}")
+            whatsapp_text = "\n".join(wa_lines[:30])
+        except Exception:
+            pass
+
         # Build context for AI
         opp_name = opp.get("name") or opp.get("title", "Sin nombre")
         amount = opp.get("amount")
@@ -1963,6 +2081,9 @@ TAREAS:
 
 CORREOS VINCULADOS:
 {emails_text or 'Sin correos vinculados'}
+
+CONVERSACIONES WHATSAPP VINCULADAS:
+{whatsapp_text or 'Sin chats vinculados'}
 
 Genera un resumen en español de máximo 300 palabras que incluya:
 1. Estado actual de la oportunidad
