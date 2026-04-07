@@ -14,6 +14,7 @@ import base64
 import binascii
 import json
 import logging
+from api.services.automations.trigger import fire_automation_trigger
 import mimetypes
 import httpx
 import os
@@ -1991,6 +1992,13 @@ async def whatsapp_webhook(request: Request):
                     .update({"unread_count": int(chat_config.get("unread_count") or 0) + 1})\
                     .eq("id", chat_id)\
                     .execute()
+
+                # Fire automation trigger for incoming WhatsApp messages
+                asyncio.create_task(fire_automation_trigger(
+                    account.get("workspace_id", ""),
+                    "whatsapp.message.received",
+                    {"chat_id": chat_id, "sender": sender_name, "sender_jid": sender_jid, "text": text or "", "media_type": media_type, "instance": instance}
+                ))
 
             # Check auto-reply (only for incoming messages, not our own)
             if not from_me:
