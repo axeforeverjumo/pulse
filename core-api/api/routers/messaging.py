@@ -739,14 +739,21 @@ async def _sync_whatsapp_chats_from_evolution(
             if not isinstance(avatar_url, str) or not avatar_url:
                 avatar_url = None
 
+            is_group = remote_jid.endswith("@g.us")
+            # For groups, use subject/name from chat metadata; pushName is the sender
+            if is_group:
+                display_name = (chat.get("subject") or chat.get("name") or chat.get("pushName") or remote_jid.split("@")[0])[:120]
+            else:
+                display_name = (chat.get("pushName") or chat.get("name") or remote_jid.split("@")[0])[:120]
+
             rows.append(
                 {
                     "account_id": account_id,
                     "remote_jid": remote_jid,
-                    "contact_name": (chat.get("pushName") or remote_jid.split("@")[0])[:120],
+                    "contact_name": display_name,
                     "contact_phone": remote_jid.split("@")[0],
                     "contact_avatar_url": avatar_url,
-                    "is_group": remote_jid.endswith("@g.us"),
+                    "is_group": is_group,
                     "last_message_at": last_message_at,
                     "last_message_preview": _message_preview(msg_payload, msg_type),
                 }
@@ -1868,22 +1875,23 @@ async def whatsapp_webhook(request: Request):
             message = msg_data.get("message", {}) if isinstance(msg_data.get("message"), dict) else {}
             media_type, media_url = _extract_media_info(message, msg_data if isinstance(msg_data, dict) else None)
 
-            # Skip outgoing messages
-            if key.get("fromMe", False):
-                continue
-
+            from_me = key.get("fromMe", False)
             remote_jid = key.get("remoteJid", "")
             if not remote_jid:
                 continue
+
+            is_group = "@g.us" in remote_jid
+
+            # For groups, participant is the actual sender; for 1:1, it's the remote_jid
+            sender_jid = key.get("participant", remote_jid) if is_group else remote_jid
+            sender_name = msg_data.get("pushName", "") or sender_jid.split("@")[0]
 
             # Extract text content
             text = _extract_message_text(message, media_type)
 
             # Get or create chat
-            contact_name = msg_data.get("pushName", "") or remote_jid.split("@")[0]
-
             chat_result = await supabase.table("external_chats")\
-                .select("id, auto_reply_enabled, auto_reply_directives, unread_count")\
+                .select("id, contact_name, auto_reply_enabled, auto_reply_directives, unread_count, is_group")\
                 .eq("account_id", account["id"])\
                 .eq("remote_jid", remote_jid)\
                 .maybe_single()\
@@ -1893,16 +1901,35 @@ async def whatsapp_webhook(request: Request):
                 chat_id = chat_result.data["id"]
                 chat_config = chat_result.data
             else:
-                # Create new chat
+                # Create new chat — for groups, try to get the group subject
+                if is_group:
+                    group_display_name = remote_jid.split("@")[0]
+                    # Try to fetch group name from Evolution API
+                    try:
+                        async with httpx.AsyncClient(timeout=5.0) as http:
+                            resp = await http.get(
+                                f"{EVOLUTION_API_URL}/group/findGroupInfos/{instance}",
+                                params={"groupJid": remote_jid},
+                                headers={"apikey": EVOLUTION_API_KEY},
+                            )
+                            if resp.status_code == 200:
+                                group_info = resp.json()
+                                group_display_name = group_info.get("subject") or group_info.get("name") or group_display_name
+                    except Exception as e:
+                        logger.debug(f"Could not fetch group name for {remote_jid}: {e}")
+                    chat_display_name = group_display_name
+                else:
+                    chat_display_name = sender_name
+
                 new_chat = await supabase.table("external_chats").insert({
                     "account_id": account["id"],
                     "remote_jid": remote_jid,
-                    "contact_name": contact_name,
+                    "contact_name": chat_display_name,
                     "contact_phone": remote_jid.split("@")[0],
-                    "is_group": "@g.us" in remote_jid,
+                    "is_group": is_group,
                 }).execute()
                 chat_id = new_chat.data[0]["id"]
-                chat_config = {"auto_reply_enabled": None, "auto_reply_directives": None, "unread_count": 0}
+                chat_config = {"contact_name": chat_display_name, "auto_reply_enabled": None, "auto_reply_directives": None, "unread_count": 0}
 
             remote_message_id = key.get("id", "") or _extract_remote_message_id(msg_data)
             if remote_message_id:
@@ -1915,7 +1942,8 @@ async def whatsapp_webhook(request: Request):
                 if exists.data:
                     continue
 
-            if text:
+            # For incoming messages, check for outgoing echo duplicates
+            if not from_me and text:
                 recent_threshold = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
                 recent_out = await supabase.table("external_messages")\
                     .select("id, content, created_at, is_auto_reply, remote_message_id")\
@@ -1929,56 +1957,61 @@ async def whatsapp_webhook(request: Request):
                     logger.info("Skipping probable outgoing echo in chat %s", chat_id)
                     continue
 
-            # Save incoming message
-            incoming_payload = {
+            # Save message (both incoming AND outgoing from phone)
+            direction = "out" if from_me else "in"
+            msg_payload = {
                 "chat_id": chat_id,
                 "remote_message_id": remote_message_id,
-                "direction": "in",
+                "direction": direction,
                 "content": text,
-                "sender_name": contact_name,
-                "sender_jid": remote_jid,
+                "sender_name": sender_name if not from_me else None,
+                "sender_jid": sender_jid,
             }
             if media_type:
-                incoming_payload["media_type"] = media_type
+                msg_payload["media_type"] = media_type
             if media_url:
-                incoming_payload["media_url"] = media_url
-            await supabase.table("external_messages").insert(incoming_payload).execute()
+                msg_payload["media_url"] = media_url
+            if from_me:
+                msg_payload["status"] = "sent"
+            await supabase.table("external_messages").insert(msg_payload).execute()
 
-            # Update chat metadata
-            await supabase.table("external_chats").update({
+            # Update chat metadata — never overwrite group name with sender name
+            chat_update = {
                 "last_message_at": "now()",
                 "last_message_preview": _message_preview(message, media_type),
-                "contact_name": contact_name,
-            }).eq("id", chat_id).execute()
+            }
+            # Only update contact_name for 1:1 chats (not groups)
+            if not is_group:
+                chat_update["contact_name"] = sender_name
+            await supabase.table("external_chats").update(chat_update).eq("id", chat_id).execute()
 
-            # Increment unread counter after persisting message
-            await supabase.table("external_chats")\
-                .update({"unread_count": int(chat_config.get("unread_count") or 0) + 1})\
-                .eq("id", chat_id)\
-                .execute()
+            # Only increment unread for incoming messages
+            if not from_me:
+                await supabase.table("external_chats")\
+                    .update({"unread_count": int(chat_config.get("unread_count") or 0) + 1})\
+                    .eq("id", chat_id)\
+                    .execute()
 
-            # Check auto-reply
-            should_reply = False
-            reply_directives = ""
-
-            # Per-contact rule takes priority
-            if chat_config.get("auto_reply_enabled") is True:
-                should_reply = True
-                reply_directives = chat_config.get("auto_reply_directives", "")
-            elif chat_config.get("auto_reply_enabled") is None and account.get("away_mode"):
-                # No per-contact rule, use global away mode
-                should_reply = True
-                reply_directives = account.get("away_directives", "")
-            elif chat_config.get("auto_reply_enabled") is False:
-                # Explicitly disabled for this contact
+            # Check auto-reply (only for incoming messages, not our own)
+            if not from_me:
                 should_reply = False
+                reply_directives = ""
 
-            should_reply_text = text or _media_placeholder(media_type)
-            if should_reply and should_reply_text:
-                import asyncio
-                asyncio.create_task(
-                    _auto_reply(account, chat_id, remote_jid, instance, should_reply_text, contact_name, reply_directives)
-                )
+                if chat_config.get("auto_reply_enabled") is True:
+                    should_reply = True
+                    reply_directives = chat_config.get("auto_reply_directives", "")
+                elif chat_config.get("auto_reply_enabled") is None and account.get("away_mode"):
+                    should_reply = True
+                    reply_directives = account.get("away_directives", "")
+                elif chat_config.get("auto_reply_enabled") is False:
+                    should_reply = False
+
+                should_reply_text = text or _media_placeholder(media_type)
+                if should_reply and should_reply_text:
+                    import asyncio
+                    asyncio.create_task(
+                        _auto_reply(account, chat_id, remote_jid, instance, should_reply_text, sender_name, reply_directives)
+                    )
 
         return {"status": "ok"}
 

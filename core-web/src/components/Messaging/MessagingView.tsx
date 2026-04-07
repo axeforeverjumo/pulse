@@ -1593,29 +1593,29 @@ export default function MessagingView() {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-3 md:px-5 py-4 space-y-1">
+            <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 space-y-1.5" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")" }}>
               {messages.map((msg) => (
                 <div
                   key={msg.id}
                   className={`flex ${msg.direction === "out" ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`max-w-[88%] md:max-w-[70%] px-3 py-2 rounded-2xl text-[13px] leading-relaxed ${
+                    className={`max-w-[85%] md:max-w-[65%] px-3 py-1.5 text-[13.5px] leading-relaxed shadow-sm ${
                       msg.direction === "out"
                         ? msg.is_auto_reply
-                          ? "bg-violet-50 border border-violet-100 text-violet-900 dark:bg-violet-950/30 dark:border-violet-800/40 dark:text-violet-200 rounded-br-sm"
-                          : "bg-emerald-50 border border-emerald-100 text-gray-900 dark:bg-emerald-950/30 dark:border-emerald-800/40 dark:text-slate-100 rounded-br-sm"
-                        : "bg-white border border-gray-100 text-gray-900 shadow-sm dark:bg-slate-800 dark:border-slate-700/60 dark:text-slate-100 rounded-bl-sm"
+                          ? "bg-violet-100 text-violet-900 dark:bg-violet-900/40 dark:text-violet-100 rounded-2xl rounded-br-md"
+                          : "bg-[#d9fdd3] text-gray-900 dark:bg-emerald-900/50 dark:text-slate-100 rounded-2xl rounded-br-md"
+                        : "bg-white text-gray-900 dark:bg-slate-800 dark:text-slate-100 rounded-2xl rounded-bl-md"
                     }`}
                   >
                     {/* Group sender name for incoming messages */}
                     {msg.direction === "in" && activeChat.is_group && msg.sender_name && (
-                      <div className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 mb-0.5 truncate">
+                      <div className="text-[11px] font-semibold mb-0.5 truncate" style={{ color: avatarGradient(msg.sender_name).replace("linear-gradient(135deg, ", "").split(",")[0] }}>
                         {msg.sender_name}
                       </div>
                     )}
                     {msg.is_auto_reply && (
-                      <div className="flex items-center gap-1 text-[10px] text-violet-500 dark:text-violet-400 font-semibold mb-1">
+                      <div className="flex items-center gap-1 text-[10px] text-violet-500 dark:text-violet-400 font-semibold mb-0.5">
                         <SparklesIcon className="w-3 h-3" />
                         <span>IA</span>
                       </div>
@@ -1747,20 +1747,23 @@ export default function MessagingView() {
                       <p className="whitespace-pre-wrap">{msg.content}</p>
                     )}
                     <div
-                      className={`text-[10px] mt-1 text-right tabular-nums ${
+                      className={`flex items-center justify-end gap-1 text-[10px] mt-0.5 tabular-nums ${
                         msg.direction === "out"
                           ? msg.is_auto_reply
-                            ? "text-violet-400 dark:text-violet-500"
-                            : "text-emerald-500 dark:text-emerald-600"
-                          : "text-gray-300 dark:text-slate-500"
+                            ? "text-violet-400/70 dark:text-violet-500/70"
+                            : "text-gray-500/60 dark:text-emerald-600/70"
+                          : "text-gray-400/70 dark:text-slate-500/70"
                       }`}
                     >
-                      {formatTime(msg.created_at)}
+                      <span>{formatTime(msg.created_at)}</span>
+                      {msg.direction === "out" && msg.status !== "failed" && msg.status !== "pending" && (
+                        <svg viewBox="0 0 16 11" height="11" width="16" className="text-sky-500 dark:text-sky-400"><path d="M11.071.653a.457.457 0 0 0-.304-.102.493.493 0 0 0-.381.178l-6.19 7.636-2.011-2.095a.463.463 0 0 0-.36-.186.465.465 0 0 0-.344.153l-.311.339a.514.514 0 0 0-.14.373c0 .149.058.284.16.378l2.906 2.969c.091.088.204.147.318.147.119 0 .238-.064.334-.186l6.674-8.234a.473.473 0 0 0 .103-.38.49.49 0 0 0-.197-.322l-.457-.287Z" fill="currentColor"/></svg>
+                      )}
                       {msg.direction === "out" && msg.status === "pending" && (
-                        <span className="ml-1 opacity-60">·</span>
+                        <svg viewBox="0 0 12 12" height="10" width="10" className="text-gray-400"><circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" strokeWidth="1.5"/></svg>
                       )}
                       {msg.direction === "out" && msg.status === "failed" && (
-                        <span className="ml-1 text-red-400">!</span>
+                        <span className="text-red-400 font-bold">!</span>
                       )}
                     </div>
                   </div>
