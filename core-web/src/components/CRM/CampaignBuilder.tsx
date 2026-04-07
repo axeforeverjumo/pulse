@@ -4,8 +4,6 @@ import {
   TrashIcon,
   PaperAirplaneIcon,
   UserGroupIcon,
-  EnvelopeIcon,
-  EyeIcon,
 } from '@heroicons/react/24/outline';
 import { getCrmCampaigns, createCrmCampaign, updateCrmCampaign, deleteCrmCampaign, getCrmCampaign, populateCampaignRecipients, sendCrmCampaign } from '../../api/client';
 import { toast } from 'sonner';

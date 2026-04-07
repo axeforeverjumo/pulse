@@ -3,7 +3,6 @@ import {
   SparklesIcon,
   XMarkIcon,
   CheckIcon,
-  ClipboardDocumentIcon,
   UserPlusIcon,
   ArrowPathIcon,
   CalendarIcon,
