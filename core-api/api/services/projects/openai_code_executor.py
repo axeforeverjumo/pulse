@@ -300,6 +300,19 @@ def _commit_and_push(repo_dir: str, env: Dict[str, str], commit_message: str) ->
 # Main executor
 # ---------------------------------------------------------------------------
 
+LOG_DIR = "/tmp/pulse-agent-logs"
+
+
+def _log_line(job_id: Optional[str], line: str) -> None:
+    """Append a line to the job's log file for SSE streaming."""
+    if not job_id:
+        return
+    os.makedirs(LOG_DIR, exist_ok=True)
+    with open(os.path.join(LOG_DIR, f"{job_id}.log"), "a") as f:
+        f.write(f"{line}\n")
+        f.flush()
+
+
 SYSTEM_PROMPT = """Eres un agente de desarrollo experto que trabaja en repositorios de código.
 
 REGLAS:
@@ -363,8 +376,11 @@ async def execute_openai_code_task(
         num_turns = 0
         final_text = ""
 
+        _log_line(job_id, f"[inicio] Clonado repo, modelo={model}, max_turns={max_turns}")
+
         # Agentic loop
         while num_turns < max_turns:
+            _log_line(job_id, f"[turno {num_turns + 1}] Enviando request al modelo...")
             try:
                 response = await client.chat.completions.create(
                     model=model,
@@ -376,6 +392,7 @@ async def execute_openai_code_task(
                 )
             except Exception as exc:
                 logger.error("OpenAI API error on turn %d: %s", num_turns, exc)
+                _log_line(job_id, f"[error] API error en turno {num_turns}: {str(exc)[:200]}")
                 return _error_result(new_session_id, f"Error de OpenAI en turno {num_turns}: {str(exc)[:300]}", start_time, num_turns)
 
             choice = response.choices[0]
@@ -393,9 +410,18 @@ async def execute_openai_code_task(
                     except json.JSONDecodeError:
                         args = {}
 
+                    # Log tool call
+                    args_summary = json.dumps(args, ensure_ascii=False)[:200]
+                    _log_line(job_id, f"[tool] {tc.function.name}({args_summary})")
+
                     tool_result = await asyncio.to_thread(
                         _execute_tool, tc.function.name, args, repo_dir
                     )
+
+                    # Log tool result (truncated)
+                    result_preview = tool_result[:300].replace("\n", "\\n")
+                    _log_line(job_id, f"[resultado] {result_preview}")
+
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tc.id,
@@ -405,9 +431,11 @@ async def execute_openai_code_task(
 
             # Model finished (no tool calls)
             final_text = msg.content or ""
+            _log_line(job_id, f"[respuesta] {final_text[:500]}")
             break
 
         # Collect git state
+        _log_line(job_id, "[git] Recopilando estado git...")
         git_state = await asyncio.to_thread(_collect_git_state, repo_dir, git_env)
 
         # Auto-commit and push if there are changes
@@ -419,14 +447,21 @@ async def execute_openai_code_task(
                 commit_msg = f"feat: {title}"
                 break
 
+        _log_line(job_id, f"[git] Commit & push: {commit_msg}")
         push_result = await asyncio.to_thread(_commit_and_push, repo_dir, git_env, commit_msg)
 
         # Refresh git state after commit
         if push_result.get("pushed"):
+            _log_line(job_id, f"[git] Push exitoso: {push_result.get('commit_sha', '?')}")
             git_state = await asyncio.to_thread(_collect_git_state, repo_dir, git_env)
+        else:
+            _log_line(job_id, f"[git] Sin cambios o push fallido: {push_result.get('reason', '?')}")
 
         elapsed_ms = int((time.time() - start_time) * 1000)
         hit_max = num_turns >= max_turns
+
+        _log_line(job_id, f"[fin] {num_turns} turnos, {elapsed_ms}ms, pushed={push_result.get('pushed', False)}")
+        _log_line(job_id, "[DONE]")
 
         return {
             "status": "needs_continuation" if hit_max else "completed",

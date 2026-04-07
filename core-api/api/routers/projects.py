@@ -2940,8 +2940,7 @@ async def get_agent_log(
     lines: int = Query(60, ge=1, le=500, description="Max lines to return"),
     user_jwt: str = Depends(get_current_user_jwt),
 ):
-    """Get streaming log for a running agent job."""
-    # Sanitise job_id to prevent path traversal
+    """Get log snapshot for a running agent job (polling fallback)."""
     safe_id = re.sub(r"[^a-zA-Z0-9_-]", "", job_id)
     log_path = f"/tmp/pulse-agent-logs/{safe_id}.log"
 
@@ -2954,12 +2953,10 @@ async def get_agent_log(
     except Exception:
         return {"lines": [], "total_lines": 0, "status": "error"}
 
-    # Check if the job is still running by querying the DB
     job_status = "done"
     try:
-        from lib.supabase_client import get_async_service_role_client
-        supabase = await get_async_service_role_client()
-        job_result = await supabase.table("project_agent_queue_jobs")\
+        supabase = get_service_role_client()
+        job_result = supabase.table("project_agent_queue_jobs")\
             .select("status")\
             .eq("id", job_id)\
             .limit(1)\
@@ -2974,6 +2971,63 @@ async def get_agent_log(
         "total_lines": len(all_lines),
         "status": job_status,
     }
+
+
+@router.get("/agent-log/{job_id}/stream")
+async def stream_agent_log(
+    job_id: str,
+    user_jwt: str = Query(..., alias="token", description="JWT for auth"),
+):
+    """SSE endpoint — streams agent log lines in real time."""
+    from fastapi.responses import StreamingResponse
+
+    safe_id = re.sub(r"[^a-zA-Z0-9_-]", "", job_id)
+    log_path = f"/tmp/pulse-agent-logs/{safe_id}.log"
+
+    async def event_generator():
+        sent_lines = 0
+        idle_ticks = 0
+        max_idle = 120  # stop after 120s of no new lines
+
+        while idle_ticks < max_idle:
+            if os.path.exists(log_path):
+                try:
+                    with open(log_path, "r") as f:
+                        all_lines = f.readlines()
+                except Exception:
+                    all_lines = []
+
+                new_lines = all_lines[sent_lines:]
+                if new_lines:
+                    idle_ticks = 0
+                    for line in new_lines:
+                        stripped = line.strip()
+                        yield f"data: {stripped}\n\n"
+                        if stripped == "[DONE]":
+                            return
+                    sent_lines = len(all_lines)
+                else:
+                    idle_ticks += 1
+            else:
+                idle_ticks += 1
+
+            # Send keepalive comment every 15s of idle
+            if idle_ticks > 0 and idle_ticks % 15 == 0:
+                yield ": keepalive\n\n"
+
+            await asyncio.sleep(1)
+
+        yield "data: [TIMEOUT]\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # ============================================================================
