@@ -2,7 +2,11 @@ import { useEffect, useCallback, useRef } from 'react';
 import { useStudioStore } from '../../stores/studioStore';
 import { useStudioPages, useSaveStudioPageTree } from '../../hooks/queries/useStudio';
 import { getStudioPage } from '../../api/client';
+import { registerAllWidgets } from './widgets';
 import StudioToolbar from './StudioToolbar';
+
+// Register widgets once on module load
+registerAllWidgets();
 import StudioSidebar from './StudioSidebar';
 import StudioCanvas from './StudioCanvas';
 import StudioPropertiesPanel from './StudioPropertiesPanel';

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Plus, FileText, ChevronRight, Layers, LayoutGrid } from 'lucide-react';
 import { useStudioStore } from '../../stores/studioStore';
 import { useStudioPages, useCreateStudioPage } from '../../hooks/queries/useStudio';
+import ComponentPalette from './panels/ComponentPalette';
+import ComponentTree from './panels/ComponentTree';
 
 function slugify(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 60) || 'page';
@@ -34,7 +36,7 @@ export default function StudioSidebar() {
       {/* Tabs */}
       <div className="flex border-b border-gray-200">
         {[
-          { key: 'components' as const, icon: LayoutGrid, label: 'Componentes' },
+          { key: 'components' as const, icon: LayoutGrid, label: 'Widgets' },
           { key: 'pages' as const, icon: FileText, label: 'Paginas' },
           { key: 'tree' as const, icon: Layers, label: 'Arbol' },
         ].map(({ key, icon: Icon, label }) => (
@@ -49,13 +51,17 @@ export default function StudioSidebar() {
             title={label}
           >
             <Icon size={13} />
-            <span className="hidden sm:inline">{label}</span>
+            {label}
           </button>
         ))}
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-3">
+        {leftPanelTab === 'components' && (
+          <ComponentPalette />
+        )}
+
         {leftPanelTab === 'pages' && (
           <div className="space-y-1">
             <div className="flex items-center justify-between mb-2">
@@ -114,30 +120,8 @@ export default function StudioSidebar() {
           </div>
         )}
 
-        {leftPanelTab === 'components' && (
-          <div className="text-center py-8">
-            <LayoutGrid size={24} className="mx-auto text-gray-300 mb-2" />
-            <p className="text-[11px] text-gray-400">Componentes disponibles</p>
-            <p className="text-[10px] text-gray-300 mt-1">Arrastra al canvas para construir</p>
-            <div className="mt-4 space-y-1">
-              {['Container', 'Text', 'Button', 'Image', 'Input', 'Select', 'Divider'].map((name) => (
-                <div
-                  key={name}
-                  className="px-3 py-2 text-[12px] text-gray-600 bg-white border border-gray-100 rounded-lg cursor-grab hover:border-indigo-300 hover:shadow-sm transition-all"
-                >
-                  {name}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {leftPanelTab === 'tree' && (
-          <div className="text-center py-8">
-            <Layers size={24} className="mx-auto text-gray-300 mb-2" />
-            <p className="text-[11px] text-gray-400">Arbol de componentes</p>
-            <p className="text-[10px] text-gray-300 mt-1">Se mostrara aqui la jerarquia</p>
-          </div>
+          <ComponentTree />
         )}
       </div>
     </div>

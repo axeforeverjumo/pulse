@@ -1,19 +1,63 @@
-import { useStudioStore, type ComponentNode } from '../../stores/studioStore';
-import { Settings, Paintbrush, Zap } from 'lucide-react';
+import { useStudioStore } from '../../stores/studioStore';
+import { Settings, Paintbrush, Zap, Trash2, Copy } from 'lucide-react';
+import { registry } from './engine/registry';
+import { findNode, updateNodeProps, removeNode, cloneTree, insertNode, findParent } from './engine/nodeFactory';
+import type { ComponentNode, PropertyDefinition } from './engine/types';
 
 export default function StudioPropertiesPanel() {
-  const { selectedComponentId, componentTree, rightPanelTab, setRightPanelTab, updateTree } = useStudioStore();
+  const {
+    selectedComponentId,
+    componentTree,
+    rightPanelTab,
+    setRightPanelTab,
+    updateTree,
+    selectComponent,
+  } = useStudioStore();
 
   const selectedNode = selectedComponentId && componentTree
     ? findNode(componentTree, selectedComponentId)
     : null;
+
+  const def = selectedNode ? registry.get(selectedNode._component) : null;
+
+  const handlePropChange = (key: string, value: unknown) => {
+    if (!componentTree || !selectedComponentId) return;
+    const newTree = updateNodeProps(componentTree, selectedComponentId, { [key]: value });
+    updateTree(newTree);
+  };
+
+  const handleStyleChange = (key: string, value: string) => {
+    if (!componentTree || !selectedNode) return;
+    const currentStyles = (selectedNode._styles || {}) as Record<string, unknown>;
+    const newTree = updateNodeProps(componentTree, selectedNode._id, {
+      _styles: { ...currentStyles, [key]: value || undefined },
+    });
+    updateTree(newTree);
+  };
+
+  const handleDelete = () => {
+    if (!componentTree || !selectedComponentId || selectedComponentId === componentTree._id) return;
+    const newTree = removeNode(componentTree, selectedComponentId);
+    updateTree(newTree);
+    selectComponent(null);
+  };
+
+  const handleDuplicate = () => {
+    if (!componentTree || !selectedNode || selectedNode._id === componentTree._id) return;
+    const parentInfo = findParent(componentTree, selectedNode._id);
+    if (!parentInfo) return;
+    const clone = cloneTree(selectedNode);
+    const newTree = insertNode(componentTree, clone, parentInfo.parent._id, parentInfo.index + 1);
+    updateTree(newTree);
+    selectComponent(clone._id);
+  };
 
   return (
     <div className="w-[300px] shrink-0 bg-white border-l border-gray-200 flex flex-col overflow-hidden">
       {/* Tabs */}
       <div className="flex border-b border-gray-200">
         {[
-          { key: 'properties' as const, icon: Settings, label: 'Propiedades' },
+          { key: 'properties' as const, icon: Settings, label: 'Props' },
           { key: 'styles' as const, icon: Paintbrush, label: 'Estilos' },
           { key: 'events' as const, icon: Zap, label: 'Eventos' },
         ].map(({ key, icon: Icon, label }) => (
@@ -38,40 +82,48 @@ export default function StudioPropertiesPanel() {
           <div className="text-center py-12">
             <Settings size={24} className="mx-auto text-gray-300 mb-2" />
             <p className="text-[12px] text-gray-400">Selecciona un componente</p>
-            <p className="text-[10px] text-gray-300 mt-1">Haz click en el canvas para editar propiedades</p>
+            <p className="text-[10px] text-gray-300 mt-1">Haz click en el canvas para editar</p>
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Component info */}
+            {/* Header */}
             <div className="flex items-center gap-2 pb-3 border-b border-gray-100">
               <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
-                {selectedNode._component}
+                {def?.name || selectedNode._component}
               </span>
-              <span className="text-[10px] text-gray-400 font-mono">{selectedNode._id.slice(0, 8)}</span>
+              <div className="ml-auto flex gap-1">
+                <button onClick={handleDuplicate} className="p-1 rounded hover:bg-gray-100 text-gray-400" title="Duplicar">
+                  <Copy size={12} />
+                </button>
+                {selectedNode._id !== componentTree?._id && (
+                  <button onClick={handleDelete} className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500" title="Eliminar">
+                    <Trash2 size={12} />
+                  </button>
+                )}
+              </div>
             </div>
 
-            {rightPanelTab === 'properties' && (
-              <PropertiesTab node={selectedNode} onUpdate={(props) => {
-                if (!componentTree) return;
-                const newTree = updateNodeInTree(componentTree, selectedNode._id, props);
-                updateTree(newTree);
-              }} />
+            {rightPanelTab === 'properties' && def && (
+              <PropertiesSection
+                properties={def.properties.filter((p) => p.type !== 'event')}
+                node={selectedNode}
+                onChange={handlePropChange}
+              />
             )}
 
             {rightPanelTab === 'styles' && (
-              <StylesTab node={selectedNode} onUpdate={(styles) => {
-                if (!componentTree) return;
-                const newTree = updateNodeInTree(componentTree, selectedNode._id, { _styles: { ...(selectedNode._styles || {}), ...styles } });
-                updateTree(newTree);
-              }} />
+              <StylesSection
+                styles={(selectedNode._styles || {}) as Record<string, string>}
+                onChange={handleStyleChange}
+              />
             )}
 
-            {rightPanelTab === 'events' && (
-              <div className="text-center py-8">
-                <Zap size={20} className="mx-auto text-gray-300 mb-2" />
-                <p className="text-[11px] text-gray-400">Eventos</p>
-                <p className="text-[10px] text-gray-300">Proximamente — onClick, onChange, etc.</p>
-              </div>
+            {rightPanelTab === 'events' && def && (
+              <PropertiesSection
+                properties={def.properties.filter((p) => p.type === 'event')}
+                node={selectedNode}
+                onChange={handlePropChange}
+              />
             )}
           </div>
         )}
@@ -80,124 +132,183 @@ export default function StudioPropertiesPanel() {
   );
 }
 
-function PropertiesTab({ node, onUpdate }: { node: ComponentNode; onUpdate: (props: Record<string, unknown>) => void }) {
-  const comp = node._component;
+function PropertiesSection({
+  properties,
+  node,
+  onChange,
+}: {
+  properties: PropertyDefinition[];
+  node: ComponentNode;
+  onChange: (key: string, value: unknown) => void;
+}) {
+  if (properties.length === 0) {
+    return <p className="text-[11px] text-gray-400 text-center py-4">Sin propiedades</p>;
+  }
 
-  // Build property fields based on component type
-  const fields: { key: string; label: string; type: 'text' | 'select'; options?: string[] }[] = [];
-
-  if (comp === 'Container') {
-    fields.push(
-      { key: 'direction', label: 'Direccion', type: 'select', options: ['column', 'row'] },
-      { key: 'gap', label: 'Gap', type: 'text' },
-      { key: 'padding', label: 'Padding', type: 'text' },
-    );
-  } else if (comp === 'Text') {
-    fields.push(
-      { key: 'content', label: 'Contenido', type: 'text' },
-      { key: 'variant', label: 'Variante', type: 'select', options: ['body', 'h1', 'h2', 'h3', 'h4', 'caption'] },
-    );
-  } else if (comp === 'Button') {
-    fields.push(
-      { key: 'label', label: 'Texto', type: 'text' },
-      { key: 'variant', label: 'Variante', type: 'select', options: ['primary', 'secondary', 'outline', 'ghost'] },
-      { key: 'size', label: 'Tamano', type: 'select', options: ['sm', 'md', 'lg'] },
-    );
-  } else if (comp === 'Input') {
-    fields.push(
-      { key: 'label', label: 'Etiqueta', type: 'text' },
-      { key: 'placeholder', label: 'Placeholder', type: 'text' },
-      { key: 'type', label: 'Tipo', type: 'select', options: ['text', 'email', 'password', 'number', 'tel'] },
-    );
-  } else if (comp === 'Image') {
-    fields.push(
-      { key: 'src', label: 'URL', type: 'text' },
-      { key: 'alt', label: 'Alt', type: 'text' },
-      { key: 'objectFit', label: 'Ajuste', type: 'select', options: ['cover', 'contain', 'fill', 'none'] },
-    );
+  // Group by section
+  const sections = new Map<string, PropertyDefinition[]>();
+  for (const prop of properties) {
+    const sec = prop.section || 'General';
+    if (!sections.has(sec)) sections.set(sec, []);
+    sections.get(sec)!.push(prop);
   }
 
   return (
-    <div className="space-y-3">
-      {fields.map(({ key, label, type, options }) => (
-        <div key={key}>
-          <label className="block text-[10px] font-medium text-gray-500 mb-1">{label}</label>
-          {type === 'text' ? (
-            <input
-              type="text"
-              value={(node[key] as string) || ''}
-              onChange={(e) => onUpdate({ [key]: e.target.value })}
-              className="w-full px-2 py-1.5 text-[12px] border border-gray-200 rounded-md focus:ring-1 focus:ring-indigo-500 outline-none"
-            />
-          ) : (
-            <select
-              value={(node[key] as string) || options?.[0] || ''}
-              onChange={(e) => onUpdate({ [key]: e.target.value })}
-              className="w-full px-2 py-1.5 text-[12px] border border-gray-200 rounded-md focus:ring-1 focus:ring-indigo-500 outline-none bg-white"
-            >
-              {options?.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
+    <div className="space-y-4">
+      {Array.from(sections.entries()).map(([section, props]) => (
+        <div key={section}>
+          {sections.size > 1 && (
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{section}</span>
           )}
+          <div className="space-y-3 mt-1">
+            {props.map((prop) => (
+              <PropertyControl
+                key={prop.key}
+                definition={prop}
+                value={node[prop.key]}
+                onChange={(val) => onChange(prop.key, val)}
+              />
+            ))}
+          </div>
         </div>
       ))}
+    </div>
+  );
+}
 
-      {fields.length === 0 && (
-        <p className="text-[11px] text-gray-400">Sin propiedades configurables para este componente</p>
+function PropertyControl({
+  definition,
+  value,
+  onChange,
+}: {
+  definition: PropertyDefinition;
+  value: unknown;
+  onChange: (value: unknown) => void;
+}) {
+  const { type, label, placeholder, options, defaultValue } = definition;
+  const current = value ?? defaultValue ?? '';
+
+  return (
+    <div>
+      <label className="block text-[10px] font-medium text-gray-500 mb-1">{label}</label>
+      {(type === 'text' || type === 'expression' || type === 'size' || type === 'image' || type === 'icon') && (
+        <input
+          type="text"
+          value={String(current)}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder || ''}
+          className={`w-full px-2 py-1.5 text-[12px] border border-gray-200 rounded-md focus:ring-1 focus:ring-indigo-500 outline-none ${
+            type === 'expression' ? 'font-mono bg-gray-50' : ''
+          }`}
+        />
+      )}
+      {type === 'number' && (
+        <input
+          type="number"
+          value={Number(current) || 0}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="w-full px-2 py-1.5 text-[12px] border border-gray-200 rounded-md focus:ring-1 focus:ring-indigo-500 outline-none"
+        />
+      )}
+      {type === 'boolean' && (
+        <button
+          onClick={() => onChange(!current)}
+          className={`w-10 h-5 rounded-full transition-colors ${
+            current ? 'bg-indigo-500' : 'bg-gray-300'
+          }`}
+        >
+          <div
+            className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${
+              current ? 'translate-x-5' : 'translate-x-0.5'
+            }`}
+          />
+        </button>
+      )}
+      {type === 'select' && options && (
+        <select
+          value={String(current)}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full px-2 py-1.5 text-[12px] border border-gray-200 rounded-md focus:ring-1 focus:ring-indigo-500 outline-none bg-white"
+        >
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      )}
+      {type === 'color' && (
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={String(current) || '#000000'}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-7 h-7 rounded border border-gray-200 cursor-pointer"
+          />
+          <input
+            type="text"
+            value={String(current)}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="#000000"
+            className="flex-1 px-2 py-1.5 text-[12px] border border-gray-200 rounded-md focus:ring-1 focus:ring-indigo-500 outline-none font-mono"
+          />
+        </div>
+      )}
+      {type === 'json' && (
+        <textarea
+          value={typeof current === 'string' ? current : JSON.stringify(current, null, 2)}
+          onChange={(e) => {
+            try { onChange(JSON.parse(e.target.value)); } catch { onChange(e.target.value); }
+          }}
+          rows={3}
+          className="w-full px-2 py-1.5 text-[11px] font-mono border border-gray-200 rounded-md focus:ring-1 focus:ring-indigo-500 outline-none resize-y"
+        />
+      )}
+      {type === 'event' && (
+        <input
+          type="text"
+          value={String(current)}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="{{ accion }}"
+          className="w-full px-2 py-1.5 text-[12px] font-mono bg-amber-50 border border-amber-200 rounded-md focus:ring-1 focus:ring-amber-500 outline-none"
+        />
       )}
     </div>
   );
 }
 
-function StylesTab({ node, onUpdate }: { node: ComponentNode; onUpdate: (styles: Record<string, unknown>) => void }) {
-  const styles = (node._styles || {}) as Record<string, string>;
-
-  const styleFields = [
-    { key: 'width', label: 'Ancho' },
-    { key: 'height', label: 'Alto' },
-    { key: 'padding', label: 'Padding' },
-    { key: 'margin', label: 'Margin' },
-    { key: 'backgroundColor', label: 'Fondo' },
-    { key: 'borderRadius', label: 'Border radius' },
-    { key: 'border', label: 'Borde' },
+function StylesSection({
+  styles,
+  onChange,
+}: {
+  styles: Record<string, string>;
+  onChange: (key: string, value: string) => void;
+}) {
+  const fields = [
+    { key: 'width', label: 'Ancho', placeholder: 'auto' },
+    { key: 'height', label: 'Alto', placeholder: 'auto' },
+    { key: 'minHeight', label: 'Alto min.', placeholder: 'auto' },
+    { key: 'padding', label: 'Padding', placeholder: '0px' },
+    { key: 'margin', label: 'Margin', placeholder: '0px' },
+    { key: 'backgroundColor', label: 'Fondo', placeholder: 'transparent' },
+    { key: 'borderRadius', label: 'Borde radius', placeholder: '0px' },
+    { key: 'border', label: 'Borde', placeholder: 'none' },
+    { key: 'opacity', label: 'Opacidad', placeholder: '1' },
+    { key: 'overflow', label: 'Overflow', placeholder: 'visible' },
   ];
 
   return (
     <div className="space-y-3">
-      {styleFields.map(({ key, label }) => (
+      {fields.map(({ key, label, placeholder }) => (
         <div key={key}>
           <label className="block text-[10px] font-medium text-gray-500 mb-1">{label}</label>
           <input
             type="text"
             value={styles[key] || ''}
-            onChange={(e) => onUpdate({ [key]: e.target.value })}
-            placeholder={key === 'backgroundColor' ? '#ffffff' : 'auto'}
+            onChange={(e) => onChange(key, e.target.value)}
+            placeholder={placeholder}
             className="w-full px-2 py-1.5 text-[12px] border border-gray-200 rounded-md focus:ring-1 focus:ring-indigo-500 outline-none font-mono"
           />
         </div>
       ))}
     </div>
   );
-}
-
-// Helpers
-function findNode(tree: ComponentNode, id: string): ComponentNode | null {
-  if (tree._id === id) return tree;
-  for (const child of (tree._children || [])) {
-    const found = findNode(child, id);
-    if (found) return found;
-  }
-  return null;
-}
-
-function updateNodeInTree(tree: ComponentNode, id: string, updates: Record<string, unknown>): ComponentNode {
-  if (tree._id === id) {
-    return { ...tree, ...updates };
-  }
-  if (!tree._children) return tree;
-  return {
-    ...tree,
-    _children: tree._children.map((child) => updateNodeInTree(child, id, updates)),
-  };
 }
