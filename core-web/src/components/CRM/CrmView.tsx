@@ -7,7 +7,6 @@ import {
   ChartBarIcon,
   DocumentTextIcon,
   CubeIcon,
-  BoltIcon,
   XMarkIcon,
   CurrencyDollarIcon,
   EnvelopeIcon,
@@ -26,9 +25,7 @@ import PipelineView from './PipelineView';
 import OpportunityDetail from './OpportunityDetail';
 import NotesView from './NotesView';
 import ProductsView from './ProductsView';
-import WorkflowsView from './WorkflowsView';
 import DashboardView from './DashboardView';
-import SequenceBuilder from './SequenceBuilder';
 import CampaignBuilder from './CampaignBuilder';
 import FormBuilder from './FormBuilder';
 import TeamActivityView from './TeamActivityView';
@@ -43,10 +40,8 @@ const tabs = [
   { id: 'contacts' as const, label: 'Contactos', icon: UserGroupIcon },
   { id: 'companies' as const, label: 'Empresas', icon: BuildingOfficeIcon },
   { id: 'notes' as const, label: 'Notas', icon: DocumentTextIcon },
-  { id: 'sequences' as const, label: 'Secuencias', icon: EnvelopeIcon },
   { id: 'campaigns' as const, label: 'Campañas', icon: MegaphoneIcon },
   { id: 'forms' as const, label: 'Formularios', icon: ClipboardDocumentListIcon },
-  { id: 'workflows' as const, label: 'Automatizaciones', icon: BoltIcon },
   { id: 'team' as const, label: 'Equipo', icon: UsersIcon },
 ];
 
@@ -247,17 +242,11 @@ export default function CrmView() {
             {activeView === 'notes' && (
               <NotesView workspaceId={effectiveWorkspaceId} />
             )}
-            {activeView === 'sequences' && (
-              <SequenceBuilder workspaceId={effectiveWorkspaceId} />
-            )}
             {activeView === 'campaigns' && (
               <CampaignBuilder workspaceId={effectiveWorkspaceId} />
             )}
             {activeView === 'forms' && (
               <FormBuilder workspaceId={effectiveWorkspaceId} />
-            )}
-            {activeView === 'workflows' && (
-              <WorkflowsView workspaceId={effectiveWorkspaceId} />
             )}
             {activeView === 'team' && (
               <TeamActivityView workspaceId={effectiveWorkspaceId} />
