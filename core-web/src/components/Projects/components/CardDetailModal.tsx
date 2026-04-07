@@ -22,7 +22,7 @@ import {
   type ProjectIssue,
 } from '../../../hooks/queries/useProjects';
 import { getRelativeDate, formatDateFull } from '../../../utils/dateUtils';
-import { getPresignedUploadUrl, confirmFileUpload } from '../../../api/client';
+import { getPresignedUploadUrl, confirmFileUpload, createRefinement, getIssueDependencies, addIssueDependency, removeIssueDependency, type IssueDependency } from '../../../api/client';
 import { resolveUploadMimeType } from '../../../utils/uploadMime';
 import DatePicker from '../../ui/DatePicker';
 import LabelPicker from './LabelPicker';
@@ -30,6 +30,7 @@ import AssigneePicker from './AssigneePicker';
 import StackedAvatars from './StackedAvatars';
 import IssueComments from './IssueComments';
 import AgentLogPanel from './AgentLogPanel';
+import { toast } from 'sonner';
 
 interface CardDetailModalProps {
   card: ProjectIssue;
@@ -46,6 +47,172 @@ const PRIORITY_OPTIONS = [
   { value: 3, label: '3', color: 'text-orange-500', bg: 'bg-orange-50' },
   { value: 4, label: '4', color: 'text-rose-500', bg: 'bg-rose-50' },
 ] as const;
+
+function DependenciesSection({ issueId }: { issueId: string }) {
+  const [deps, setDeps] = useState<IssueDependency[]>([]);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [depInput, setDepInput] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const fetchDeps = useCallback(async () => {
+    try {
+      const r = await getIssueDependencies(issueId);
+      setDeps(r.dependencies);
+      setIsBlocked(r.is_blocked);
+    } catch { /* ignore */ }
+  }, [issueId]);
+
+  useState(() => { fetchDeps(); });
+
+  const handleAdd = async () => {
+    if (!depInput.trim()) return;
+    setLoading(true);
+    try {
+      await addIssueDependency(issueId, depInput.trim());
+      toast.success('Dependencia añadida');
+      setDepInput('');
+      setShowAdd(false);
+      fetchDeps();
+    } catch (e: any) {
+      toast.error(e?.message || 'Error al añadir dependencia');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemove = async (depId: string) => {
+    try {
+      await removeIssueDependency(issueId, depId);
+      fetchDeps();
+    } catch { toast.error('Error'); }
+  };
+
+  if (deps.length === 0 && !showAdd) {
+    return (
+      <div className="border-t border-gray-100 pt-4 pb-2">
+        <button
+          onClick={() => setShowAdd(true)}
+          className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 hover:text-gray-700 transition-colors"
+        >
+          <PlusIcon className="w-3.5 h-3.5" />
+          Añadir dependencia
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-t border-gray-100 pt-4 pb-2 space-y-2">
+      {isBlocked && (
+        <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-[12px] text-amber-700 font-medium">
+          Bloqueada — dependencias pendientes
+        </div>
+      )}
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Depende de</span>
+        <button onClick={() => setShowAdd(!showAdd)} className="text-[11px] text-gray-400 hover:text-gray-600">
+          {showAdd ? 'Cancelar' : '+ Añadir'}
+        </button>
+      </div>
+      {deps.map((d) => (
+        <div key={d.id} className="flex items-center justify-between px-3 py-1.5 bg-gray-50 rounded-lg">
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${d.resolved ? 'bg-green-400' : 'bg-amber-400'}`} />
+            <span className="text-[12px] text-gray-700">#{d.number} {d.title}</span>
+          </div>
+          <button onClick={() => handleRemove(d.id)} className="text-[11px] text-gray-400 hover:text-red-500">x</button>
+        </div>
+      ))}
+      {showAdd && (
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={depInput}
+            onChange={(e) => setDepInput(e.target.value)}
+            placeholder="ID de la tarea (UUID)"
+            className="flex-1 px-2 py-1.5 text-[12px] border border-gray-200 rounded-lg"
+            autoFocus
+          />
+          <button onClick={handleAdd} disabled={loading} className="px-3 py-1.5 text-[12px] font-medium text-white bg-gray-900 rounded-lg disabled:opacity-40">
+            {loading ? '...' : 'Añadir'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RefinementSection({ issueId, parentIssueId, onCreated }: { issueId: string; parentIssueId?: string | null; onCreated: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  if (parentIssueId) {
+    return (
+      <div className="border-t border-gray-100 pt-4 pb-2">
+        <p className="text-[11px] text-gray-400">Esta es una tarea de refinamiento</p>
+      </div>
+    );
+  }
+
+  const handleCreate = async () => {
+    if (!text.trim()) return;
+    setLoading(true);
+    try {
+      const ref = await createRefinement(issueId, text);
+      toast.success(`Refinamiento #${ref.number} creado`);
+      setText('');
+      setOpen(false);
+      onCreated();
+    } catch {
+      toast.error('Error al crear refinamiento');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="border-t border-gray-100 pt-4 pb-2">
+      {!open ? (
+        <button
+          onClick={() => setOpen(true)}
+          className="flex items-center gap-1.5 text-[12px] font-medium text-amber-600 hover:text-amber-800 transition-colors"
+        >
+          <PlusIcon className="w-3.5 h-3.5" />
+          Añadir refinamiento
+        </button>
+      ) : (
+        <div className="space-y-2">
+          <label className="block text-[11px] font-medium text-gray-500">Que hay que corregir o completar?</label>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={3}
+            autoFocus
+            placeholder="Describe que falta, que fallo o que hay que ajustar..."
+            className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-400 resize-none"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={handleCreate}
+              disabled={loading || !text.trim()}
+              className="px-3 py-1.5 text-[12px] font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-40"
+            >
+              {loading ? 'Creando...' : 'Crear refinamiento'}
+            </button>
+            <button
+              onClick={() => { setOpen(false); setText(''); }}
+              className="px-3 py-1.5 text-[12px] font-medium text-gray-500 hover:text-gray-700"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function CardDetailModal({ card, onClose, initialEdit = false, isDevelopmentBoard = false }: CardDetailModalProps) {
   const [isEditing, setIsEditing] = useState(initialEdit);
@@ -821,6 +988,12 @@ export default function CardDetailModal({ card, onClose, initialEdit = false, is
                   <AgentLogPanel jobId={runningJobId} />
                 </div>
               )}
+
+              {/* Dependencies section */}
+              <DependenciesSection issueId={card.id} />
+
+              {/* Refinement section */}
+              <RefinementSection issueId={card.id} parentIssueId={card.parent_issue_id} onCreated={onClose} />
 
               {/* Comments section */}
               <div className="border-t border-gray-100 pt-5">

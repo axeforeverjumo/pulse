@@ -2551,6 +2551,7 @@ export interface ProjectIssue {
   created_at?: string;
   updated_at?: string;
   is_dev_task?: boolean | null;
+  parent_issue_id?: string | null;
 }
 
 export interface ProjectAgentQueueJob {
@@ -2845,6 +2846,54 @@ export async function reorderProjectIssues(stateId: string, items: ItemPosition[
 
 export async function deleteProjectIssue(issueId: string): Promise<{ status: string }> {
   return api(`/projects/issues/${issueId}`, { method: 'DELETE' });
+}
+
+// --- Plan with AI ---
+
+export async function planWithAI(boardId: string, specText: string, agentId?: string): Promise<{ tasks: { id: string; number: number; title: string }[]; count: number }> {
+  return api(`/projects/boards/${boardId}/plan-with-ai`, {
+    method: 'POST',
+    body: JSON.stringify({ spec_text: specText, agent_id: agentId }),
+  });
+}
+
+// --- Refinements ---
+
+export async function createRefinement(issueId: string, description: string, agentId?: string): Promise<ProjectIssue> {
+  return api(`/projects/issues/${issueId}/refinement`, {
+    method: 'POST',
+    body: JSON.stringify({ description, agent_id: agentId }),
+  });
+}
+
+export async function getChildIssues(issueId: string): Promise<ProjectIssue[]> {
+  return api(`/projects/boards/0/issues?parent_issue_id=${issueId}`);
+}
+
+// --- Dependencies ---
+
+export interface IssueDependency {
+  id: string;
+  depends_on_issue_id: string;
+  number?: number;
+  title: string;
+  resolved: boolean;
+  dependency_type: string;
+}
+
+export async function getIssueDependencies(issueId: string): Promise<{ dependencies: IssueDependency[]; is_blocked: boolean }> {
+  return api(`/projects/issues/${issueId}/dependencies`);
+}
+
+export async function addIssueDependency(issueId: string, dependsOnIssueId: string): Promise<{ dependency: any }> {
+  return api(`/projects/issues/${issueId}/dependencies`, {
+    method: 'POST',
+    body: JSON.stringify({ depends_on_issue_id: dependsOnIssueId }),
+  });
+}
+
+export async function removeIssueDependency(issueId: string, depId: string): Promise<{ ok: boolean }> {
+  return api(`/projects/issues/${issueId}/dependencies/${depId}`, { method: 'DELETE' });
 }
 
 // --- Labels ---
@@ -3728,6 +3777,28 @@ export async function triggerCrmWorkflow(workflowId: string, data: { workspace_i
   return api<any>(`/crm/workflows/${workflowId}/trigger`, { method: 'POST', body: JSON.stringify(data) });
 }
 
+// CRM Dashboard
+export async function getCrmDashboard(workspaceId: string) {
+  return api<any>(`/crm/dashboard?workspace_id=${workspaceId}`);
+}
+
+export async function getCrmDashboardHistory(workspaceId: string, days = 30) {
+  return api<{ snapshots: any[] }>(`/crm/dashboard/history?workspace_id=${workspaceId}&days=${days}`);
+}
+
+// CRM Tags
+export async function getCrmTags(workspaceId: string) {
+  return api<{ tags: any[] }>(`/crm/tags?workspace_id=${workspaceId}`);
+}
+
+export async function createCrmTag(data: { workspace_id: string; name: string; color?: string; entity_type?: string }) {
+  return api<{ tag: any }>('/crm/tags', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function deleteCrmTag(tagId: string) {
+  return api<any>(`/crm/tags/${tagId}`, { method: 'DELETE' });
+}
+
 // =============================================================================
 // Server Management
 // =============================================================================
@@ -3782,6 +3853,7 @@ export async function addServer(data: {
   username?: string;
   auth_type?: string;
   ssh_private_key?: string;
+  ssh_passphrase?: string;
   password?: string;
   wildcard_domain?: string;
   is_default?: boolean;

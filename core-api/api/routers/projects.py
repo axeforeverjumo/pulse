@@ -152,6 +152,18 @@ class CreateIssueRequest(BaseModel):
     is_dev_task: Optional[bool] = Field(None, description="Override dev task flag (null=inherit from board)")
 
 
+class PlanWithAIRequest(BaseModel):
+    """Request model for AI-powered task planning from a spec."""
+    spec_text: str = Field(..., min_length=10, description="Spec or requirements text to decompose into tasks")
+    agent_id: Optional[str] = Field(None, description="Agent to assign to generated tasks")
+
+
+class CreateRefinementRequest(BaseModel):
+    """Request model for creating a refinement sub-task."""
+    description: str = Field(..., min_length=3, description="What needs to be fixed or improved")
+    agent_id: Optional[str] = Field(None, description="Agent to assign (inherits from parent if omitted)")
+
+
 class UpdateIssueRequest(BaseModel):
     """Request model for updating an issue.
 
@@ -603,6 +615,46 @@ def _is_qa_state(name: Optional[str]) -> bool:
 def _is_done_state(name: Optional[str]) -> bool:
     normalized = _normalize_state_name(name)
     return normalized in {"done", "hecho", "completado", "terminado", "closed", "finalizado"}
+
+
+async def _check_dependencies_resolved(issue_id: str) -> tuple:
+    """Check if all dependencies of an issue are resolved (completed).
+    Returns (all_resolved: bool, blocking_titles: list[str]).
+    """
+    supabase = get_service_role_client()
+    deps = supabase.table("project_issue_dependencies")\
+        .select("depends_on_issue_id")\
+        .eq("issue_id", issue_id)\
+        .execute()
+    if not deps.data:
+        return (True, [])
+
+    dep_ids = [d["depends_on_issue_id"] for d in deps.data]
+    blockers = supabase.table("project_issues")\
+        .select("number, title, completed_at")\
+        .in_("id", dep_ids)\
+        .is_("completed_at", "null")\
+        .execute()
+
+    blocking = [f"#{b['number']} {b['title']}" for b in (blockers.data or [])]
+    return (len(blocking) == 0, blocking)
+
+
+async def _assert_not_blocked(issue_id: str, target_state_name: Optional[str] = None):
+    """Raise HTTP 409 if issue has unresolved dependencies and target is In Progress+."""
+    if target_state_name and not (
+        _is_in_progress_state(target_state_name) or
+        _is_qa_state(target_state_name) or
+        _is_done_state(target_state_name)
+    ):
+        return  # Moving to To Do / Backlog is always allowed
+
+    resolved, blockers = await _check_dependencies_resolved(issue_id)
+    if not resolved:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Tarea bloqueada por dependencias pendientes: {', '.join(blockers[:5])}"
+        )
 
 
 def _resolve_effective_is_dev_task(task: Dict[str, Any], board: Dict[str, Any]) -> bool:
@@ -1725,6 +1777,10 @@ async def _execute_project_agent_job(
     if not _is_in_progress_state(current_state_name):
         if not in_progress_id:
             raise RuntimeError("Board is missing an In Progress state; blocking queue job")
+        # Check dependencies before auto-moving to In Progress
+        deps_resolved, dep_blockers = await _check_dependencies_resolved(issue_id)
+        if not deps_resolved:
+            raise RuntimeError(f"Tarea bloqueada por dependencias: {', '.join(dep_blockers[:3])}. No se puede mover a In Progress.")
         await supabase.table("project_issues").update({"state_id": in_progress_id}).eq("id", issue_id).execute()
         task["state_id"] = in_progress_id
         await _append_agent_activity_comment(
@@ -1857,9 +1913,9 @@ async def _execute_project_agent_job(
         "- Si completaste de verdad la tarea, incluye en una línea separada exacta: `Tarea completada`."
     )
 
-    # ── Claude Code dev tasks (real code execution via CLI bridge) ──
+    # ── Dev tasks (code execution via OpenAI agentic loop) ──
     if agent.get("tier") == "claude_code":
-        from api.services.projects.claude_code_executor import execute_claude_code_task, build_dev_task_prompt
+        from api.services.projects.openai_code_executor import execute_openai_code_task, build_dev_task_prompt
         from api.config import settings
 
         # ── PAPER-02: Atomic Checkout — prevent two agents on the same repo ──
@@ -1901,7 +1957,7 @@ async def _execute_project_agent_job(
             previous_context=previous_payload if isinstance(previous_payload, dict) and previous_payload.get("iteration_count") else None,
         )
 
-        cc_result = await execute_claude_code_task(
+        cc_result = await execute_openai_code_task(
             prompt=dev_prompt,
             repo_url=repo_url,
             github_token=settings.pulse_github_token,
@@ -2038,9 +2094,9 @@ async def _execute_project_agent_job(
                 "payload": {"claude_code_session_id": cc_session_id},
             }
 
-    # ── Core agents (text-only via Claude Code CLI — uses subscription, $0 extra) ──
+    # ── Core agents (text-only via OpenAI SDK) ──
     if agent.get("tier") == "core":
-        import httpx
+        from lib.openai_client import get_async_openai_client
 
         system_prompt = (
             f"Eres {agent['name']}.\n\n"
@@ -2050,27 +2106,22 @@ async def _execute_project_agent_job(
             "Respeta el formato de salida obligatorio indicado por el usuario.\n"
             "Responde en español."
         )
-        core_prompt = f"{system_prompt}\n\n---\n\nTarea asignada:\n\n{task_context}\n\nTrabaja en esta tarea."
 
         try:
-            async with httpx.AsyncClient(timeout=300.0) as http_client:
-                resp = await http_client.post(
-                    "http://127.0.0.1:4201",
-                    json={
-                        "action": "execute",
-                        "prompt": core_prompt,
-                        "repo_dir": "/tmp",
-                        "max_budget_usd": "5",  # core agents are text-only, less budget needed
-                    }
-                )
-                if resp.status_code == 200:
-                    cc_data = resp.json()
-                    agent_response = cc_data.get("result") or "Sin respuesta del agente."
-                else:
-                    agent_response = f"Error del bridge: HTTP {resp.status_code}"
+            oai = get_async_openai_client()
+            oai_resp = await oai.chat.completions.create(
+                model=settings.openai_core_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Tarea asignada:\n\n{task_context}\n\nTrabaja en esta tarea."},
+                ],
+                max_tokens=4096,
+                temperature=0.3,
+            )
+            agent_response = oai_resp.choices[0].message.content or "Sin respuesta del agente."
         except Exception as e:
-            logger.error("Core agent CLI bridge error: %s", e)
-            agent_response = f"Error al contactar el bridge de Claude Code: {str(e)[:200]}"
+            logger.error("Core agent OpenAI error: %s", e)
+            agent_response = f"Error al contactar OpenAI: {str(e)[:200]}"
     # ── OpenClaw advance agents (bridge 4200) ──
     else:
         async with httpx.AsyncClient(timeout=420.0) as http_client:
@@ -3420,6 +3471,425 @@ async def create_issue_endpoint(
         handle_api_exception(e, "Failed to create issue", logger)
 
 
+@router.get("/boards/{board_id}/stats")
+async def board_stats_endpoint(
+    board_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Get aggregated stats for a board: by state, priority, assignee, completion."""
+    try:
+        supabase = get_service_role_client()
+
+        # Get all issues for the board
+        issues_result = supabase.table("project_issues")\
+            .select("id, state_id, priority, completed_at, due_at")\
+            .eq("board_id", board_id)\
+            .execute()
+        issues = issues_result.data or []
+        total = len(issues)
+
+        # States
+        states_result = supabase.table("project_states")\
+            .select("id, name, is_done")\
+            .eq("board_id", board_id)\
+            .order("position")\
+            .execute()
+        state_map = {s["id"]: s for s in (states_result.data or [])}
+
+        by_state = {}
+        for s in (states_result.data or []):
+            by_state[s["id"]] = {"name": s["name"], "count": 0, "is_done": s.get("is_done", False)}
+        for i in issues:
+            sid = i.get("state_id")
+            if sid in by_state:
+                by_state[sid]["count"] += 1
+
+        # Priority
+        by_priority = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0}
+        for i in issues:
+            p = i.get("priority", 0)
+            by_priority[p] = by_priority.get(p, 0) + 1
+
+        # Completion
+        completed = sum(1 for i in issues if i.get("completed_at"))
+        completion_rate = completed / total if total > 0 else 0
+
+        # Overdue
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        overdue = sum(1 for i in issues if i.get("due_at") and not i.get("completed_at") and i["due_at"] < now.isoformat())
+
+        # Blocked count
+        deps_result = supabase.table("project_issue_dependencies")\
+            .select("issue_id, depends_on_issue_id")\
+            .execute()
+        dep_issue_ids = set(d["issue_id"] for d in (deps_result.data or []))
+        board_issue_ids = set(i["id"] for i in issues)
+        completed_ids = set(i["id"] for i in issues if i.get("completed_at"))
+        blocked_count = 0
+        for d in (deps_result.data or []):
+            if d["issue_id"] in board_issue_ids and d["depends_on_issue_id"] not in completed_ids:
+                blocked_count += 1
+
+        # Assignees
+        assignees_result = supabase.table("project_issue_assignees")\
+            .select("issue_id, user_id, agent_id, assignee_type")\
+            .in_("issue_id", list(board_issue_ids))\
+            .execute() if board_issue_ids else type('', (), {'data': []})()
+        by_assignee: Dict[str, int] = {}
+        for a in (assignees_result.data or []):
+            key = a.get("agent_id") or a.get("user_id") or "unassigned"
+            by_assignee[key] = by_assignee.get(key, 0) + 1
+
+        return {
+            "total": total,
+            "completed": completed,
+            "completion_rate": round(completion_rate, 2),
+            "overdue_count": overdue,
+            "blocked_count": blocked_count,
+            "by_state": list(by_state.values()),
+            "by_priority": [{"priority": k, "count": v} for k, v in sorted(by_priority.items())],
+            "by_assignee": [{"id": k, "count": v} for k, v in sorted(by_assignee.items(), key=lambda x: -x[1])],
+        }
+    except Exception as e:
+        handle_api_exception(e, "Failed to get board stats", logger)
+
+
+@router.post("/boards/{board_id}/plan-with-ai")
+async def plan_with_ai_endpoint(
+    board_id: str,
+    request: PlanWithAIRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Decompose a spec into multiple ordered issues using AI."""
+    import json as _json
+    from lib.openai_client import get_async_openai_client
+
+    try:
+        supabase = get_service_role_client()
+
+        # Get board states to find the first (To Do) state
+        states_result = supabase.table("project_states")\
+            .select("id, name, position")\
+            .eq("board_id", board_id)\
+            .order("position")\
+            .execute()
+        states = states_result.data or []
+        if not states:
+            raise HTTPException(status_code=400, detail="Board has no states")
+        first_state_id = states[0]["id"]
+
+        # Call GPT-5.4 to plan tasks
+        oai = get_async_openai_client()
+        plan_resp = await oai.chat.completions.create(
+            model="gpt-5.4",
+            messages=[
+                {"role": "system", "content": (
+                    "Eres un planificador experto de proyectos de software. "
+                    "Dado un spec o documento de requisitos, descomponlo en tareas concretas y ejecutables "
+                    "ordenadas por dependencia (las primeras son las que no dependen de nada). "
+                    "Cada tarea debe ser atómica: un agente de desarrollo la puede completar en una sesión. "
+                    "Responde SOLO con un JSON array. Cada elemento:\n"
+                    '{"title": "string (max 100 chars)", "description": "string con contexto técnico necesario", '
+                    '"priority": 3, "checklist_items": [{"text": "paso 1"}, {"text": "paso 2"}]}\n'
+                    "Priority: 1=urgente, 2=alta, 3=media, 4=baja. "
+                    "Genera entre 5 y 30 tareas. Sin markdown, solo JSON array."
+                )},
+                {"role": "user", "content": request.spec_text},
+            ],
+            max_tokens=8192,
+            temperature=0.3,
+        )
+        raw = plan_resp.choices[0].message.content or "[]"
+
+        # Parse JSON (strip markdown fences if present)
+        clean = raw.strip()
+        if clean.startswith("```"):
+            clean = clean.split("\n", 1)[1] if "\n" in clean else clean[3:]
+        if clean.endswith("```"):
+            clean = clean[:-3]
+        tasks = _json.loads(clean.strip())
+
+        if not isinstance(tasks, list):
+            raise ValueError("AI response is not a JSON array")
+
+        # Create issues in order
+        created = []
+        for i, task in enumerate(tasks):
+            if not isinstance(task, dict) or not task.get("title"):
+                continue
+            checklist = None
+            if task.get("checklist_items"):
+                checklist = [
+                    {"id": f"ai-{i}-{j}", "text": item.get("text", ""), "done": False}
+                    for j, item in enumerate(task["checklist_items"])
+                    if isinstance(item, dict)
+                ]
+            issue = await create_issue(
+                user_id=user_id,
+                user_jwt=user_jwt,
+                board_id=board_id,
+                state_id=first_state_id,
+                title=task["title"][:500],
+                description=task.get("description"),
+                priority=task.get("priority", 3),
+                checklist_items=checklist,
+            )
+            # Assign agent if requested
+            if request.agent_id and issue.get("id"):
+                try:
+                    from api.services.projects.assignees import add_agent_assignee
+                    await add_agent_assignee(
+                        user_jwt=user_jwt,
+                        issue_id=issue["id"],
+                        agent_id=request.agent_id,
+                    )
+                except Exception:
+                    pass  # Non-critical
+            created.append({"id": issue.get("id"), "number": issue.get("number"), "title": task["title"][:500]})
+
+        return {"tasks": created, "count": len(created)}
+
+    except HTTPException:
+        raise
+    except _json.JSONDecodeError:
+        raise HTTPException(status_code=422, detail="AI did not return valid JSON. Try again or simplify the spec.")
+    except Exception as e:
+        handle_api_exception(e, "Failed to plan with AI", logger)
+
+
+@router.post("/issues/{issue_id}/refinement", response_model=IssueResponse, status_code=status.HTTP_201_CREATED)
+async def create_refinement_endpoint(
+    issue_id: str,
+    request: CreateRefinementRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Create a refinement sub-task linked to a parent issue."""
+    try:
+        supabase = get_service_role_client()
+
+        # Fetch parent issue
+        parent_result = supabase.table("project_issues")\
+            .select("id, board_id, title, description, priority")\
+            .eq("id", issue_id)\
+            .single()\
+            .execute()
+        parent = parent_result.data
+        if not parent:
+            raise HTTPException(status_code=404, detail="Parent issue not found")
+
+        # Get first state (To Do) of the board
+        states_result = supabase.table("project_states")\
+            .select("id, name, position")\
+            .eq("board_id", parent["board_id"])\
+            .order("position")\
+            .execute()
+        states = states_result.data or []
+        if not states:
+            raise HTTPException(status_code=400, detail="Board has no states")
+        first_state_id = states[0]["id"]
+
+        # Get agent from parent if not specified
+        agent_id = request.agent_id
+        if not agent_id:
+            agents_result = supabase.table("project_issue_assignees")\
+                .select("agent_id")\
+                .eq("issue_id", issue_id)\
+                .eq("assignee_type", "agent")\
+                .limit(1)\
+                .execute()
+            if agents_result.data:
+                agent_id = agents_result.data[0].get("agent_id")
+
+        # Get last agent comment for context
+        last_agent_comment = ""
+        comments_result = supabase.table("project_issue_comments")\
+            .select("blocks")\
+            .eq("issue_id", issue_id)\
+            .order("created_at", desc=True)\
+            .limit(5)\
+            .execute()
+        for c in (comments_result.data or []):
+            blocks = c.get("blocks") or []
+            has_agent_meta = any(b.get("type") == "agent_meta" for b in blocks)
+            if has_agent_meta:
+                for b in blocks:
+                    if b.get("type") == "text":
+                        last_agent_comment = (b.get("data", {}).get("content") or "")[:2000]
+                        break
+                break
+
+        # Build refinement description with parent context
+        desc_parts = [
+            f"**Refinamiento de:** #{parent.get('number', '?')} — {parent['title']}",
+            "",
+            f"**Que hay que corregir/completar:**",
+            request.description,
+        ]
+        if last_agent_comment:
+            desc_parts += [
+                "",
+                "**Ultimo resultado del agente:**",
+                last_agent_comment[:1000],
+            ]
+        if parent.get("description"):
+            desc_parts += [
+                "",
+                "**Contexto original:**",
+                parent["description"][:1000],
+            ]
+
+        short_desc = request.description[:60].replace("\n", " ")
+        title = f"Ref: {parent['title'][:60]} — {short_desc}"
+
+        refinement = await create_issue(
+            user_id=user_id,
+            user_jwt=user_jwt,
+            board_id=parent["board_id"],
+            state_id=first_state_id,
+            title=title[:500],
+            description="\n".join(desc_parts),
+            priority=parent.get("priority", 3),
+            parent_issue_id=issue_id,
+        )
+
+        # Assign agent
+        if agent_id and refinement.get("id"):
+            try:
+                from api.services.projects.assignees import add_agent_assignee
+                await add_agent_assignee(
+                    user_jwt=user_jwt,
+                    issue_id=refinement["id"],
+                    agent_id=agent_id,
+                )
+            except Exception:
+                pass
+
+        # Post comment on parent
+        try:
+            ref_number = refinement.get("number", "?")
+            supabase.table("project_issue_comments").insert({
+                "issue_id": issue_id,
+                "user_id": user_id,
+                "workspace_id": refinement.get("workspace_id"),
+                "workspace_app_id": refinement.get("workspace_app_id"),
+                "blocks": [{"type": "text", "data": {"content": f"Refinamiento creado: #{ref_number} — {short_desc}"}}],
+            }).execute()
+        except Exception:
+            pass
+
+        return refinement
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to create refinement", logger)
+
+
+@router.get("/issues/{issue_id}/dependencies")
+async def get_dependencies_endpoint(
+    issue_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Get all dependencies for an issue with their resolution status."""
+    try:
+        supabase = get_service_role_client()
+        deps = supabase.table("project_issue_dependencies")\
+            .select("id, depends_on_issue_id, dependency_type, created_at")\
+            .eq("issue_id", issue_id)\
+            .execute()
+        if not deps.data:
+            return {"dependencies": [], "is_blocked": False}
+
+        dep_ids = [d["depends_on_issue_id"] for d in deps.data]
+        issues = supabase.table("project_issues")\
+            .select("id, number, title, completed_at, state_id")\
+            .in_("id", dep_ids)\
+            .execute()
+        issue_map = {i["id"]: i for i in (issues.data or [])}
+
+        result = []
+        is_blocked = False
+        for d in deps.data:
+            dep_issue = issue_map.get(d["depends_on_issue_id"], {})
+            resolved = dep_issue.get("completed_at") is not None
+            if not resolved:
+                is_blocked = True
+            result.append({
+                "id": d["id"],
+                "depends_on_issue_id": d["depends_on_issue_id"],
+                "number": dep_issue.get("number"),
+                "title": dep_issue.get("title", "Unknown"),
+                "resolved": resolved,
+                "dependency_type": d["dependency_type"],
+            })
+        return {"dependencies": result, "is_blocked": is_blocked}
+    except Exception as e:
+        handle_api_exception(e, "Failed to get dependencies", logger)
+
+
+@router.post("/issues/{issue_id}/dependencies")
+async def add_dependency_endpoint(
+    issue_id: str,
+    body: Dict[str, str],
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Add a dependency: issue_id depends on body.depends_on_issue_id."""
+    depends_on = body.get("depends_on_issue_id")
+    if not depends_on:
+        raise HTTPException(status_code=400, detail="depends_on_issue_id required")
+    if depends_on == issue_id:
+        raise HTTPException(status_code=400, detail="Cannot depend on self")
+
+    try:
+        supabase = get_service_role_client()
+
+        # Cycle detection: check if depends_on already depends on issue_id (direct or transitive)
+        visited = set()
+        queue = [depends_on]
+        while queue:
+            current = queue.pop(0)
+            if current == issue_id:
+                raise HTTPException(status_code=400, detail="Dependencia circular detectada")
+            if current in visited:
+                continue
+            visited.add(current)
+            upstream = supabase.table("project_issue_dependencies")\
+                .select("depends_on_issue_id")\
+                .eq("issue_id", current)\
+                .execute()
+            for u in (upstream.data or []):
+                queue.append(u["depends_on_issue_id"])
+
+        result = supabase.table("project_issue_dependencies").insert({
+            "issue_id": issue_id,
+            "depends_on_issue_id": depends_on,
+        }).execute()
+        return {"dependency": result.data[0] if result.data else {}}
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to add dependency", logger)
+
+
+@router.delete("/issues/{issue_id}/dependencies/{dep_id}")
+async def remove_dependency_endpoint(
+    issue_id: str,
+    dep_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Remove a dependency."""
+    try:
+        supabase = get_service_role_client()
+        supabase.table("project_issue_dependencies")\
+            .delete().eq("id", dep_id).eq("issue_id", issue_id).execute()
+        return {"ok": True}
+    except Exception as e:
+        handle_api_exception(e, "Failed to remove dependency", logger)
+
+
 @router.patch("/issues/{issue_id}", response_model=IssueResponse)
 async def update_issue_endpoint(
     issue_id: str,
@@ -3429,6 +3899,14 @@ async def update_issue_endpoint(
 ):
     """Update an issue. Changing state_id triggers completion logic."""
     try:
+        # Check dependency blocking if state_id is changing
+        if request.state_id:
+            supabase_sr = get_service_role_client()
+            ts = supabase_sr.table("project_states")\
+                .select("name").eq("id", request.state_id).single().execute()
+            target_name = (ts.data or {}).get("name") if ts.data else None
+            await _assert_not_blocked(issue_id, target_name)
+
         issue = await update_issue(
             user_jwt=user_jwt,
             issue_id=issue_id,
@@ -3471,6 +3949,13 @@ async def move_issue_endpoint(
 ):
     """Move an issue to a new state and position (atomic operation)."""
     try:
+        # Check dependency blocking before allowing move
+        supabase_sr = get_service_role_client()
+        target_state = supabase_sr.table("project_states")\
+            .select("name").eq("id", request.target_state_id).single().execute()
+        target_name = (target_state.data or {}).get("name") if target_state.data else None
+        await _assert_not_blocked(issue_id, target_name)
+
         issue = await move_issue(
             user_jwt=user_jwt,
             issue_id=issue_id,
@@ -3486,6 +3971,8 @@ async def move_issue_endpoint(
             user_id=user_id,
         )
         return issue
+    except HTTPException:
+        raise
     except Exception as e:
         handle_api_exception(e, "Failed to move issue", logger)
 

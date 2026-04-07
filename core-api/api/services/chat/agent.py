@@ -314,7 +314,7 @@ async def stream_chat_response(
         t_api_start = time.time()
         logger.info(f"⏱️ [TIMING] Starting OpenAI API call (model: gpt-5.1, has_images: {any(isinstance(m.get('content'), list) for m in current_messages)})")
         stream = await client.chat.completions.create(
-            model="gpt-5.1",
+            model="gpt-5.3-codex",
             messages=current_messages,
             tools=tools if tools else None,
             tool_choice="auto" if tools else None,

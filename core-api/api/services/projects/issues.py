@@ -230,6 +230,7 @@ async def create_issue(
     checklist_items: Optional[List[Dict[str, Any]]] = None,
     label_ids: Optional[List[str]] = None,
     assignee_ids: Optional[List[str]] = None,
+    parent_issue_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Create a new issue with auto-allocated number.
@@ -246,6 +247,7 @@ async def create_issue(
         image_r2_keys: Optional list of R2 keys for issue images
         label_ids: Optional list of label UUIDs
         assignee_ids: Optional list of assignee user UUIDs
+        parent_issue_id: Optional parent issue UUID for refinement sub-tasks
 
     Returns:
         Created issue dict with label_objects, assignees, and image_urls
@@ -292,6 +294,8 @@ async def create_issue(
             issue_data["image_r2_keys"] = valid_keys
     if checklist_items is not None:
         issue_data["checklist_items"] = checklist_items
+    if parent_issue_id is not None:
+        issue_data["parent_issue_id"] = parent_issue_id
 
     result = await supabase.table("project_issues")\
         .insert(issue_data)\

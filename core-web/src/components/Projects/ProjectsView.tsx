@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useProjectsStore } from "../../stores/projectsStore";
-import { useProjectBoards, usePrefetchBoards } from "../../hooks/queries/useProjects";
+import { useProjectBoards, useProjectBoard, usePrefetchBoards } from "../../hooks/queries/useProjects";
 import { updateProjectBoard, deleteProjectBoard } from "../../api/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useViewContextStore } from "../../stores/viewContextStore";
@@ -14,6 +14,8 @@ import ProjectsListView from "./components/ProjectsListView";
 import ProjectsSettingsModal from "./components/ProjectsSettingsModal";
 import ProjectsSettingsDropdown from "./components/ProjectsSettingsDropdown";
 import AgentQueuePanel from "./components/AgentQueuePanel";
+import TimelineView from "./components/TimelineView";
+import ProgressView from "./components/ProgressView";
 import WorkspaceTemplatesModal from "./components/WorkspaceTemplatesModal";
 import { HeaderButtons } from "../MiniAppHeader";
 import { Columns3, PanelLeft, X } from "lucide-react";
@@ -39,7 +41,7 @@ export default function ProjectsView() {
   const [settingsModalTab, setSettingsModalTab] = useState<"board" | "app" | "agents" | "routines" | "team">("board");
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
-  const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
+  const [viewMode, setViewMode] = useState<"kanban" | "list" | "timeline" | "progress">("kanban");
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
   const queryClient = useQueryClient();
@@ -54,6 +56,10 @@ export default function ProjectsView() {
     () => boards.find((b) => b.id === activeProjectId),
     [boards, activeProjectId]
   );
+
+  // Load board data for timeline/progress views
+  const { data: boardData } = useProjectBoard(activeProjectId);
+  const timelineIssues = useMemo(() => boardData?.issues || [], [boardData]);
 
   // Prefetch ALL boards when entering projects view for instant switching
   useEffect(() => {
@@ -242,7 +248,10 @@ export default function ProjectsView() {
               <div className="flex-1 flex flex-col overflow-hidden relative">
                 <ProjectsFilterBar viewMode={viewMode} setViewMode={setViewMode} />
                 <div className="flex-1 overflow-hidden">
-                  {viewMode === "kanban" ? <KanbanBoard /> : <ProjectsListView />}
+                  {viewMode === "kanban" && <KanbanBoard />}
+                  {viewMode === "list" && <ProjectsListView />}
+                  {viewMode === "timeline" && <TimelineView issues={timelineIssues} onIssueClick={() => setViewMode("kanban")} />}
+                  {viewMode === "progress" && activeBoard && <ProgressView boardId={activeBoard.id} />}
                 </div>
               </div>
             </>

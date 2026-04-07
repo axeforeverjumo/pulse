@@ -46,6 +46,7 @@ class AddServerRequest(BaseModel):
     username: str = Field(default="root", min_length=1)
     auth_type: str = Field(default="ssh_key")
     ssh_private_key: Optional[str] = None
+    ssh_passphrase: Optional[str] = None
     password: Optional[str] = None
     wildcard_domain: Optional[str] = None
     is_default: bool = False
@@ -58,6 +59,7 @@ class UpdateServerRequest(BaseModel):
     username: Optional[str] = None
     auth_type: Optional[str] = None
     ssh_private_key: Optional[str] = None
+    ssh_passphrase: Optional[str] = None
     password: Optional[str] = None
     wildcard_domain: Optional[str] = None
     is_default: Optional[bool] = None

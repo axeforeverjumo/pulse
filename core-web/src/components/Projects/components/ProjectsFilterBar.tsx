@@ -51,9 +51,11 @@ const PRIORITY_CONFIG = [
   },
 ] as const;
 
+type ViewMode = "kanban" | "list" | "timeline" | "progress";
+
 interface ProjectsFilterBarProps {
-  viewMode: "kanban" | "list";
-  setViewMode: (mode: "kanban" | "list") => void;
+  viewMode: ViewMode;
+  setViewMode: (mode: ViewMode) => void;
 }
 
 export default function ProjectsFilterBar({
@@ -577,6 +579,30 @@ export default function ProjectsFilterBar({
           aria-label="Vista de lista"
         >
           <Icon icon={List} size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode("timeline")}
+          className={`h-7 px-1.5 flex items-center justify-center rounded-md transition-colors text-[10px] font-medium ${
+            viewMode === "timeline"
+              ? "bg-black/6 text-text-body"
+              : "text-text-tertiary hover:text-text-secondary"
+          }`}
+          aria-label="Vista Timeline"
+        >
+          TL
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode("progress")}
+          className={`h-7 px-1.5 flex items-center justify-center rounded-md transition-colors text-[10px] font-medium ${
+            viewMode === "progress"
+              ? "bg-black/6 text-text-body"
+              : "text-text-tertiary hover:text-text-secondary"
+          }`}
+          aria-label="Vista Progreso"
+        >
+          %
         </button>
       </div>
     </div>

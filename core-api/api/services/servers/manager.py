@@ -16,6 +16,42 @@ from lib.token_encryption import encrypt_token, decrypt_token
 logger = logging.getLogger(__name__)
 
 
+def _strip_ssh_passphrase(pem_text: str, passphrase: str = "") -> str:
+    """If the SSH key is encrypted with a passphrase, remove it via ssh-keygen
+    so that non-interactive SSH can use the key. Returns unchanged if unprotected."""
+    import tempfile
+    import os
+    import subprocess
+
+    normalized = pem_text.replace("\r\n", "\n").replace("\r", "\n").strip() + "\n"
+
+    # Quick check: if key is not encrypted, return as-is
+    if "aes" not in normalized[:200].lower() and "bcrypt" not in normalized[:200].lower():
+        return normalized
+
+    if not passphrase:
+        raise ValueError("La clave SSH requiere passphrase")
+
+    tf = tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False)
+    try:
+        tf.write(normalized)
+        tf.close()
+        os.chmod(tf.name, 0o600)
+        r = subprocess.run(
+            ["ssh-keygen", "-p", "-P", passphrase, "-N", "", "-f", tf.name],
+            capture_output=True, text=True, timeout=10,
+        )
+        if r.returncode != 0:
+            raise ValueError("Passphrase incorrecta o clave SSH no valida")
+        with open(tf.name) as f:
+            return f.read()
+    finally:
+        try:
+            os.unlink(tf.name)
+        except OSError:
+            pass
+
+
 # ---------------------------------------------------------------------------
 # CRUD
 # ---------------------------------------------------------------------------
@@ -58,9 +94,10 @@ async def add_server(
         "created_by": user_id,
     }
 
-    # Encrypt sensitive credentials
+    # Encrypt sensitive credentials (strip passphrase if present)
     if data.get("ssh_private_key"):
-        row["ssh_private_key_encrypted"] = encrypt_token(data["ssh_private_key"])
+        clean_key = _strip_ssh_passphrase(data["ssh_private_key"], data.get("ssh_passphrase", ""))
+        row["ssh_private_key_encrypted"] = encrypt_token(clean_key)
     if data.get("password"):
         row["password_encrypted"] = encrypt_token(data["password"])
 
@@ -86,7 +123,8 @@ async def update_server(
             updates[key] = data[key]
 
     if data.get("ssh_private_key"):
-        updates["ssh_private_key_encrypted"] = encrypt_token(data["ssh_private_key"])
+        clean_key = _strip_ssh_passphrase(data["ssh_private_key"], data.get("ssh_passphrase", ""))
+        updates["ssh_private_key_encrypted"] = encrypt_token(clean_key)
     if data.get("password"):
         updates["password_encrypted"] = encrypt_token(data["password"])
 
@@ -248,10 +286,13 @@ async def _run_ssh_command(
     key_file = None
     try:
         if private_key_pem:
+            # Normalize key: fix Windows line endings, strip trailing whitespace,
+            # ensure single trailing newline — prevents "error in libcrypto"
+            normalized = private_key_pem.replace("\r\n", "\n").replace("\r", "\n").strip() + "\n"
             key_file = tempfile.NamedTemporaryFile(
                 mode="w", suffix=".pem", delete=False
             )
-            key_file.write(private_key_pem)
+            key_file.write(normalized)
             key_file.close()
             os.chmod(key_file.name, 0o600)
             ssh_args += ["-i", key_file.name]

@@ -150,17 +150,24 @@ const KanbanCard = memo(function KanbanCard({
       onClick={handleCardClick}
       className={cardClasses}
     >
-      {/* Title + Dev badge */}
+      {/* Title + badges */}
       <div className="flex items-start gap-1.5 mb-3">
         <h4 className="font-medium text-[13px] text-gray-900 leading-snug line-clamp-2 flex-1">
           {card.title}
         </h4>
-        {effectiveIsDevTask && (
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-violet-50 text-violet-600 border border-violet-100 shrink-0 mt-0.5">
-            <Terminal size={10} weight="bold" />
-            Dev
-          </span>
-        )}
+        <div className="flex items-center gap-1 shrink-0 mt-0.5">
+          {card.parent_issue_id && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-amber-50 text-amber-600 border border-amber-100" title="Refinamiento">
+              Ref
+            </span>
+          )}
+          {effectiveIsDevTask && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-violet-50 text-violet-600 border border-violet-100">
+              <Terminal size={10} weight="bold" />
+              Dev
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Labels */}

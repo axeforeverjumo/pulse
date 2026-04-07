@@ -192,7 +192,12 @@ class Settings(BaseSettings):
     # Anthropic (AI agent runtime)
     anthropic_api_key: str = ""
 
-    # Claude Code dev bridge (for dev tasks via CLI)
+    # OpenAI agent models
+    openai_code_model: str = "gpt-5.3-codex"   # Model for dev tasks (code execution, high performance)
+    openai_code_max_turns: int = 40             # Max agentic loop turns per execution
+    openai_core_model: str = "gpt-5.4-mini"     # Model for core text-only agents
+
+    # Claude Code dev bridge (deprecated — migrated to OpenAI code executor)
     claude_code_bridge_url: str = "http://127.0.0.1:4201"
     claude_code_max_budget_usd: str = "2.0"
     claude_code_sentinel_agent_id: str = "00000000-0000-0000-0000-000000000cc1"

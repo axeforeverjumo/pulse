@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import {
   listServers,
   addServer,
+  updateServer,
   removeServer,
   verifyServer,
   listSSHKeys,
@@ -113,6 +114,8 @@ export default function DevOpsView() {
   const [expandedServer, setExpandedServer] = useState<string | null>(null);
   const [showAddServer, setShowAddServer] = useState(false);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [editingServerId, setEditingServerId] = useState<string | null>(null);
+  const [editServerData, setEditServerData] = useState<Record<string, any>>({});
   const [newServer, setNewServer] = useState({
     name: '',
     host: '',
@@ -120,6 +123,7 @@ export default function DevOpsView() {
     username: 'root',
     auth_type: 'ssh_key' as 'ssh_key' | 'password',
     ssh_private_key: '',
+    ssh_passphrase: '',
     password: '',
     wildcard_domain: '',
     is_default: false,
@@ -202,13 +206,14 @@ export default function DevOpsView() {
         username: newServer.username,
         auth_type: newServer.auth_type,
         ssh_private_key: newServer.ssh_private_key || undefined,
+        ssh_passphrase: newServer.ssh_passphrase || undefined,
         password: newServer.password || undefined,
         wildcard_domain: newServer.wildcard_domain || undefined,
         is_default: newServer.is_default,
       });
       toast.success('Servidor agregado');
       setShowAddServer(false);
-      setNewServer({ name: '', host: '', port: 22, username: 'root', auth_type: 'ssh_key', ssh_private_key: '', password: '', wildcard_domain: '', is_default: false });
+      setNewServer({ name: '', host: '', port: 22, username: 'root', auth_type: 'ssh_key', ssh_private_key: '', ssh_passphrase: '', password: '', wildcard_domain: '', is_default: false });
       fetchServers();
     } catch {
       toast.error('Error al agregar servidor');
@@ -225,6 +230,40 @@ export default function DevOpsView() {
       toast.error('Error al verificar servidor');
     } finally {
       setVerifyingId(null);
+    }
+  };
+
+  const handleEditServer = (server: WorkspaceServer) => {
+    setEditingServerId(server.id);
+    setEditServerData({
+      name: server.name,
+      host: server.host,
+      port: server.port,
+      username: server.username,
+      auth_type: server.auth_type || 'ssh_key',
+      wildcard_domain: server.wildcard_domain || '',
+      is_default: server.is_default,
+      ssh_private_key: '',
+      password: '',
+    });
+  };
+
+  const handleSaveServer = async () => {
+    if (!editingServerId) return;
+    try {
+      const payload: Record<string, any> = { ...editServerData };
+      // Only send credentials if user entered new ones
+      if (!payload.ssh_private_key) {
+        delete payload.ssh_private_key;
+        delete payload.ssh_passphrase;
+      }
+      if (!payload.password) delete payload.password;
+      await updateServer(editingServerId, payload);
+      toast.success('Servidor actualizado');
+      setEditingServerId(null);
+      fetchServers();
+    } catch {
+      toast.error('Error al actualizar servidor');
     }
   };
 
@@ -388,7 +427,13 @@ export default function DevOpsView() {
             newServer={newServer}
             setNewServer={setNewServer}
             verifyingId={verifyingId}
+            editingServerId={editingServerId}
+            editServerData={editServerData}
+            setEditServerData={setEditServerData}
             onAdd={handleAddServer}
+            onEdit={handleEditServer}
+            onSaveEdit={handleSaveServer}
+            onCancelEdit={() => setEditingServerId(null)}
             onVerify={handleVerifyServer}
             onRemove={handleRemoveServer}
             inputCls={inputCls}
@@ -448,7 +493,8 @@ export default function DevOpsView() {
 function ServersTab({
   servers, loading, expandedServer, setExpandedServer,
   showAddServer, setShowAddServer, newServer, setNewServer,
-  verifyingId, onAdd, onVerify, onRemove,
+  verifyingId, editingServerId, editServerData, setEditServerData,
+  onAdd, onEdit, onSaveEdit, onCancelEdit, onVerify, onRemove,
   inputCls, btnPrimary, btnSecondary,
 }: any) {
   if (loading) {
@@ -538,6 +584,14 @@ function ServersTab({
                 placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
                 rows={4}
                 className={`${inputCls} resize-none font-mono text-[11px]`}
+              />
+              <label className="block text-[11px] font-medium text-gray-500 mb-1 mt-2">Passphrase <span className="text-gray-400 font-normal">(si la clave esta protegida)</span></label>
+              <input
+                type="password"
+                value={newServer.ssh_passphrase}
+                onChange={(e) => setNewServer({ ...newServer, ssh_passphrase: e.target.value })}
+                placeholder="Dejar vacio si no tiene"
+                className={inputCls}
               />
             </div>
           ) : (
@@ -635,6 +689,13 @@ function ServersTab({
                   </div>
                   <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                     <button
+                      onClick={() => onEdit(server)}
+                      className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+                      title="Editar"
+                    >
+                      <PencilIcon className="w-4 h-4" />
+                    </button>
+                    <button
                       onClick={() => onVerify(server.id)}
                       disabled={verifyingId === server.id}
                       className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-40"
@@ -651,7 +712,90 @@ function ServersTab({
                     </button>
                   </div>
                 </div>
-                {isExpanded && details && (
+                {editingServerId === server.id && (
+                  <div className="px-4 pb-4 border-t border-gray-100 bg-amber-50/30">
+                    <div className="grid grid-cols-2 gap-3 pt-3">
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-500 mb-1">Nombre</label>
+                        <input
+                          type="text"
+                          value={editServerData.name || ''}
+                          onChange={(e) => setEditServerData({ ...editServerData, name: e.target.value })}
+                          className={inputCls}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-500 mb-1">Host</label>
+                        <input
+                          type="text"
+                          value={editServerData.host || ''}
+                          onChange={(e) => setEditServerData({ ...editServerData, host: e.target.value })}
+                          className={inputCls}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-500 mb-1">Puerto</label>
+                        <input
+                          type="number"
+                          value={editServerData.port || 22}
+                          onChange={(e) => setEditServerData({ ...editServerData, port: parseInt(e.target.value) || 22 })}
+                          className={inputCls}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-500 mb-1">Usuario</label>
+                        <input
+                          type="text"
+                          value={editServerData.username || ''}
+                          onChange={(e) => setEditServerData({ ...editServerData, username: e.target.value })}
+                          className={inputCls}
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <label className="block text-[11px] font-medium text-gray-500 mb-1">Clave privada SSH <span className="text-gray-400 font-normal">(dejar vacio para mantener la actual)</span></label>
+                      <textarea
+                        value={editServerData.ssh_private_key || ''}
+                        onChange={(e) => setEditServerData({ ...editServerData, ssh_private_key: e.target.value })}
+                        placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                        rows={3}
+                        className={`${inputCls} resize-none font-mono text-[11px]`}
+                      />
+                      <label className="block text-[11px] font-medium text-gray-500 mb-1 mt-2">Passphrase <span className="text-gray-400 font-normal">(si la clave esta protegida)</span></label>
+                      <input
+                        type="password"
+                        value={editServerData.ssh_passphrase || ''}
+                        onChange={(e) => setEditServerData({ ...editServerData, ssh_passphrase: e.target.value })}
+                        placeholder="Dejar vacio si no tiene"
+                        className={inputCls}
+                      />
+                    </div>
+                    <div className="mt-3">
+                      <label className="block text-[11px] font-medium text-gray-500 mb-1">Dominio wildcard <span className="text-gray-400 font-normal">(opcional)</span></label>
+                      <input
+                        type="text"
+                        value={editServerData.wildcard_domain || ''}
+                        onChange={(e) => setEditServerData({ ...editServerData, wildcard_domain: e.target.value })}
+                        placeholder="apps.midominio.com"
+                        className={inputCls}
+                      />
+                    </div>
+                    <label className="flex items-center gap-2 text-[12px] text-gray-600 cursor-pointer mt-3">
+                      <input
+                        type="checkbox"
+                        checked={editServerData.is_default || false}
+                        onChange={(e) => setEditServerData({ ...editServerData, is_default: e.target.checked })}
+                        className="rounded border-gray-300"
+                      />
+                      Servidor por defecto
+                    </label>
+                    <div className="flex gap-2 pt-3">
+                      <button onClick={onSaveEdit} className={btnPrimary}>Guardar</button>
+                      <button onClick={onCancelEdit} className={btnSecondary}>Cancelar</button>
+                    </div>
+                  </div>
+                )}
+                {isExpanded && editingServerId !== server.id && details && (
                   <div className="px-4 pb-4 border-t border-gray-100 bg-gray-50/50">
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3 pt-3">
                       <InfoCard label="Sistema operativo" value={details.os || '-'} />

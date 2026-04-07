@@ -990,10 +990,15 @@ export function useMoveIssue(boardId: string | null) {
       });
     },
 
-    onError: (_err, _variables, context) => {
+    onError: (err: any, _variables, context) => {
       // Rollback to previous state on error
       if (context?.previousBoardData) {
         queryClient.setQueryData(boardDataKey, context.previousBoardData);
+      }
+      // Show toast for dependency blocking (409)
+      const detail = err?.detail || err?.message || '';
+      if (detail.includes('bloqueada') || detail.includes('dependencia')) {
+        import('sonner').then(({ toast }) => toast.error(detail));
       }
     },
 

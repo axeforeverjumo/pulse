@@ -632,6 +632,14 @@ async def move_project_issue_tool(args: Dict, ctx: ToolContext) -> ToolResult:
         valid_states = [{"id": s["id"], "name": s["name"]} for s in states]
         return error(f"Invalid state_id. Valid states: {valid_states}")
 
+    # Check dependency blocking before moving
+    from api.routers.projects import _check_dependencies_resolved, _is_in_progress_state, _is_qa_state, _is_done_state
+    target_name = target_state.get("name", "")
+    if _is_in_progress_state(target_name) or _is_qa_state(target_name) or _is_done_state(target_name):
+        resolved, blockers = await _check_dependencies_resolved(issue_id)
+        if not resolved:
+            return error(f"Tarea bloqueada por dependencias pendientes: {', '.join(blockers[:3])}. No puedes moverla hasta que se completen.")
+
     # Move to position 0 (top of column)
     updated = await move_issue(
         user_jwt=ctx.user_jwt,
