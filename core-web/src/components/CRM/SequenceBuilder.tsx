@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   PlusIcon,
   TrashIcon,
-  EnvelopeIcon,
   ClockIcon,
   SparklesIcon,
   ChevronUpIcon,

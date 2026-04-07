@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { UsersIcon, BoltIcon, CurrencyDollarIcon } from '@heroicons/react/24/outline';
+import { UsersIcon } from '@heroicons/react/24/outline';
 import { getCrmTeamActivity } from '../../api/client';
 
 interface TeamActivityViewProps {

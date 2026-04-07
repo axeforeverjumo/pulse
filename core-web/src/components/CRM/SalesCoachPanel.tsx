@@ -7,7 +7,7 @@ import {
   XMarkIcon,
   LightBulbIcon,
 } from '@heroicons/react/24/outline';
-import { getCrmCoachAdvice, analyzeCrmSentiment, suggestCrmAction, qualifyCrmLead, draftCrmFollowup } from '../../api/client';
+import { getCrmCoachAdvice, suggestCrmAction, qualifyCrmLead, draftCrmFollowup } from '../../api/client';
 import { toast } from 'sonner';
 
 interface SalesCoachPanelProps {

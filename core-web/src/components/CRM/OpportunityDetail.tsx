@@ -945,7 +945,7 @@ export default function OpportunityDetail({ opportunityId, workspaceId, onBack }
         opportunityName={opp?.name || opp?.title || 'Sin nombre'}
         workspaceId={workspaceId}
         onClose={() => setShowExtractDialog(false)}
-        onApplied={() => fetchOpportunity()}
+        onApplied={() => loadOpportunity()}
       />
     )}
     </>
