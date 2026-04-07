@@ -3420,6 +3420,24 @@ async def get_issues_endpoint(
             assignee_user_id=assignee_user_id,
             include_done=include_done,
         )
+        # Enrich with is_blocked flag from dependencies
+        issue_ids = [i["id"] for i in issues if i.get("id")]
+        if issue_ids:
+            try:
+                sr = get_service_role_client()
+                all_deps = sr.table("project_issue_dependencies")\
+                    .select("issue_id, depends_on_issue_id")\
+                    .in_("issue_id", issue_ids)\
+                    .execute()
+                completed_ids = set(i["id"] for i in issues if i.get("completed_at"))
+                blocked_ids = set()
+                for d in (all_deps.data or []):
+                    if d["depends_on_issue_id"] not in completed_ids:
+                        blocked_ids.add(d["issue_id"])
+                for issue in issues:
+                    issue["is_blocked"] = issue["id"] in blocked_ids
+            except Exception:
+                pass  # Non-critical enrichment
         return {"issues": issues, "count": len(issues)}
     except Exception as e:
         handle_api_exception(e, "Failed to fetch issues", logger)
@@ -3649,6 +3667,19 @@ async def plan_with_ai_endpoint(
                     pass  # Non-critical
             created.append({"id": issue.get("id"), "number": issue.get("number"), "title": task["title"][:500]})
 
+        # Create sequential dependencies (each task depends on the previous one)
+        for idx in range(1, len(created)):
+            prev_id = created[idx - 1].get("id")
+            curr_id = created[idx].get("id")
+            if prev_id and curr_id:
+                try:
+                    supabase.table("project_issue_dependencies").insert({
+                        "issue_id": curr_id,
+                        "depends_on_issue_id": prev_id,
+                    }).execute()
+                except Exception:
+                    pass  # Non-critical: duplicate or missing FK
+
         return {"tasks": created, "count": len(created)}
 
     except HTTPException:
@@ -3657,6 +3688,33 @@ async def plan_with_ai_endpoint(
         raise HTTPException(status_code=422, detail="AI did not return valid JSON. Try again or simplify the spec.")
     except Exception as e:
         handle_api_exception(e, "Failed to plan with AI", logger)
+
+
+@router.get("/boards/{board_id}/issues/search")
+async def search_board_issues_endpoint(
+    board_id: str,
+    q: str = Query("", description="Search by number or title"),
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Search issues in a board by number or title fragment. Used for dependency picker."""
+    try:
+        supabase = get_service_role_client()
+        query = supabase.table("project_issues")\
+            .select("id, number, title, completed_at, state_id")\
+            .eq("board_id", board_id)\
+            .order("number")
+
+        if q.strip():
+            # Try number match first
+            if q.strip().isdigit():
+                query = query.eq("number", int(q.strip()))
+            else:
+                query = query.ilike("title", f"%{q.strip()}%")
+
+        result = query.limit(20).execute()
+        return {"issues": result.data or []}
+    except Exception as e:
+        handle_api_exception(e, "Failed to search issues", logger)
 
 
 @router.post("/issues/{issue_id}/refinement", response_model=IssueResponse, status_code=status.HTTP_201_CREATED)

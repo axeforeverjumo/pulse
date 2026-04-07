@@ -22,7 +22,7 @@ import {
   type ProjectIssue,
 } from '../../../hooks/queries/useProjects';
 import { getRelativeDate, formatDateFull } from '../../../utils/dateUtils';
-import { getPresignedUploadUrl, confirmFileUpload, createRefinement, getIssueDependencies, addIssueDependency, removeIssueDependency, type IssueDependency } from '../../../api/client';
+import { getPresignedUploadUrl, confirmFileUpload, createRefinement, getIssueDependencies, addIssueDependency, removeIssueDependency, searchBoardIssues, type IssueDependency } from '../../../api/client';
 import { resolveUploadMimeType } from '../../../utils/uploadMime';
 import DatePicker from '../../ui/DatePicker';
 import LabelPicker from './LabelPicker';
@@ -48,12 +48,13 @@ const PRIORITY_OPTIONS = [
   { value: 4, label: '4', color: 'text-rose-500', bg: 'bg-rose-50' },
 ] as const;
 
-function DependenciesSection({ issueId }: { issueId: string }) {
+function DependenciesSection({ issueId, boardId }: { issueId: string; boardId: string }) {
   const [deps, setDeps] = useState<IssueDependency[]>([]);
   const [isBlocked, setIsBlocked] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
-  const [depInput, setDepInput] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<{ id: string; number: number; title: string; completed_at?: string }[]>([]);
+  const [searching, setSearching] = useState(false);
 
   const fetchDeps = useCallback(async () => {
     try {
@@ -63,21 +64,38 @@ function DependenciesSection({ issueId }: { issueId: string }) {
     } catch { /* ignore */ }
   }, [issueId]);
 
-  useState(() => { fetchDeps(); });
+  // Load deps on mount
+  const mounted = useRef(false);
+  if (!mounted.current) { mounted.current = true; fetchDeps(); }
 
-  const handleAdd = async () => {
-    if (!depInput.trim()) return;
-    setLoading(true);
+  // Search with debounce
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const handleSearch = (q: string) => {
+    setSearchQuery(q);
+    clearTimeout(searchTimer.current);
+    if (q.trim().length < 1) { setSearchResults([]); return; }
+    searchTimer.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const r = await searchBoardIssues(boardId, q);
+        // Filter out self and existing deps
+        const depIds = new Set(deps.map(d => d.depends_on_issue_id));
+        setSearchResults((r.issues || []).filter(i => i.id !== issueId && !depIds.has(i.id)));
+      } catch { /* ignore */ }
+      setSearching(false);
+    }, 300);
+  };
+
+  const handleAdd = async (targetId: string) => {
     try {
-      await addIssueDependency(issueId, depInput.trim());
+      await addIssueDependency(issueId, targetId);
       toast.success('Dependencia añadida');
-      setDepInput('');
+      setSearchQuery('');
+      setSearchResults([]);
       setShowAdd(false);
       fetchDeps();
     } catch (e: any) {
-      toast.error(e?.message || 'Error al añadir dependencia');
-    } finally {
-      setLoading(false);
+      toast.error(e?.detail || e?.message || 'Error al añadir dependencia');
     }
   };
 
@@ -105,7 +123,8 @@ function DependenciesSection({ issueId }: { issueId: string }) {
   return (
     <div className="border-t border-gray-100 pt-4 pb-2 space-y-2">
       {isBlocked && (
-        <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-[12px] text-amber-700 font-medium">
+        <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-[12px] text-amber-700 font-medium flex items-center gap-2">
+          <svg className="w-4 h-4 text-amber-500 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" /></svg>
           Bloqueada — dependencias pendientes
         </div>
       )}
@@ -120,23 +139,37 @@ function DependenciesSection({ issueId }: { issueId: string }) {
           <div className="flex items-center gap-2">
             <span className={`w-2 h-2 rounded-full ${d.resolved ? 'bg-green-400' : 'bg-amber-400'}`} />
             <span className="text-[12px] text-gray-700">#{d.number} {d.title}</span>
+            {d.resolved && <span className="text-[10px] text-green-500 font-medium">Completada</span>}
           </div>
           <button onClick={() => handleRemove(d.id)} className="text-[11px] text-gray-400 hover:text-red-500">x</button>
         </div>
       ))}
       {showAdd && (
-        <div className="flex gap-2">
+        <div className="space-y-1.5">
           <input
             type="text"
-            value={depInput}
-            onChange={(e) => setDepInput(e.target.value)}
-            placeholder="ID de la tarea (UUID)"
-            className="flex-1 px-2 py-1.5 text-[12px] border border-gray-200 rounded-lg"
+            value={searchQuery}
+            onChange={(e) => handleSearch(e.target.value)}
+            placeholder="Buscar por numero o titulo..."
+            className="w-full px-3 py-1.5 text-[12px] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-200"
             autoFocus
           />
-          <button onClick={handleAdd} disabled={loading} className="px-3 py-1.5 text-[12px] font-medium text-white bg-gray-900 rounded-lg disabled:opacity-40">
-            {loading ? '...' : 'Añadir'}
-          </button>
+          {searching && <p className="text-[11px] text-gray-400">Buscando...</p>}
+          {searchResults.length > 0 && (
+            <div className="max-h-32 overflow-y-auto space-y-1">
+              {searchResults.map(r => (
+                <button
+                  key={r.id}
+                  onClick={() => handleAdd(r.id)}
+                  className="w-full text-left px-3 py-1.5 text-[12px] bg-gray-50 hover:bg-indigo-50 rounded-lg flex items-center gap-2 transition-colors"
+                >
+                  <span className="text-gray-400 font-mono">#{r.number}</span>
+                  <span className="text-gray-700 truncate">{r.title}</span>
+                  {r.completed_at && <span className="text-[10px] text-green-500 ml-auto shrink-0">Done</span>}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -990,7 +1023,7 @@ export default function CardDetailModal({ card, onClose, initialEdit = false, is
               )}
 
               {/* Dependencies section */}
-              <DependenciesSection issueId={card.id} />
+              <DependenciesSection issueId={card.id} boardId={card.board_id} />
 
               {/* Refinement section */}
               <RefinementSection issueId={card.id} parentIssueId={card.parent_issue_id} onCreated={onClose} />

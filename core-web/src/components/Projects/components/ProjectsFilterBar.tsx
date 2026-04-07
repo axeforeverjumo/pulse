@@ -583,26 +583,28 @@ export default function ProjectsFilterBar({
         <button
           type="button"
           onClick={() => setViewMode("timeline")}
-          className={`h-7 px-1.5 flex items-center justify-center rounded-md transition-colors text-[10px] font-medium ${
+          className={`h-7 w-7 flex items-center justify-center rounded-md transition-colors ${
             viewMode === "timeline"
               ? "bg-black/6 text-text-body"
               : "text-text-tertiary hover:text-text-secondary"
           }`}
           aria-label="Vista Timeline"
+          title="Timeline"
         >
-          TL
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="15" y2="6" /><line x1="9" y1="12" x2="21" y2="12" /><line x1="5" y1="18" x2="17" y2="18" /></svg>
         </button>
         <button
           type="button"
           onClick={() => setViewMode("progress")}
-          className={`h-7 px-1.5 flex items-center justify-center rounded-md transition-colors text-[10px] font-medium ${
+          className={`h-7 w-7 flex items-center justify-center rounded-md transition-colors ${
             viewMode === "progress"
               ? "bg-black/6 text-text-body"
               : "text-text-tertiary hover:text-text-secondary"
           }`}
           aria-label="Vista Progreso"
+          title="Progreso"
         >
-          %
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2v4m0 12v4M2 12h4m12 0h4" /><circle cx="12" cy="12" r="6" /></svg>
         </button>
       </div>
     </div>

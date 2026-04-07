@@ -2552,6 +2552,7 @@ export interface ProjectIssue {
   updated_at?: string;
   is_dev_task?: boolean | null;
   parent_issue_id?: string | null;
+  is_blocked?: boolean;
 }
 
 export interface ProjectAgentQueueJob {
@@ -2894,6 +2895,10 @@ export async function addIssueDependency(issueId: string, dependsOnIssueId: stri
 
 export async function removeIssueDependency(issueId: string, depId: string): Promise<{ ok: boolean }> {
   return api(`/projects/issues/${issueId}/dependencies/${depId}`, { method: 'DELETE' });
+}
+
+export async function searchBoardIssues(boardId: string, q: string): Promise<{ issues: { id: string; number: number; title: string; completed_at?: string }[] }> {
+  return api(`/projects/boards/${boardId}/issues/search?q=${encodeURIComponent(q)}`);
 }
 
 // --- Labels ---
@@ -3775,6 +3780,50 @@ export async function getCrmWorkflowRuns(workspaceId: string, workflowId?: strin
 
 export async function triggerCrmWorkflow(workflowId: string, data: { workspace_id: string; opportunity_id?: string }) {
   return api<any>(`/crm/workflows/${workflowId}/trigger`, { method: 'POST', body: JSON.stringify(data) });
+}
+
+// CRM AI - Lead Scoring
+export async function getCrmOpportunityScore(opportunityId: string, workspaceId: string) {
+  return api<{ score: number; breakdown: any }>(`/crm/opportunities/${opportunityId}/score?workspace_id=${workspaceId}`);
+}
+
+// CRM AI - Suggestions
+export async function getCrmSuggestions(workspaceId: string, entityType?: string, entityId?: string) {
+  const params = new URLSearchParams({ workspace_id: workspaceId });
+  if (entityType) params.set('entity_type', entityType);
+  if (entityId) params.set('entity_id', entityId);
+  return api<{ suggestions: any[]; count: number }>(`/crm/suggestions?${params}`);
+}
+
+export async function dismissCrmSuggestion(suggestionId: string) {
+  return api<{ dismissed: boolean }>(`/crm/suggestions/${suggestionId}/dismiss`, { method: 'POST' });
+}
+
+// CRM AI - Extract Actions (KILLER FEATURE)
+export async function extractCrmActions(opportunityId: string, data: { workspace_id: string; text: string; source_type?: string }) {
+  return api<any>(`/crm/opportunities/${opportunityId}/extract-actions`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function applyCrmExtraction(opportunityId: string, data: {
+  workspace_id: string;
+  extraction_id: string;
+  selected_tasks?: any[];
+  apply_stage?: boolean;
+  selected_contacts?: any[];
+  apply_followup?: boolean;
+}) {
+  return api<any>(`/crm/opportunities/${opportunityId}/apply-extraction`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+// CRM AI - Forecast
+export async function getCrmForecast(workspaceId: string) {
+  return api<any>(`/crm/forecast?workspace_id=${workspaceId}`);
 }
 
 // CRM Dashboard

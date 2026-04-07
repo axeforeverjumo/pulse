@@ -156,6 +156,11 @@ const KanbanCard = memo(function KanbanCard({
           {card.title}
         </h4>
         <div className="flex items-center gap-1 shrink-0 mt-0.5">
+          {card.is_blocked && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-red-50 text-red-500 border border-red-100" title="Bloqueada por dependencias">
+              <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" /></svg>
+            </span>
+          )}
           {card.parent_issue_id && (
             <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-amber-50 text-amber-600 border border-amber-100" title="Refinamiento">
               Ref
