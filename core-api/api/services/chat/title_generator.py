@@ -41,13 +41,9 @@ async def generate_title(user_message: str) -> Optional[str]:
     if not user_message or not user_message.strip():
         return None
 
-    api_key = settings.openai_api_key
-    if not api_key:
-        logger.warning("OpenAI API key not configured for title generation")
-        return None
-
     try:
-        client = AsyncOpenAI(api_key=api_key)
+        from lib.openai_client import get_async_openai_client
+        client = get_async_openai_client()
 
         response = await client.chat.completions.create(
             model=TITLE_MODEL,

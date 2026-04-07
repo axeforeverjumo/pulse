@@ -17,13 +17,8 @@ _openai_client: Optional[AsyncOpenAI] = None
 
 def get_openai_client() -> AsyncOpenAI:
     """Get or create async OpenAI client."""
-    global _openai_client
-    if _openai_client is None:
-        api_key = settings.openai_api_key
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY not set in configuration")
-        _openai_client = AsyncOpenAI(api_key=api_key)
-    return _openai_client
+    from lib.openai_client import get_async_openai_client
+    return get_async_openai_client()
 
 
 CLASSIFICATION_PROMPT = """You are an AI assistant that classifies user input into productivity actions.

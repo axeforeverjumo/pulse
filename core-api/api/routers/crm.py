@@ -1913,7 +1913,7 @@ async def refresh_opportunity_context_endpoint(
 ):
     """Generate or refresh the Pulse Context AI summary for an opportunity."""
     try:
-        import anthropic
+        from lib.openai_client import get_openai_client
         from datetime import datetime, timezone
 
         supabase = await get_authenticated_async_client(user_jwt)
@@ -1970,13 +1970,13 @@ Genera un resumen en español de máximo 300 palabras que incluya:
 3. Riesgos o puntos de atención
 4. Resumen de las interacciones más relevantes"""
 
-        client = anthropic.Anthropic()
-        message = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-5.4-mini",
             max_tokens=512,
             messages=[{"role": "user", "content": prompt}],
         )
-        context_text = message.content[0].text
+        context_text = response.choices[0].message.content
 
         # Save to DB
         now = datetime.now(timezone.utc).isoformat()

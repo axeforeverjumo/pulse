@@ -135,8 +135,9 @@ class Settings(BaseSettings):
     # Groq API settings (for AI email analysis)
     groq_api_key: str = ""
     
-    # OpenAI API settings (for Chat Agent)
-    openai_api_key: str = ""
+    # OpenAI settings (for Chat Agent + AI features)
+    openai_api_key: str = ""  # Fallback: only used if proxy is not available
+    openai_proxy_url: str = "http://127.0.0.1:10531/v1"  # openai-oauth proxy (subscription auth)
 
     # Exa API settings (for web search RAG)
     exa_api_key: str = ""

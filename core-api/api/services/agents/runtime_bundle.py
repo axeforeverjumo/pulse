@@ -18,10 +18,10 @@ class Config:
     WORKSPACE_ID: str = os.environ["WORKSPACE_ID"]
     SUPABASE_URL: str = os.environ["SUPABASE_URL"]
     SUPABASE_SERVICE_ROLE_KEY: str = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-    ANTHROPIC_API_KEY: str = os.environ["ANTHROPIC_API_KEY"]
+    OPENAI_API_KEY: str = os.environ["OPENAI_API_KEY"]
 
     MAX_TURNS: int = int(os.environ.get("MAX_TURNS", "25"))
-    MODEL: str = os.environ.get("MODEL", "claude-haiku-4-5-20251001")
+    MODEL: str = os.environ.get("MODEL", "gpt-5.3-codex")
     TASK_POLL_INTERVAL: float = float(os.environ.get("TASK_POLL_INTERVAL", "1.0"))
     IDLE_TIMEOUT_SECONDS: int = int(os.environ.get("IDLE_TIMEOUT", "900"))
 
@@ -97,102 +97,120 @@ logger = logging.getLogger(__name__)
 
 TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     {
-        "name": "bash",
-        "description": "Run a bash command in the sandbox. Returns stdout and stderr.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "command": {
-                    "type": "string",
-                    "description": "The bash command to execute",
+        "type": "function",
+        "function": {
+            "name": "bash",
+            "description": "Run a bash command in the sandbox. Returns stdout and stderr.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "The bash command to execute",
+                    },
                 },
+                "required": ["command"],
             },
-            "required": ["command"],
         },
     },
     {
-        "name": "read_file",
-        "description": "Read a file from the sandbox filesystem.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Absolute path to the file to read",
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": "Read a file from the sandbox filesystem.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Absolute path to the file to read",
+                    },
                 },
+                "required": ["path"],
             },
-            "required": ["path"],
         },
     },
     {
-        "name": "write_file",
-        "description": "Write content to a file in the sandbox.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Absolute path to write to",
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "description": "Write content to a file in the sandbox.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Absolute path to write to",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Content to write to the file",
+                    },
                 },
-                "content": {
-                    "type": "string",
-                    "description": "Content to write to the file",
-                },
+                "required": ["path", "content"],
             },
-            "required": ["path", "content"],
         },
     },
     {
-        "name": "edit_file",
-        "description": (
-            "Edit a file by replacing an exact string match with new content. "
-            "The old_string must match EXACTLY (including whitespace). "
-            "Only the first occurrence is replaced. "
-            "To delete text, use new_string=''. To insert at beginning, use old_string=''."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Absolute path to the file to edit",
+        "type": "function",
+        "function": {
+            "name": "edit_file",
+            "description": (
+                "Edit a file by replacing an exact string match with new content. "
+                "The old_string must match EXACTLY (including whitespace). "
+                "Only the first occurrence is replaced. "
+                "To delete text, use new_string=''. To insert at beginning, use old_string=''."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Absolute path to the file to edit",
+                    },
+                    "old_string": {
+                        "type": "string",
+                        "description": "The exact string to find and replace",
+                    },
+                    "new_string": {
+                        "type": "string",
+                        "description": "The replacement string",
+                    },
                 },
-                "old_string": {
-                    "type": "string",
-                    "description": "The exact string to find and replace",
-                },
-                "new_string": {
-                    "type": "string",
-                    "description": "The replacement string",
-                },
+                "required": ["path", "old_string", "new_string"],
             },
-            "required": ["path", "old_string", "new_string"],
         },
     },
     {
-        "name": "send_channel_message",
-        "description": "Send a message to a workspace channel on behalf of this agent.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "channel_id": {
-                    "type": "string",
-                    "description": "The channel ID to send the message to",
+        "type": "function",
+        "function": {
+            "name": "send_channel_message",
+            "description": "Send a message to a workspace channel on behalf of this agent.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "channel_id": {
+                        "type": "string",
+                        "description": "The channel ID to send the message to",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "The message content to send",
+                    },
                 },
-                "content": {
-                    "type": "string",
-                    "description": "The message content to send",
-                },
+                "required": ["channel_id", "content"],
             },
-            "required": ["channel_id", "content"],
         },
     },
     {
-        "name": "refresh_workspace",
-        "description": "Force refresh all workspace data files in /home/user/context/workspace/. Use if data seems stale or you need the latest information.",
-        "input_schema": {
-            "type": "object",
-            "properties": {},
+        "type": "function",
+        "function": {
+            "name": "refresh_workspace",
+            "description": "Force refresh all workspace data files in /home/user/context/workspace/. Use if data seems stale or you need the latest information.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
         },
     },
 ]
@@ -289,13 +307,13 @@ def execute_tool(name: str, args: Dict[str, Any], supabase=None, workspace_sync=
 '''.lstrip()
 
 AGENT_LOOP_PY = r'''
-"""Claude API tool-calling loop using Anthropic Messages API."""
+"""OpenAI tool-calling loop for agent tasks."""
 import json
 import time
 import logging
 from typing import Dict, Any, Optional
 
-import anthropic
+from openai import OpenAI
 
 from config import config
 from tools import TOOL_DEFINITIONS, execute_tool
@@ -336,79 +354,84 @@ def run_agent_loop(
     workspace_sync=None,
 ) -> Dict[str, Any]:
     """
-    Run the Claude tool-calling loop for a task.
+    Run the OpenAI tool-calling loop for a task.
 
     Returns:
         {"response": str, "turns": int, "total_tokens": int}
     """
-    client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+    client = OpenAI(api_key=config.OPENAI_API_KEY)
     reporter = StepReporter(supabase, task["id"])
     model = model or config.MODEL
     total_tokens = 0
 
     # Load conversation history if this task belongs to a conversation
-    messages = []
+    messages = [{"role": "system", "content": system_prompt}]
     conversation_id = task.get("conversation_id")
     if conversation_id:
-        messages = _load_conversation_history(supabase, conversation_id, task["id"])
+        messages.extend(_load_conversation_history(supabase, conversation_id, task["id"]))
     messages.append({"role": "user", "content": task["instruction"]})
 
     for turn in range(1, config.MAX_TURNS + 1):
         t0 = time.time()
         try:
-            response = client.messages.create(
+            response = client.chat.completions.create(
                 model=model,
                 max_tokens=4096,
-                system=system_prompt,
-                tools=TOOL_DEFINITIONS,
+                tools=TOOL_DEFINITIONS if TOOL_DEFINITIONS else None,
                 messages=messages,
             )
         except Exception as e:
-            reporter.report(turn=turn, step_type="error", content=f"Claude API error: {e}")
+            reporter.report(turn=turn, step_type="error", content=f"OpenAI API error: {e}")
             raise
 
         elapsed_ms = int((time.time() - t0) * 1000)
-        turn_tokens = response.usage.input_tokens + response.usage.output_tokens
+        usage = response.usage
+        turn_tokens = (usage.prompt_tokens + usage.completion_tokens) if usage else 0
         total_tokens += turn_tokens
 
-        # Separate text and tool_use blocks
-        text_parts = []
-        tool_use_blocks = []
-
-        for block in response.content:
-            if block.type == "text":
-                text_parts.append(block.text)
-            elif block.type == "tool_use":
-                tool_use_blocks.append(block)
+        choice = response.choices[0]
+        text_content = choice.message.content or ""
+        tool_calls = choice.message.tool_calls or []
 
         # Report text content
-        if text_parts:
-            combined_text = "\n".join(text_parts)
-            is_final = response.stop_reason == "end_turn" and not tool_use_blocks
+        if text_content:
+            is_final = choice.finish_reason == "stop" and not tool_calls
             reporter.report(
                 turn=turn,
                 step_type="message" if is_final else "thinking",
-                content=combined_text,
+                content=text_content,
                 token_usage=turn_tokens,
                 duration_ms=elapsed_ms,
             )
 
         # Done if no tool calls
-        if response.stop_reason == "end_turn" and not tool_use_blocks:
+        if choice.finish_reason == "stop" and not tool_calls:
             return {
-                "response": "\n".join(text_parts) if text_parts else "",
+                "response": text_content,
                 "turns": turn,
                 "total_tokens": total_tokens,
             }
 
         # Add assistant message to conversation
-        messages.append({"role": "assistant", "content": response.content})
+        assistant_msg = {"role": "assistant", "content": text_content or None}
+        if tool_calls:
+            assistant_msg["tool_calls"] = [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                }
+                for tc in tool_calls
+            ]
+        messages.append(assistant_msg)
 
         # Execute each tool call
-        tool_results = []
-        for tool_block in tool_use_blocks:
-            tool_name = tool_block.name
-            tool_input = tool_block.input
+        for tc in tool_calls:
+            tool_name = tc.function.name
+            try:
+                tool_input = json.loads(tc.function.arguments) if tc.function.arguments else {}
+            except json.JSONDecodeError:
+                tool_input = {}
 
             reporter.report(
                 turn=turn,
@@ -429,13 +452,11 @@ def run_agent_loop(
                 duration_ms=tool_elapsed,
             )
 
-            tool_results.append({
-                "type": "tool_result",
-                "tool_use_id": tool_block.id,
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc.id,
                 "content": json.dumps(result),
             })
-
-        messages.append({"role": "user", "content": tool_results})
 
     # Exceeded max turns
     reporter.report(
@@ -731,7 +752,7 @@ def build_identity_prompt(identity: dict) -> str:
 
 def extract_memories(instruction: str, response: str):
     """Use Haiku to update memories.md after a completed task."""
-    import anthropic
+    from openai import OpenAI
 
     existing = ""
     if os.path.exists(MEMORIES_PATH):
@@ -742,9 +763,9 @@ def extract_memories(instruction: str, response: str):
             logger.warning(f"Failed to read memories.md: {e}")
 
     try:
-        client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
-        result = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+        client = OpenAI(api_key=config.OPENAI_API_KEY)
+        result = client.chat.completions.create(
+            model="gpt-5.4-mini",
             max_tokens=2048,
             messages=[{"role": "user", "content": (
                 "You manage a memories file for an AI agent. Given the conversation "
@@ -764,7 +785,7 @@ def extract_memories(instruction: str, response: str):
                 "Return ONLY the updated memories.md content:"
             )}],
         )
-        new_memories = result.content[0].text.strip()
+        new_memories = result.choices[0].message.content.strip()
         if new_memories:
             os.makedirs(os.path.dirname(MEMORIES_PATH), exist_ok=True)
             with open(MEMORIES_PATH, "w") as f:
@@ -1398,7 +1419,7 @@ class WorkspaceSync:
                 logger.error(f"Polling sync failed: {e}")
 '''.lstrip()
 
-REQUIREMENTS_TXT = "anthropic>=0.40.0\nsupabase>=2.0.0\n"
+REQUIREMENTS_TXT = "openai>=1.0.0\nsupabase>=2.0.0\n"
 
 SETUP_SH = r'''
 #!/bin/bash

@@ -154,10 +154,9 @@ async def handle_agent_mention(
 
     # Core agents: call Haiku directly
     if agent.get("tier") == "core":
-        import anthropic
-        from api.config import settings
+        from lib.openai_client import get_async_openai_client
 
-        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        client = get_async_openai_client()
 
         system_prompt = f"""Eres {agent['name']}.
 
@@ -167,18 +166,18 @@ async def handle_agent_mention(
 
 Responde siempre en español. Sé útil, directo y mantén tu personalidad."""
 
-        haiku_messages = [
-            {"role": "user", "content": f"[Pulse #{request.channel_name} - {profile.get('name', 'Usuario')}] {request.message_content}"}
+        chat_messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"[Pulse #{request.channel_name} - {profile.get('name', 'Usuario')}] {request.message_content}"},
         ]
 
         try:
-            response = await client.messages.create(
-                model=agent.get("model", "claude-haiku-4-5-20251001"),
+            response = await client.chat.completions.create(
+                model=agent.get("model", "gpt-5.4-mini"),
                 max_tokens=2048,
-                system=system_prompt,
-                messages=haiku_messages,
+                messages=chat_messages,
             )
-            assistant_message = response.content[0].text
+            assistant_message = response.choices[0].message.content
         except Exception as e:
             logger.error(f"Haiku API error on mention: {e}")
             raise HTTPException(502, "El agente no está disponible")
@@ -324,8 +323,8 @@ async def dispatch_to_agents(
     async def call_agent(agent):
         try:
             if agent["tier"] == "core":
-                import anthropic
-                client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+                from lib.openai_client import get_async_openai_client
+                client = get_async_openai_client()
                 system_prompt = f"""Eres {agent['name']}.
 
 {agent.get('soul_md', '')}
@@ -343,18 +342,20 @@ El usuario te ha mencionado en un mensaje grupal. Responde SOLO a la parte que v
                         + request.email_context[:2000]
                     )
 
-                response = await client.messages.create(
-                    model=agent.get("model", "claude-haiku-4-5-20251001"),
+                response = await client.chat.completions.create(
+                    model=agent.get("model", "gpt-5.4-mini"),
                     max_tokens=2048,
-                    system=system_prompt,
-                    messages=[{"role": "user", "content": message_for_agent}],
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": message_for_agent},
+                    ],
                 )
                 return {
                     "agent_id": agent["id"],
                     "agent_name": agent["name"],
                     "avatar_url": agent.get("avatar_url", ""),
                     "tier": agent["tier"],
-                    "content": response.content[0].text,
+                    "content": response.choices[0].message.content,
                 }
             else:
                 async with httpx.AsyncClient(timeout=180.0) as http_client:
@@ -404,12 +405,11 @@ async def create_agent(
     """Create a new Core agent. Haiku generates personality, stored in DB. No OpenClaw workspace."""
     import json as json_mod
     import re
-    import anthropic
-    from api.config import settings
+    from lib.openai_client import get_openai_client
 
-    # Generate agent config using Haiku
+    # Generate agent config using AI
     try:
-        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        client = get_openai_client()
 
         prompt = f"""Eres un diseñador de agentes de IA. El usuario quiere crear un agente con estos datos:
 - Nombre que el usuario le puso: {request.name}
@@ -432,13 +432,13 @@ Responde SOLO con JSON válido:
     "category": "una palabra: general, desarrollo, marketing, ventas, soporte, legal, finanzas, educacion, trading, oficina"
 }}"""
 
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+        response = client.chat.completions.create(
+            model="gpt-5.4-mini",
             max_tokens=500,
             messages=[{"role": "user", "content": prompt}],
         )
 
-        raw_text = response.content[0].text.strip()
+        raw_text = response.choices[0].message.content.strip()
         # Extract JSON from possible markdown code block
         if raw_text.startswith("```"):
             raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
@@ -463,7 +463,7 @@ Responde SOLO con JSON válido:
             "description": config.get("description", ""),
             "tier": "core",
             "category": config.get("category", "general"),
-            "model": "claude-haiku-4-5-20251001",
+            "model": "gpt-5.4-mini",
             "tools": [],
             "soul_md": config.get("soul", ""),
             "identity_md": config.get("identity", ""),
@@ -615,12 +615,11 @@ async def chat_with_agent(
     profile = await _get_user_profile(user_id)
     user_name = profile.get("name", "Usuario")
 
-    # ── Core agents: call Haiku directly ──
+    # ── Core agents: call OpenAI directly ──
     if agent.get("tier") == "core":
-        import anthropic
-        from api.config import settings
+        from lib.openai_client import get_async_openai_client
 
-        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        client = get_async_openai_client()
 
         system_prompt = f"""Eres {agent['name']}.
 
@@ -630,20 +629,19 @@ async def chat_with_agent(
 
 Responde siempre en español. Sé útil, directo y mantén tu personalidad."""
 
-        haiku_messages = []
+        chat_messages = [{"role": "system", "content": system_prompt}]
         for msg in request.messages:
-            haiku_messages.append({"role": msg.role, "content": msg.content})
+            chat_messages.append({"role": msg.role, "content": msg.content})
 
         try:
-            response = await client.messages.create(
-                model=agent.get("model", "claude-haiku-4-5-20251001"),
+            response = await client.chat.completions.create(
+                model=agent.get("model", "gpt-5.4-mini"),
                 max_tokens=2048,
-                system=system_prompt,
-                messages=haiku_messages,
+                messages=chat_messages,
             )
 
             return {
-                "message": {"role": "assistant", "content": response.content[0].text},
+                "message": {"role": "assistant", "content": response.choices[0].message.content},
                 "agent": {"id": agent["id"], "name": agent["name"]}
             }
         except Exception as e:

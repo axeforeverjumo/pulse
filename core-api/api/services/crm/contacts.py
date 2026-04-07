@@ -324,7 +324,7 @@ async def _generate_relationship_summary(
 ) -> Optional[str]:
     """Use AI to generate a relationship summary from email history."""
     try:
-        import anthropic
+        from lib.openai_client import get_async_openai_client
 
         # Build context from emails
         email_summaries = []
@@ -337,9 +337,9 @@ async def _generate_relationship_summary(
 
         context = "\n".join(email_summaries)
 
-        client = anthropic.AsyncAnthropic()
-        response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
+        client = get_async_openai_client()
+        response = await client.chat.completions.create(
+            model="gpt-5.4-mini",
             max_tokens=300,
             messages=[{
                 "role": "user",
@@ -351,7 +351,7 @@ async def _generate_relationship_summary(
             }],
         )
 
-        return response.content[0].text
+        return response.choices[0].message.content
     except Exception as e:
         logger.warning(f"Failed to generate AI summary: {e}")
         return None

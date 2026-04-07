@@ -1,5 +1,5 @@
 """
-AI-powered email analysis using Anthropic Claude API.
+AI-powered email analysis using OpenAI API.
 Analyzes emails to generate summaries and determine importance.
 """
 
@@ -8,24 +8,10 @@ import logging
 import time
 import traceback
 from typing import Dict, Optional
-import anthropic
 from pydantic import BaseModel
-from api.config import settings
+from lib.openai_client import get_openai_client
 
 logger = logging.getLogger(__name__)
-
-# Initialize Anthropic client
-anthropic_client = None
-
-def get_anthropic_client():
-    """Get or initialize Anthropic client."""
-    global anthropic_client
-    if anthropic_client is None:
-        api_key = settings.anthropic_api_key
-        if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY not set in configuration")
-        anthropic_client = anthropic.Anthropic(api_key=api_key)
-    return anthropic_client
 
 
 # Valid AI categories for emails
@@ -136,24 +122,21 @@ You MUST respond with valid JSON only. No markdown, no code fences, no explanati
 {email_content}"""
 
     try:
-        client = get_anthropic_client()
-        
-        # Call Anthropic API
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+        client = get_openai_client()
+
+        # Call OpenAI API
+        response = client.chat.completions.create(
+            model="gpt-5.4-mini",
             max_tokens=200,
-            system=system_prompt,
             messages=[
-                {
-                    "role": "user",
-                    "content": user_prompt
-                }
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
             ],
             temperature=0.1,
         )
-        
-        # Parse response from Anthropic format
-        result_text = response.content[0].text
+
+        # Parse response from OpenAI format
+        result_text = response.choices[0].message.content
         
         # Parse and validate the response using Pydantic
         email_analysis = EmailAnalysis.model_validate(

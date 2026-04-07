@@ -89,13 +89,8 @@ openai_client = None
 
 def get_openai_client() -> AsyncOpenAI:
     """Get or create the async OpenAI client."""
-    global openai_client
-    if openai_client is None:
-        api_key = settings.openai_api_key
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY not set in configuration")
-        openai_client = AsyncOpenAI(api_key=api_key)
-    return openai_client
+    from lib.openai_client import get_async_openai_client
+    return get_async_openai_client()
 
 
 def _fetch_image_sync(r2_key: str) -> Optional[bytes]:

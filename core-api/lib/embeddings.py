@@ -8,25 +8,16 @@ for pgvector semantic search.
 import logging
 from typing import List, Optional
 
-from openai import AsyncOpenAI
-
-from api.config import settings
+from lib.openai_client import get_async_openai_client
 
 logger = logging.getLogger(__name__)
 
 MODEL = "text-embedding-3-large"
 DIMENSIONS = 1536  # Matryoshka reduction from 3072 — fits Supabase HNSW 2000-dim limit
 
-_client: Optional[AsyncOpenAI] = None
 
-
-def _get_client() -> AsyncOpenAI:
-    global _client
-    if _client is None:
-        if not settings.openai_api_key:
-            raise ValueError("OPENAI_API_KEY not set")
-        _client = AsyncOpenAI(api_key=settings.openai_api_key)
-    return _client
+def _get_client():
+    return get_async_openai_client()
 
 
 async def embed_text(text: str) -> List[float]:

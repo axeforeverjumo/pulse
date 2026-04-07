@@ -1,12 +1,8 @@
 """
-Chat agent streaming response handler using Claude (Anthropic).
+Chat agent streaming response handler using OpenAI.
 
 Streams responses via NDJSON events, handles tool calling with parallel
 execution, and image attachments.
-
-Authentication priority:
-  1. Claude CLI OAuth token (uses user's subscription, no API credits)
-  2. ANTHROPIC_API_KEY env var (fallback)
 """
 
 from typing import List, Dict, AsyncGenerator, Optional, Any
@@ -16,10 +12,8 @@ import uuid
 import base64
 import asyncio
 import time
-import subprocess
-import anthropic
-from anthropic import APIStatusError
-from api.config import settings
+from openai import APIStatusError
+from lib.openai_client import get_async_openai_client
 from api.services.chat.events import (
     content_event, action_event, display_event, ping_event,
     done_event, sources_event, status_event,
@@ -38,156 +32,17 @@ logger = logging.getLogger(__name__)
 TOOL_EXECUTION_TIMEOUT_S = 30
 MAX_TOOL_RESULT_CHARS = 4000
 MAX_CONTEXT_CHARS = 100000
-CLAUDE_MAX_RETRIES = 3
-CLAUDE_RETRY_DELAY_S = 1.0
+MAX_RETRIES = 3
+RETRY_DELAY_S = 1.0
 
 # Transient HTTP status codes worth retrying
-_TRANSIENT_STATUS_CODES = {429, 500, 502, 503, 529}
-
-# Claude CLI credentials path
-_CLAUDE_CLI_CREDENTIALS_PATH = "/home/claude/.claude/.credentials.json"
-
-# Cached CLI token state
-_cli_token_cache: Optional[Dict[str, Any]] = None
-
+_TRANSIENT_STATUS_CODES = {429, 500, 502, 503}
 
 def _truncate_tool_result(result_str: str, max_chars: int = MAX_TOOL_RESULT_CHARS) -> str:
     """Truncate a tool result string to avoid blowing the context window."""
     if len(result_str) <= max_chars:
         return result_str
     return result_str[:max_chars] + "... [truncated]"
-
-
-def _read_claude_cli_token() -> Optional[Dict[str, Any]]:
-    """
-    Read the OAuth token from the Claude CLI credentials file.
-
-    Returns dict with 'accessToken', 'expiresAt' (epoch ms), etc. or None.
-    """
-    try:
-        with open(_CLAUDE_CLI_CREDENTIALS_PATH, "r") as f:
-            data = json.load(f)
-        oauth = data.get("claudeAiOauth")
-        if oauth and oauth.get("accessToken"):
-            return oauth
-    except (FileNotFoundError, json.JSONDecodeError, PermissionError, KeyError) as e:
-        logger.debug(f"[CHAT] Could not read Claude CLI credentials: {e}")
-    return None
-
-
-def _refresh_claude_cli_token() -> Optional[str]:
-    """
-    Trigger a Claude CLI invocation to refresh the OAuth token.
-
-    The CLI automatically refreshes expired tokens on any invocation.
-    Returns the new access token or None on failure.
-    """
-    try:
-        logger.info("[CHAT] Refreshing Claude CLI OAuth token...")
-        result = subprocess.run(
-            ["su", "claude", "-c", "claude -p 'hi' --max-turns 1"],
-            capture_output=True, text=True, timeout=30,
-        )
-        if result.returncode != 0:
-            logger.warning(f"[CHAT] Claude CLI refresh failed: {result.stderr[:200]}")
-            return None
-        # Re-read the refreshed token
-        oauth = _read_claude_cli_token()
-        if oauth:
-            logger.info("[CHAT] Claude CLI token refreshed successfully")
-            return oauth["accessToken"]
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
-        logger.warning(f"[CHAT] Claude CLI refresh error: {e}")
-    return None
-
-
-def _get_claude_cli_api_key() -> Optional[str]:
-    """
-    Get a valid API key from the Claude CLI OAuth credentials.
-
-    Reads the cached token, checks expiry, and refreshes if needed.
-    Uses the user's Claude subscription instead of API credits.
-    """
-    global _cli_token_cache
-
-    oauth = _read_claude_cli_token()
-    if not oauth:
-        return None
-
-    access_token = oauth["accessToken"]
-    expires_at_ms = oauth.get("expiresAt", 0)
-    now_ms = time.time() * 1000
-
-    # Token is valid (with 5-minute buffer)
-    if expires_at_ms > now_ms + 300_000:
-        if _cli_token_cache is None or _cli_token_cache.get("accessToken") != access_token:
-            logger.info("[CHAT] Using Claude CLI OAuth token (subscription)")
-        _cli_token_cache = oauth
-        return access_token
-
-    # Token expired or about to expire — try to refresh
-    logger.info(f"[CHAT] Claude CLI token expired ({int((now_ms - expires_at_ms) / 1000)}s ago), refreshing...")
-    refreshed = _refresh_claude_cli_token()
-    if refreshed:
-        _cli_token_cache = _read_claude_cli_token()
-        return refreshed
-
-    # Refresh failed but token might still work (grace period)
-    if expires_at_ms > now_ms - 3600_000:  # expired less than 1 hour ago
-        logger.warning("[CHAT] Using possibly-expired CLI token (refresh failed, within grace period)")
-        return access_token
-
-    logger.warning("[CHAT] Claude CLI token expired and refresh failed")
-    return None
-
-
-# Initialize Anthropic client
-_anthropic_client = None
-_client_auth_source: Optional[str] = None  # Track which auth method is active
-
-
-def _reset_client():
-    """Reset the cached client (e.g., when token changes)."""
-    global _anthropic_client, _client_auth_source
-    _anthropic_client = None
-    _client_auth_source = None
-
-
-def get_anthropic_client() -> anthropic.AsyncAnthropic:
-    """
-    Get or create the async Anthropic client.
-
-    Priority:
-      1. Claude CLI OAuth token (user's subscription, no API credits)
-      2. ANTHROPIC_API_KEY from settings (fallback)
-    """
-    global _anthropic_client, _client_auth_source
-
-    # Try Claude CLI token first
-    cli_key = _get_claude_cli_api_key()
-    if cli_key:
-        # Recreate client if token changed
-        if _client_auth_source != "cli" or _anthropic_client is None:
-            _anthropic_client = anthropic.AsyncAnthropic(api_key=cli_key)
-            _client_auth_source = "cli"
-            logger.info("[CHAT] Anthropic client initialized with Claude CLI token (subscription)")
-        else:
-            # Update the API key if it changed (token refresh)
-            _anthropic_client.api_key = cli_key
-        return _anthropic_client
-
-    # Fallback to configured API key
-    if _client_auth_source != "api_key" or _anthropic_client is None:
-        api_key = settings.anthropic_api_key
-        if not api_key:
-            raise ValueError(
-                "No Claude authentication available. "
-                "Neither Claude CLI credentials nor ANTHROPIC_API_KEY found."
-            )
-        _anthropic_client = anthropic.AsyncAnthropic(api_key=api_key)
-        _client_auth_source = "api_key"
-        logger.info("[CHAT] Anthropic client initialized with ANTHROPIC_API_KEY (fallback)")
-    return _anthropic_client
 
 
 def _fetch_image_sync(r2_key: str) -> Optional[bytes]:
@@ -215,7 +70,7 @@ async def _fetch_image_as_base64(r2_key: str) -> Optional[str]:
         encoded = base64.b64encode(image_data).decode('utf-8')
         t2 = time.time()
         size_kb = len(image_data) / 1024
-        logger.info(f"⏱️ [TIMING] R2 fetch: {(t1-t0)*1000:.0f}ms, base64 encode: {(t2-t1)*1000:.0f}ms, size: {size_kb:.0f}KB")
+        logger.info(f"[TIMING] R2 fetch: {(t1-t0)*1000:.0f}ms, base64 encode: {(t2-t1)*1000:.0f}ms, size: {size_kb:.0f}KB")
         return encoded
     except Exception as e:
         logger.error(f"Failed to fetch/encode image: {r2_key}, error: {e}")
@@ -226,10 +81,10 @@ async def _prepare_image_attachments(
     attachments: List[Dict[str, Any]]
 ) -> tuple[List[Dict[str, Any]], List[str]]:
     """
-    Fetch image attachments from R2 and prepare Claude content blocks.
+    Fetch image attachments from R2 and prepare OpenAI content blocks.
 
     Returns:
-        Tuple of (claude_image_blocks, base64_images)
+        Tuple of (image_blocks, base64_images)
     """
     image_attachments = [
         att for att in attachments
@@ -241,11 +96,11 @@ async def _prepare_image_attachments(
 
     # Fetch ALL images in parallel
     t_start = time.time()
-    logger.info(f"⏱️ [TIMING] Starting to fetch {len(image_attachments)} images in parallel...")
+    logger.info(f"[TIMING] Starting to fetch {len(image_attachments)} images in parallel...")
     fetch_tasks = [_fetch_image_as_base64(att["r2_key"]) for att in image_attachments]
     base64_results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
     t_end = time.time()
-    logger.info(f"⏱️ [TIMING] All images fetched + encoded in {(t_end-t_start)*1000:.0f}ms total")
+    logger.info(f"[TIMING] All images fetched + encoded in {(t_end-t_start)*1000:.0f}ms total")
 
     image_blocks = []
     valid_base64_images = []
@@ -257,83 +112,31 @@ async def _prepare_image_attachments(
             continue
 
         valid_base64_images.append(base64_result)
-        # Claude image format
+        # OpenAI image format
         image_blocks.append({
-            "type": "image",
-            "source": {
-                "type": "base64",
-                "media_type": att["mime_type"],
-                "data": base64_result,
+            "type": "image_url",
+            "image_url": {
+                "url": f"data:{att['mime_type']};base64,{base64_result}",
             }
         })
-        logger.info(f"Added image to Claude message: {att.get('filename', 'unknown')}")
+        logger.info(f"Added image to message: {att.get('filename', 'unknown')}")
 
     return image_blocks, valid_base64_images
 
 
-def _convert_messages_to_claude(messages: List[Dict]) -> List[Dict]:
+def _prepare_messages(messages: List[Dict]) -> List[Dict]:
     """
-    Convert message history from OpenAI format to Claude format.
-
-    OpenAI: [{"role": "system", ...}, {"role": "user", ...}, {"role": "assistant", ...}, {"role": "tool", ...}]
-    Claude: system is separate param. Tool results go in user messages.
+    Prepare message history for OpenAI format.
+    Messages are already in OpenAI format, just pass through.
+    Filter out system messages (handled separately).
     """
-    claude_messages = []
-
+    prepared = []
     for msg in messages:
         role = msg.get("role", "")
-
         if role == "system":
-            # System messages are handled separately in Claude
             continue
-
-        elif role == "user":
-            content = msg.get("content", "")
-            # Handle multimodal content (already in list format from image prep)
-            if isinstance(content, list):
-                claude_messages.append({"role": "user", "content": content})
-            else:
-                claude_messages.append({"role": "user", "content": content})
-
-        elif role == "assistant":
-            # Check if this has tool calls
-            tool_calls = msg.get("tool_calls", [])
-            if tool_calls:
-                content_blocks = []
-                # Add any text content first
-                if msg.get("content"):
-                    content_blocks.append({"type": "text", "text": msg["content"]})
-                # Add tool_use blocks
-                for tc in tool_calls:
-                    func = tc.get("function", {})
-                    try:
-                        tool_input = json.loads(func.get("arguments", "{}"))
-                    except json.JSONDecodeError:
-                        tool_input = {}
-                    content_blocks.append({
-                        "type": "tool_use",
-                        "id": tc.get("id", ""),
-                        "name": func.get("name", ""),
-                        "input": tool_input,
-                    })
-                claude_messages.append({"role": "assistant", "content": content_blocks})
-            else:
-                content = msg.get("content", "")
-                if content:
-                    claude_messages.append({"role": "assistant", "content": content})
-
-        elif role == "tool":
-            # Claude expects tool results in a user message
-            claude_messages.append({
-                "role": "user",
-                "content": [{
-                    "type": "tool_result",
-                    "tool_use_id": msg.get("tool_call_id", ""),
-                    "content": msg.get("content", ""),
-                }]
-            })
-
-    return claude_messages
+        prepared.append(msg)
+    return prepared
 
 
 async def get_user_connections(user_id: str, user_jwt: str) -> List[str]:
@@ -349,17 +152,16 @@ async def get_user_connections(user_id: str, user_jwt: str) -> List[str]:
         providers = list({row["provider"] for row in (result.data or [])})
         if providers:
             return providers
-        # Fallback: if no connections found, return empty list
         return []
     except Exception as e:
         logger.warning(f"[CHAT] Failed to fetch ext_connections for user {user_id}: {e}")
         return []
 
 
-DEFAULT_CHAT_MODEL = "claude-haiku-4-5-20251001"
-DEV_AGENT_MODEL = "claude-sonnet-4-6"
+DEFAULT_CHAT_MODEL = "gpt-5.4-mini"
+DEV_AGENT_MODEL = "gpt-5.3-codex"
 
-# Agents that should use the dev model (Sonnet) instead of Haiku
+# Agents that should use the Codex model (gpt-5.3-codex) instead of gpt-5.4-mini
 DEV_AGENT_NAMES = {"pulse agent", "odoopulse", "odoo developer", "lexy dev"}
 
 
@@ -375,20 +177,10 @@ async def stream_chat_response(
     agent_model: Optional[str] = None,
 ) -> AsyncGenerator[str, None]:
     """
-    Stream chat response from Claude, handling tool calls.
+    Stream chat response from OpenAI, handling tool calls.
     Yields NDJSON event chunks.
-
-    Args:
-        messages: Conversation history
-        user_id: User ID
-        user_jwt: User's JWT token
-        context: Optional context dict with 'emails' and/or 'documents' lists
-        user_timezone: User's timezone identifier (e.g., "Europe/Oslo")
-        attachments: Optional list of attachment dicts for images
-        workspace_ids: Optional list of workspace IDs to scope tool results
-        is_disconnected: Optional async callable that returns True if client disconnected
     """
-    client = get_anthropic_client()
+    client = get_async_openai_client()
 
     # Default to all user's workspaces if none specified
     if not workspace_ids:
@@ -424,7 +216,7 @@ async def stream_chat_response(
         if image_blocks:
             yield status_event("Processing images...")
 
-    # Build the last user message with images
+    # Build the last user message with images (OpenAI format)
     if image_blocks:
         for i in range(len(recent_messages) - 1, -1, -1):
             if recent_messages[i].get("role") == "user":
@@ -438,12 +230,15 @@ async def stream_chat_response(
                 }
                 break
 
-    # Convert to Claude message format
-    claude_messages = _convert_messages_to_claude(recent_messages)
+    # Prepare messages (already in OpenAI format)
+    chat_messages = _prepare_messages(recent_messages)
+
+    # Prepend system message
+    openai_messages = [{"role": "system", "content": system_prompt}] + chat_messages
 
     # Get user's connected services for tool filtering
     ext_connections = await get_user_connections(user_id, user_jwt)
-    tools = ToolRegistry.get_claude_tools(ext_connections)
+    tools = ToolRegistry.get_openai_tools(ext_connections)
 
     tool_context = ToolContext(
         user_id=user_id,
@@ -454,119 +249,103 @@ async def stream_chat_response(
     )
 
     pending_actions = []
-    # Track display/sources events to emit after LLM text (preserve interleaving order)
     queued_display_events: List[str] = []
     queued_sources_events: List[str] = []
 
     while True:
-        # Check if client disconnected before starting a new Claude API call
+        # Check if client disconnected before starting a new API call
         if is_disconnected and await is_disconnected():
             logger.info("[CHAT] Client disconnected, aborting stream")
             return
 
         t_api_start = time.time()
-        has_images = any(
-            isinstance(m.get("content"), list) and
-            any(b.get("type") == "image" for b in m["content"] if isinstance(b, dict))
-            for m in claude_messages
-        )
         effective_model = agent_model or DEFAULT_CHAT_MODEL
-        logger.info(f"⏱️ [TIMING] Starting Claude API call (model: {effective_model}, has_images: {has_images})")
+        logger.info(f"[TIMING] Starting OpenAI API call (model: {effective_model})")
 
-        # Stream from Claude with retry on transient errors
+        # Stream from OpenAI with retry on transient errors
         collected_text = ""
-        collected_tool_uses: List[Dict[str, Any]] = []
-        current_block_type = None
-        current_tool_id = ""
-        current_tool_name = ""
-        current_tool_json = ""
+        collected_tool_calls: List[Dict[str, Any]] = []
+        # Track tool call assembly from streaming chunks
+        tool_call_buffers: Dict[int, Dict[str, str]] = {}
         first_token_logged = False
 
         last_error: Optional[Exception] = None
-        for attempt in range(1, CLAUDE_MAX_RETRIES + 1):
+        for attempt in range(1, MAX_RETRIES + 1):
             try:
-                async with client.messages.stream(
+                stream = await client.chat.completions.create(
                     model=effective_model,
                     max_tokens=25000,
-                    system=system_prompt,
-                    messages=claude_messages,
-                    tools=tools if tools else [],
-                ) as stream:
-                    async for event in stream:
-                        if not first_token_logged and event.type == "content_block_delta":
-                            t_first = time.time()
-                            logger.info(f"⏱️ [TIMING] Claude time-to-first-token: {(t_first-t_api_start)*1000:.0f}ms")
-                            first_token_logged = True
+                    messages=openai_messages,
+                    tools=tools if tools else None,
+                    stream=True,
+                )
 
-                        if event.type == "content_block_start":
-                            block = event.content_block
-                            current_block_type = block.type
-                            if block.type == "tool_use":
-                                current_tool_id = block.id
-                                current_tool_name = block.name
-                                current_tool_json = ""
+                async for chunk in stream:
+                    if not chunk.choices:
+                        continue
 
-                        elif event.type == "content_block_delta":
-                            delta = event.delta
-                            if delta.type == "text_delta":
-                                collected_text += delta.text
-                                yield content_event(delta.text)
-                            elif delta.type == "input_json_delta":
-                                current_tool_json += delta.partial_json
+                    delta = chunk.choices[0].delta
 
-                        elif event.type == "content_block_stop":
-                            if current_block_type == "tool_use":
-                                try:
-                                    tool_input = json.loads(current_tool_json) if current_tool_json else {}
-                                except json.JSONDecodeError as e:
-                                    logger.error(f"Failed to parse tool JSON for {current_tool_name}: {e}")
-                                    tool_input = {}
-                                collected_tool_uses.append({
-                                    "id": current_tool_id,
-                                    "name": current_tool_name,
-                                    "input": tool_input,
-                                })
-                            current_block_type = None
+                    if not first_token_logged and (delta.content or delta.tool_calls):
+                        t_first = time.time()
+                        logger.info(f"[TIMING] Time-to-first-token: {(t_first-t_api_start)*1000:.0f}ms")
+                        first_token_logged = True
+
+                    # Text content
+                    if delta.content:
+                        collected_text += delta.content
+                        yield content_event(delta.content)
+
+                    # Tool calls (streamed incrementally)
+                    if delta.tool_calls:
+                        for tc_delta in delta.tool_calls:
+                            idx = tc_delta.index
+                            if idx not in tool_call_buffers:
+                                tool_call_buffers[idx] = {
+                                    "id": tc_delta.id or "",
+                                    "name": "",
+                                    "arguments": "",
+                                }
+                            buf = tool_call_buffers[idx]
+                            if tc_delta.id:
+                                buf["id"] = tc_delta.id
+                            if tc_delta.function:
+                                if tc_delta.function.name:
+                                    buf["name"] = tc_delta.function.name
+                                if tc_delta.function.arguments:
+                                    buf["arguments"] += tc_delta.function.arguments
 
                 last_error = None
-                break  # Success — exit retry loop
+                break  # Success
 
             except APIStatusError as e:
                 last_error = e
-
-                # Handle expired OAuth token (401) — refresh and retry
-                if e.status_code == 401 and _client_auth_source == "cli" and attempt < CLAUDE_MAX_RETRIES:
-                    logger.warning("[CHAT] Auth error with CLI token, attempting refresh...")
-                    _reset_client()
-                    refreshed_key = _get_claude_cli_api_key()
-                    if refreshed_key:
-                        client = get_anthropic_client()
-                        collected_text = ""
-                        collected_tool_uses = []
-                        continue
-
                 is_transient = e.status_code in _TRANSIENT_STATUS_CODES
-                # Catch mid-stream overload errors (SSE error on 200 response)
-                if not is_transient:
-                    try:
-                        body = e.body if hasattr(e, 'body') else {}
-                        if isinstance(body, dict):
-                            error_type = body.get('error', {}).get('type', '')
-                            is_transient = error_type in ('overloaded_error', 'api_error')
-                    except Exception:
-                        pass
-                if is_transient and attempt < CLAUDE_MAX_RETRIES:
-                    delay = CLAUDE_RETRY_DELAY_S * attempt
-                    logger.warning(f"[CHAT] Claude API error (status={e.status_code}, body={e.body}), retrying in {delay}s (attempt {attempt}/{CLAUDE_MAX_RETRIES})")
+                if is_transient and attempt < MAX_RETRIES:
+                    delay = RETRY_DELAY_S * attempt
+                    logger.warning(f"[CHAT] OpenAI API error (status={e.status_code}), retrying in {delay}s (attempt {attempt}/{MAX_RETRIES})")
                     await asyncio.sleep(delay)
-                    # Reset state for retry
                     collected_text = ""
-                    collected_tool_uses = []
+                    tool_call_buffers = {}
                     continue
-                raise  # Non-transient or final attempt — propagate
+                raise
 
         if last_error:
             raise last_error
+
+        # Assemble collected tool calls
+        for idx in sorted(tool_call_buffers.keys()):
+            buf = tool_call_buffers[idx]
+            try:
+                tool_input = json.loads(buf["arguments"]) if buf["arguments"] else {}
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse tool JSON for {buf['name']}: {e}")
+                tool_input = {}
+            collected_tool_calls.append({
+                "id": buf["id"],
+                "name": buf["name"],
+                "input": tool_input,
+            })
 
         # Flush queued events from previous tool iteration
         for ev in queued_display_events:
@@ -578,22 +357,24 @@ async def stream_chat_response(
         queued_sources_events = []
 
         # Process tool calls
-        if collected_tool_uses:
-            # Build assistant message with all content blocks
-            assistant_content = []
-            if collected_text:
-                assistant_content.append({"type": "text", "text": collected_text})
-            for tu in collected_tool_uses:
-                assistant_content.append({
-                    "type": "tool_use",
+        if collected_tool_calls:
+            # Build assistant message in OpenAI format
+            assistant_msg: Dict[str, Any] = {"role": "assistant", "content": collected_text or None}
+            assistant_msg["tool_calls"] = [
+                {
                     "id": tu["id"],
-                    "name": tu["name"],
-                    "input": tu["input"],
-                })
-            claude_messages.append({"role": "assistant", "content": assistant_content})
+                    "type": "function",
+                    "function": {
+                        "name": tu["name"],
+                        "arguments": json.dumps(tu["input"]),
+                    },
+                }
+                for tu in collected_tool_calls
+            ]
+            openai_messages.append(assistant_msg)
 
             # Emit tool_call start events for all tools
-            for tu in collected_tool_uses:
+            for tu in collected_tool_calls:
                 yield tool_call_start_event(tu["name"], tu["input"])
 
             yield ping_event()
@@ -612,18 +393,17 @@ async def stream_chat_response(
                 duration_ms = int((time.time() - t0) * 1000)
                 return result, duration_ms
 
-            tasks = [_timed_execute(tu) for tu in collected_tool_uses]
+            tasks = [_timed_execute(tu) for tu in collected_tool_calls]
             timed_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            # Process results and build tool_result messages
-            tool_result_blocks = []
-            for tu, timed_result in zip(collected_tool_uses, timed_results):
+            # Process results and build tool result messages
+            for tu, timed_result in zip(collected_tool_calls, timed_results):
                 if isinstance(timed_result, Exception):
                     logger.error(f"Tool {tu['name']} raised exception: {timed_result}")
                     tool_result_str = json.dumps({"status": "error", "error": str(timed_result)})
-                    tool_result_blocks.append({
-                        "type": "tool_result",
-                        "tool_use_id": tu["id"],
+                    openai_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tu["id"],
                         "content": _truncate_tool_result(tool_result_str),
                     })
                     yield tool_call_end_event(tu["name"], 0, "error")
@@ -658,17 +438,14 @@ async def stream_chat_response(
                 # Truncate tool result before adding to context
                 truncated_result_str = _truncate_tool_result(tool_result_str)
 
-                tool_result_blocks.append({
-                    "type": "tool_result",
-                    "tool_use_id": tu["id"],
+                openai_messages.append({
+                    "role": "tool",
+                    "tool_call_id": tu["id"],
                     "content": truncated_result_str,
                 })
 
                 # Yield full tool exchange for persistence (not truncated)
                 yield tool_exchange_event(tu["id"], tu["name"], tu["input"], tool_result_str)
-
-            # Add all tool results in a single user message
-            claude_messages.append({"role": "user", "content": tool_result_blocks})
 
             # Reset for next iteration
             collected_text = ""

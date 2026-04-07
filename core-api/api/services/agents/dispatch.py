@@ -137,7 +137,7 @@ def create_sandbox(agent: Dict[str, Any]) -> Tuple[str, Sandbox]:
             "WORKSPACE_ID": agent["workspace_id"],
             "SUPABASE_URL": settings.supabase_url,
             "SUPABASE_SERVICE_ROLE_KEY": settings.supabase_service_role_key,
-            "ANTHROPIC_API_KEY": settings.anthropic_api_key,
+            "OPENAI_API_KEY": settings.openai_api_key,
         },
         api_key=api_key,
     )

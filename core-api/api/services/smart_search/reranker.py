@@ -33,7 +33,8 @@ class SemanticReranker:
     """
 
     def __init__(self):
-        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
+        from lib.openai_client import get_async_openai_client
+        self.client = get_async_openai_client()
         self.model = "text-embedding-3-small"
         self.dimensions = 1536
 

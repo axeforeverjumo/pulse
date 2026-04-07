@@ -1279,11 +1279,10 @@ async def compose_email_with_ai(
     """
     Generate email body using AI based on user's prompt and context.
     """
-    import anthropic
-    from api.config import settings
+    from lib.openai_client import get_openai_client
 
     try:
-        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        client = get_openai_client()
 
         context_parts = []
         if request.to:
@@ -1312,16 +1311,18 @@ Rules:
         user_prompt = f"""Write an email with the following intent:{context_section}
 User's request: {request.prompt}"""
 
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+        response = client.chat.completions.create(
+            model="gpt-5.4-mini",
             max_tokens=1500,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
             temperature=0.7,
         )
 
         import json
-        result = json.loads(response.content[0].text)
+        result = json.loads(response.choices[0].message.content)
 
         return ComposeAIResponse(
             body_html=result.get("body_html", ""),

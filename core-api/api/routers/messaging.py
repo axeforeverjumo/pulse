@@ -2230,8 +2230,7 @@ async def telegram_webhook(request: Request):
 async def _auto_reply(account, chat_id, remote_jid, instance, incoming_text, contact_name, directives):
     """Generate and send auto-reply using Haiku."""
     try:
-        import anthropic
-        from api.config import settings
+        from lib.openai_client import get_async_openai_client
 
         supabase = await get_async_service_role_client()
         agent_id, agent_name, directive_notes = _parse_directives_metadata(directives)
@@ -2364,18 +2363,18 @@ REGLAS:
 - Solo usa frases íntimas (ej. "te amo", "mi amor") cuando haya contexto afectivo real con este contacto
 - Si no aplica contexto afectivo, esquiva con una respuesta cálida pero neutra"""
 
-        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        client = get_async_openai_client()
 
-        response = await client.messages.create(
-            model="claude-haiku-4-5-20251001",
+        response = await client.chat.completions.create(
+            model="gpt-5.4-mini",
             max_tokens=300,
-            system=system_prompt,
             messages=[
-                {"role": "user", "content": f"Conversación reciente:\n{history}\n\n{contact_name} acaba de escribir: {incoming_text}\n\nResponde como el usuario:"}
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Conversación reciente:\n{history}\n\n{contact_name} acaba de escribir: {incoming_text}\n\nResponde como el usuario:"},
             ],
         )
 
-        reply_text = response.content[0].text
+        reply_text = response.choices[0].message.content
 
         # Send via Evolution API
         reply_remote_id = ""
@@ -2424,9 +2423,8 @@ async def suggest_reply(
     user_jwt: str = Depends(get_current_user_jwt),
     user_id: str = Depends(get_current_user_id),
 ):
-    """Suggest a reply using Haiku with user's style."""
-    import anthropic
-    from api.config import settings
+    """Suggest a reply using AI with user's style."""
+    from lib.openai_client import get_async_openai_client
 
     supabase = await get_async_service_role_client()
 
@@ -2456,18 +2454,18 @@ async def suggest_reply(
     style = chat.data.get("account", {}).get("style_profile", {})
     style_desc = style.get("description", "Responde de forma natural.")
 
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    client = get_async_openai_client()
 
-    response = await client.messages.create(
-        model="claude-haiku-4-5-20251001",
+    response = await client.chat.completions.create(
+        model="gpt-5.4-mini",
         max_tokens=300,
-        system=f"Sugiere una respuesta para este chat de WhatsApp. Estilo del usuario: {style_desc}. Responde como el usuario, breve y natural.",
         messages=[
-            {"role": "user", "content": f"Conversación:\n{history}\n\nSugiere la siguiente respuesta del usuario:"}
+            {"role": "system", "content": f"Sugiere una respuesta para este chat de WhatsApp. Estilo del usuario: {style_desc}. Responde como el usuario, breve y natural."},
+            {"role": "user", "content": f"Conversación:\n{history}\n\nSugiere la siguiente respuesta del usuario:"},
         ],
     )
 
-    return {"suggestion": response.content[0].text}
+    return {"suggestion": response.choices[0].message.content}
 
 
 # ── Away Mode ──
@@ -2535,8 +2533,7 @@ async def analyze_style(
     user_id: str = Depends(get_current_user_id),
 ):
     """Analyze user's message history to create a communication style profile."""
-    import anthropic
-    from api.config import settings
+    from lib.openai_client import get_async_openai_client
 
     supabase = await get_async_service_role_client()
 
@@ -2563,23 +2560,23 @@ async def analyze_style(
 
     sample = "\n".join([m["content"] for m in messages.data if m.get("content")])
 
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    client = get_async_openai_client()
 
-    response = await client.messages.create(
-        model="claude-haiku-4-5-20251001",
+    response = await client.chat.completions.create(
+        model="gpt-5.4-mini",
         max_tokens=500,
-        system="Eres un analista de comunicación. Analiza estos mensajes de WhatsApp/Telegram y genera un perfil de estilo de comunicación conciso.",
         messages=[
-            {"role": "user", "content": f"Analiza el estilo de comunicación de estos mensajes y genera un perfil:\n\n{sample[:3000]}\n\nGenera un perfil con: tono (formal/informal), longitud típica, uso de emojis, muletillas, formalidad, idioma, y cualquier patrón notable. Formato JSON con campo 'description' (texto libre) y campos individuales."}
+            {"role": "system", "content": "Eres un analista de comunicación. Analiza estos mensajes de WhatsApp/Telegram y genera un perfil de estilo de comunicación conciso."},
+            {"role": "user", "content": f"Analiza el estilo de comunicación de estos mensajes y genera un perfil:\n\n{sample[:3000]}\n\nGenera un perfil con: tono (formal/informal), longitud típica, uso de emojis, muletillas, formalidad, idioma, y cualquier patrón notable. Formato JSON con campo 'description' (texto libre) y campos individuales."},
         ],
     )
 
     # Try to parse as JSON, fallback to text description
     import json
     try:
-        profile = json.loads(response.content[0].text)
+        profile = json.loads(response.choices[0].message.content)
     except json.JSONDecodeError:
-        profile = {"description": response.content[0].text}
+        profile = {"description": response.choices[0].message.content}
 
     # Save profile
     await supabase.table("external_accounts")\

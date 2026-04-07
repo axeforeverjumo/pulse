@@ -8,10 +8,8 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any
 
-import anthropic
-
 from lib.supabase_client import get_service_role_client
-from api.config import settings
+from lib.openai_client import get_openai_client
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +113,7 @@ def refresh_all_pulse_contexts() -> Dict[str, Any]:
 
     start_time = datetime.now(timezone.utc)
     supabase = get_service_role_client()
-    ai_client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    ai_client = get_openai_client()
 
     processed = 0
     skipped = 0
@@ -164,12 +162,12 @@ def refresh_all_pulse_contexts() -> Dict[str, Any]:
                 notes_text, tasks_text, emails_text = _gather_related_data(supabase, opp_id)
                 prompt = _build_prompt(opp, notes_text, tasks_text, emails_text)
 
-                message = ai_client.messages.create(
-                    model="claude-haiku-4-5-20251001",
+                response = ai_client.chat.completions.create(
+                    model="gpt-5.4-mini",
                     max_tokens=512,
                     messages=[{"role": "user", "content": prompt}],
                 )
-                context_text = message.content[0].text
+                context_text = response.choices[0].message.content
 
                 now = datetime.now(timezone.utc).isoformat()
                 supabase.table("crm_opportunities") \

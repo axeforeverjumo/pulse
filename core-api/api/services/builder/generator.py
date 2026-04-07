@@ -3,8 +3,8 @@ AI code generation service for the App Builder.
 Streams NDJSON events as code is generated.
 
 Architecture:
-  Phase 1 — Plan: Quick Claude call to decide which files to create/modify.
-  Phase 2 — Generate: Parallel Claude calls, one per file.
+  Phase 1 — Plan: Quick OpenAI call to decide which files to create/modify.
+  Phase 2 — Generate: Parallel OpenAI calls, one per file.
   Phase 3 — Assemble: Save version, emit completion events.
   Fallback — If planning fails, falls back to sequential streaming.
 """
@@ -13,9 +13,9 @@ import json
 import logging
 from typing import AsyncGenerator
 
-import anthropic
+from openai import AsyncOpenAI
 
-from api.config import settings
+from lib.openai_client import get_async_openai_client
 from api.services.chat.events import (
     content_event,
     status_event,
@@ -37,19 +37,7 @@ from api.services.builder.projects import (
 
 logger = logging.getLogger(__name__)
 
-_anthropic_client = None
-
-MODEL = "claude-haiku-4-5-20251001"
-
-
-def get_anthropic_client() -> anthropic.AsyncAnthropic:
-    global _anthropic_client
-    if _anthropic_client is None:
-        api_key = settings.anthropic_api_key
-        if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY not set")
-        _anthropic_client = anthropic.AsyncAnthropic(api_key=api_key)
-    return _anthropic_client
+MODEL = "gpt-5.4-mini"
 
 
 # ── Event helpers ────────────────────────────────────────
@@ -83,21 +71,20 @@ def builder_complete_event(version_id: str, file_count: int) -> str:
 
 
 async def _get_plan(
-    client: anthropic.AsyncAnthropic,
-    claude_messages: list,
+    client: AsyncOpenAI,
+    chat_messages: list,
     current_file_tree: dict,
 ) -> dict:
-    """Ask Claude for a JSON plan of files to generate."""
+    """Ask OpenAI for a JSON plan of files to generate."""
     system = build_plan_prompt(current_file_tree)
 
-    response = await client.messages.create(
+    response = await client.chat.completions.create(
         model=MODEL,
         max_tokens=2000,
-        system=system,
-        messages=claude_messages,
+        messages=[{"role": "system", "content": system}] + chat_messages,
     )
 
-    text = response.content[0].text.strip()
+    text = response.choices[0].message.content.strip()
     # Strip markdown fences if present
     if text.startswith("```"):
         text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
@@ -112,7 +99,7 @@ async def _get_plan(
 
 
 async def _generate_file(
-    client: anthropic.AsyncAnthropic,
+    client: AsyncOpenAI,
     file_path: str,
     file_description: str,
     all_files_plan: list,
@@ -121,14 +108,16 @@ async def _generate_file(
     """Generate a single file. Returns (path, content)."""
     system = build_file_prompt(file_path, file_description, all_files_plan, current_file_tree)
 
-    response = await client.messages.create(
+    response = await client.chat.completions.create(
         model=MODEL,
         max_tokens=4000,
-        system=system,
-        messages=[{"role": "user", "content": f"Generate {file_path}"}],
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": f"Generate {file_path}"},
+        ],
     )
 
-    content = response.content[0].text.strip()
+    content = response.choices[0].message.content.strip()
     # Strip markdown fences if Claude wraps the output anyway
     if content.startswith("```"):
         first_newline = content.index("\n") if "\n" in content else len("```")
@@ -143,11 +132,11 @@ async def _generate_file(
 
 
 async def _sequential_generation(
-    client: anthropic.AsyncAnthropic,
+    client: AsyncOpenAI,
     project_id: str,
     conversation_id: str,
     current_file_tree: dict,
-    claude_messages: list,
+    chat_messages: list,
     message: str,
     jwt: str,
 ) -> AsyncGenerator[str, None]:
@@ -156,39 +145,39 @@ async def _sequential_generation(
     accumulated_text = ""
     file_tree = dict(current_file_tree)
 
-    async with client.messages.stream(
+    stream = await client.chat.completions.create(
         model=MODEL,
         max_tokens=16000,
-        system=system_prompt,
-        messages=claude_messages,
-    ) as stream:
-        async for event in stream:
-            if event.type == "content_block_delta":
-                if hasattr(event.delta, "text"):
-                    delta = event.delta.text
-                    accumulated_text += delta
-                    yield content_event(delta)
+        messages=[{"role": "system", "content": system_prompt}] + chat_messages,
+        stream=True,
+    )
+    async for chunk in stream:
+        delta = chunk.choices[0].delta if chunk.choices else None
+        if delta and delta.content:
+            text = delta.content
+            accumulated_text += text
+            yield content_event(text)
 
-                    # Parse file blocks as they complete
-                    while "```file:" in accumulated_text:
-                        file_start = accumulated_text.index("```file:")
-                        remaining = accumulated_text[file_start:]
-                        close_idx = remaining.find("\n```\n", len("```file:"))
-                        if close_idx == -1:
-                            close_idx = remaining.find("\n```", len("```file:"))
-                            if close_idx == -1 or close_idx + 4 < len(remaining):
-                                break
+            # Parse file blocks as they complete
+            while "```file:" in accumulated_text:
+                file_start = accumulated_text.index("```file:")
+                remaining = accumulated_text[file_start:]
+                close_idx = remaining.find("\n```\n", len("```file:"))
+                if close_idx == -1:
+                    close_idx = remaining.find("\n```", len("```file:"))
+                    if close_idx == -1 or close_idx + 4 < len(remaining):
+                        break
 
-                        header_end = remaining.index("\n")
-                        file_path = remaining[len("```file:"):header_end].strip()
-                        file_content = remaining[header_end + 1:close_idx]
+                header_end = remaining.index("\n")
+                file_path = remaining[len("```file:"):header_end].strip()
+                file_content = remaining[header_end + 1:close_idx]
 
-                        action = "update" if file_path in file_tree else "create"
-                        file_tree[file_path] = file_content
-                        yield builder_file_event(file_path, file_content, action)
+                action = "update" if file_path in file_tree else "create"
+                file_tree[file_path] = file_content
+                yield builder_file_event(file_path, file_content, action)
 
-                        end_of_block = file_start + close_idx + 4
-                        accumulated_text = accumulated_text[:file_start] + accumulated_text[end_of_block:]
+                end_of_block = file_start + close_idx + 4
+                accumulated_text = accumulated_text[:file_start] + accumulated_text[end_of_block:]
 
     if file_tree:
         version = create_version(project_id, conversation_id, file_tree, message, jwt)
@@ -233,29 +222,29 @@ async def stream_generation(
         versions = get_versions(project_id, jwt)
         current_file_tree = versions[0]["file_tree"] if versions else {}
 
-        # Build Claude message history
-        claude_messages = []
+        # Build message history
+        chat_messages = []
         for msg in messages_data:
             if msg["id"] == user_msg["id"]:
                 continue
-            claude_messages.append({
+            chat_messages.append({
                 "role": msg["role"],
                 "content": msg["content"],
             })
-        claude_messages.append({"role": "user", "content": message})
+        chat_messages.append({"role": "user", "content": message})
 
-        client = get_anthropic_client()
+        client = get_async_openai_client()
 
         # ── Phase 1: Plan ──
         yield status_event("Planning...")
         try:
-            plan = await _get_plan(client, claude_messages, current_file_tree)
+            plan = await _get_plan(client, chat_messages, current_file_tree)
         except Exception as e:
             logger.warning(f"Planning failed, falling back to sequential: {e}")
             yield status_event("Generating code...")
             async for evt in _sequential_generation(
                 client, project_id, conversation_id,
-                current_file_tree, claude_messages, message, jwt,
+                current_file_tree, chat_messages, message, jwt,
             ):
                 yield evt
             return
@@ -271,7 +260,7 @@ async def stream_generation(
             yield status_event("Generating response...")
             async for evt in _sequential_generation(
                 client, project_id, conversation_id,
-                current_file_tree, claude_messages, message, jwt,
+                current_file_tree, chat_messages, message, jwt,
             ):
                 yield evt
             return

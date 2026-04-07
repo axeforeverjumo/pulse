@@ -82,10 +82,9 @@ async def extract_search_context_llm(
 
     Cost: ~$0.0001 per query using GPT-4o-mini
     """
-    from openai import AsyncOpenAI
-    from api.config import settings
+    from lib.openai_client import get_async_openai_client
 
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    client = get_async_openai_client()
 
     # Get current datetime in user's timezone for context
     if not current_datetime:
