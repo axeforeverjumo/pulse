@@ -98,7 +98,7 @@ function RenderTree({ node }: { node: Record<string, unknown> }) {
 
       {component === 'Input' && (
         <div>
-          {node.label && <label className="block text-[12px] font-medium text-gray-600 mb-1">{node.label as string}</label>}
+          {node.label && <label className="block text-[12px] font-medium text-gray-600 mb-1">{String(node.label)}</label>}
           <input
             type="text"
             placeholder={(node.placeholder as string) || 'Escribe aqui...'}

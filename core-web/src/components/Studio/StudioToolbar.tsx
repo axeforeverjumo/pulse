@@ -6,7 +6,6 @@ import { useSaveStudioPageTree } from '../../hooks/queries/useStudio';
 export default function StudioToolbar() {
   const navigate = useNavigate();
   const {
-    activeAppId,
     activePageId,
     componentTree,
     undoStack,
