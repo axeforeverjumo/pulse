@@ -9,7 +9,6 @@ import {
   CubeIcon,
   XMarkIcon,
   CurrencyDollarIcon,
-  EnvelopeIcon,
   MegaphoneIcon,
   ClipboardDocumentListIcon,
   UsersIcon,
