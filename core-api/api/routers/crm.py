@@ -61,6 +61,8 @@ from api.dependencies import get_current_user_jwt, get_current_user_id
 from api.exceptions import handle_api_exception
 from lib.supabase_client import get_authenticated_async_client
 import logging
+import asyncio
+from api.services.automations.trigger import fire_automation_trigger
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/crm", tags=["crm"])
@@ -556,6 +558,7 @@ async def create_contact_endpoint(
         contact = await create_contact(
             body.workspace_id, user_id, user_jwt, body.model_dump()
         )
+        asyncio.create_task(fire_automation_trigger(body.workspace_id, "crm.contact.created", contact or {}))
         return {"contact": contact}
     except Exception as e:
         handle_api_exception(e, "Failed to create contact", logger)
@@ -805,6 +808,7 @@ async def create_opportunity_endpoint(
         opportunity = await create_opportunity(
             body.workspace_id, user_id, user_jwt, data
         )
+        asyncio.create_task(fire_automation_trigger(body.workspace_id, "crm.lead.created", opportunity or {}))
         return {"opportunity": opportunity}
     except Exception as e:
         handle_api_exception(e, "Failed to create opportunity", logger)
@@ -1096,6 +1100,13 @@ async def update_opportunity_stage_endpoint(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Opportunity not found"
             )
+        # Fire specific triggers for stage changes
+        event_type = "crm.lead.stage_changed"
+        if body.stage == "won":
+            event_type = "crm.lead.won"
+        elif body.stage == "lost":
+            event_type = "crm.lead.lost"
+        asyncio.create_task(fire_automation_trigger(workspace_id, event_type, {**opportunity, "new_stage": body.stage}))
         return {"opportunity": opportunity}
     except HTTPException:
         raise

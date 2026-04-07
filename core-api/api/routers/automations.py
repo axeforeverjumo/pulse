@@ -533,3 +533,38 @@ async def log_timeline_auto(body: TimelineLog):
         data["opportunity_id"] = body.opportunity_id
     result = sb.table("crm_timeline").insert(data).execute()
     return {"event": result.data[0] if result.data else None}
+
+
+# ============================================================================
+# Trigger Registration — Connect Pulse events to Activepieces flows
+# ============================================================================
+
+class TriggerRegister(BaseModel):
+    workspace_id: str
+    event_type: str
+    webhook_url: str
+    description: Optional[str] = None
+
+
+@router.post("/triggers/register", dependencies=[__import__("fastapi").Depends(_verify_automation_key)])
+async def register_trigger_endpoint(body: TriggerRegister):
+    """Register a webhook URL to fire when an event occurs."""
+    from api.services.automations.trigger import register_trigger
+    result = await register_trigger(body.workspace_id, body.event_type, body.webhook_url, body.description)
+    return {"trigger": result}
+
+
+@router.post("/triggers/unregister", dependencies=[__import__("fastapi").Depends(_verify_automation_key)])
+async def unregister_trigger_endpoint(body: TriggerRegister):
+    """Unregister a webhook trigger."""
+    from api.services.automations.trigger import unregister_trigger
+    await unregister_trigger(body.workspace_id, body.event_type, body.webhook_url)
+    return {"status": "ok"}
+
+
+@router.get("/triggers", dependencies=[__import__("fastapi").Depends(_verify_automation_key)])
+async def list_triggers_endpoint(workspace_id: str = Query(...)):
+    """List all registered triggers for a workspace."""
+    from api.services.automations.trigger import list_triggers
+    triggers = await list_triggers(workspace_id)
+    return {"triggers": triggers}
