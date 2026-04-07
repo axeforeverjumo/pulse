@@ -35,7 +35,6 @@ import {
 import { SparklesIcon } from '@heroicons/react/24/outline';
 import ScoreBadge from './ScoreBadge';
 import ExtractActionsDialog from './ExtractActionsDialog';
-import SuggestionsPanel from './SuggestionsPanel';
 import SalesCoachPanel from './SalesCoachPanel';
 import SentimentBadge from './SentimentBadge';
 
