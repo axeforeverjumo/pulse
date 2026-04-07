@@ -1,5 +1,5 @@
 # Specs Index - Pulse / factoriaCore
-> Ultima actualizacion: 2026-04-06
+> Ultima actualizacion: 2026-04-07
 > Stack: FastAPI 0.115 (Python 3.11) + React 19 / TypeScript 5.9 + Supabase (PostgreSQL) + Cloudflare R2
 
 ---
@@ -15,6 +15,7 @@
 | [Projects (Kanban)](SPEC_PROJECTS.md) | Completo | Boards, issues, deploy modes, agent queue, routines |
 | [Messaging + WhatsApp](SPEC_MESSAGING_WHATSAPP_DEVOPS.md) | Messaging completo / WhatsApp pendiente | Canales internos, DMs, threads. WhatsApp estructura lista, integracion externa pendiente |
 | [DevOps](SPEC_DEVOPS.md) | Completo | Servers SSH, SSH keys RSA-4096, repo tokens, verificacion |
+| [AI Architecture](SPEC_AI_ARCHITECTURE.md) | Completo | OpenAI SDK, subscription auth, modelos, proxy, migracion |
 
 ---
 
@@ -28,13 +29,14 @@
 | Process manager | systemd (pulse-api, pulse-cron, bridges) |
 | Base de datos | Self-hosted Supabase (PostgreSQL + RLS + RPC + Realtime) |
 | Storage | Cloudflare R2 (imagenes chat, attachments email) |
-| AI — Chat general | `claude-haiku-4-5-20251001` via Anthropic API |
-| AI — Chat dev agents | `claude-sonnet-4-6` via Anthropic API |
-| AI — Email analysis | `claude-haiku-4-5-20251001` |
-| AI — CRM relationship | `claude-sonnet-4-20250514` |
-| AI — Agents core | `claude-haiku-4-5-20251001` (configurable via env `MODEL`) |
+| AI — Chat general | `gpt-5.4-mini` via OpenAI subscription (openai-oauth proxy) |
+| AI — Chat dev agents | `gpt-5.3-codex` via OpenAI subscription |
+| AI — Email analysis | `gpt-5.4-mini` via OpenAI subscription |
+| AI — CRM / WhatsApp / Builder | `gpt-5.4-mini` via OpenAI subscription |
+| AI — Agents core | `gpt-5.4-mini` (configurable via env `MODEL`) |
 | AI — Agents advance | OpenClaw bridge `127.0.0.1:4200` (GPT Pro flat-rate) |
-| AI — Pulse Agent (dev) | Claude Code CLI OAuth en server, bridge `127.0.0.1:4201` |
+| AI — Pulse Agent (dev) | `gpt-5.3-codex` via OpenAI subscription |
+| AI — Auth proxy | `openai-oauth` en `127.0.0.1:10531` (OAuth via `~/.codex/auth.json`) |
 | Cola de jobs | QStash (email sync asincrono) |
 | Rate limiting | slowapi + Redis |
 | Cifrado | Fernet (cryptography 44) para tokens, keys, passwords |
@@ -86,8 +88,9 @@
 | Sistema SSH via subprocess | Simplicidad vs asyncssh; timeout controlado, no requiere dependencia extra |
 | Soft-delete en CRM | Trazabilidad de datos; posibilidad de recuperar registros eliminados |
 | content_parts JSONB en chat | Flexibilidad para diferentes tipos (text, citations, tool_results, images) sin schema rigido |
-| CLI OAuth para Claude Code | $0 extra para el usuario; usa suscripcion existente de $200/mo |
-| Agents tier: core vs advance | Core (Haiku directo, CRUD en Pulse) vs Advance (GPT Pro via OpenClaw, read-only) |
+| OpenAI subscription via openai-oauth | $0 extra: proxy local reutiliza tokens OAuth de Codex CLI (~/.codex/auth.json), misma auth que OpenClaw |
+| Migracion Anthropic → OpenAI (2026-04-07) | Anthropic cambio politica: SDK con OAuth de suscripcion ahora cobra "uso adicional". Migrado todo a OpenAI SDK |
+| Agents tier: core vs advance | Core (gpt-5.4-mini directo, CRUD en Pulse) vs Advance (GPT Pro via OpenClaw, read-only) |
 | QStash para email sync | Desacopla sync asincrono del request-response; permite reintentos automaticos |
 
 ---

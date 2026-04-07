@@ -28,14 +28,14 @@ La mayoria de las herramientas de productividad te dan tableros, canales y calen
 | Modulo | Estado | Descripcion |
 |--------|--------|-------------|
 | **Auth / Workspace** | Completo | OAuth Google + Microsoft, workspaces, invitaciones, roles |
-| **Chat** | Completo | Conversaciones streaming con Claude, attachments, tools, CLI OAuth |
+| **Chat** | Completo | Conversaciones streaming con OpenAI (gpt-5.4-mini / gpt-5.3-codex), attachments, tools |
 | **Email** | Activo | Multi-cuenta Gmail/Outlook, threading, AI summary, compose IA, CRM link |
 | **CRM** | Completo | Contactos, empresas, pipeline Kanban, quotations, workflows, Contexto IA |
 | **Projects** | Completo | Boards Kanban, issues, agente queue, routines cron, deploy modes |
 | **Messaging** | Completo | Canales internos tipo Slack, DMs, threads, reacciones, menciones |
 | **WhatsApp** | Estructura lista | Tablas y AutoMode IA listas; integracion externa con WA API pendiente |
 | **DevOps** | Completo | Gestion servidores SSH, claves SSH, repo tokens (GitHub/GitLab/Bitbucket) |
-| **Agents** | Completo | Core agents (Haiku) + Advance agents (OpenClaw), agent queue, dispatch |
+| **Agents** | Completo | Core agents (gpt-5.4-mini) + Advance agents (OpenClaw), agent queue, dispatch |
 | **Calendar** | Activo | Integracion Google Calendar |
 | **Files** | Activo | Gestion de archivos + Google Drive |
 
@@ -55,16 +55,17 @@ La mayoria de las herramientas de productividad te dan tableros, canales y calen
                Tailwind 4                    |
                                     _________|__________
                                    |         |          |
-                              Supabase   Cloudflare   Anthropic
-                              (self-        R2        Claude API
-                              hosted)    Storage      + CLI OAuth
-                              PostgreSQL
-                              RLS + RPC
-                              Realtime
+                              Supabase   Cloudflare   OpenAI
+                              (self-        R2        gpt-5.4-mini
+                              hosted)    Storage      gpt-5.3-codex
+                              PostgreSQL               |
+                              RLS + RPC         openai-oauth :10531
+                              Realtime          (subscription proxy)
 
-        Bridges (servicios systemd locales):
-        ├── :4200 OpenClaw  ─── agents advance (GPT Pro flat-rate)
-        └── :4201 Dev Bridge ── Claude Code CLI (Pulse Agent dev)
+        Servicios systemd locales:
+        ├── :10531 openai-oauth ── proxy OAuth (usa ~/.codex/auth.json)
+        ├── :4200  OpenClaw     ── agents advance (GPT Pro flat-rate)
+        └── :4201  Dev Bridge   ── Pulse Agent dev tasks
 
         Integraciones externas:
         ├── Google: OAuth, Gmail API, Google Calendar, Google Drive
@@ -89,7 +90,7 @@ La mayoria de las herramientas de productividad te dan tableros, canales y calen
 | Almacenamiento | Cloudflare R2 (compatible S3) | boto3 1.41 |
 | Cifrado | Fernet (cryptography 44) | — |
 | Seguridad | Cloudflare Turnstile anti-bot | — |
-| AI | Anthropic Claude (API + CLI OAuth) | anthropic >= 0.39 |
+| AI | OpenAI SDK (subscription via openai-oauth proxy) | openai >= 1.0 |
 | Cola de jobs | QStash | qstash 3.2 |
 | Rate limiting | slowapi + Redis | — |
 | Error tracking | Sentry | sentry-sdk 2.53 |
