@@ -75,6 +75,21 @@ export const fileKeys = {
   document: (id: string) => [...fileKeys.all, 'document', id] as const,
 };
 
+// Studio
+export const studioKeys = {
+  all: ['studio'] as const,
+  apps: (workspaceId: string) =>
+    [...studioKeys.all, 'apps', workspaceId] as const,
+  app: (appId: string) =>
+    [...studioKeys.all, 'app', appId] as const,
+  pages: (appId: string) =>
+    [...studioKeys.all, 'pages', appId] as const,
+  page: (pageId: string) =>
+    [...studioKeys.all, 'page', pageId] as const,
+  versions: (pageId: string) =>
+    [...studioKeys.all, 'versions', pageId] as const,
+};
+
 // Conversations (Chat)
 export const conversationKeys = {
   all: ['conversations'] as const,

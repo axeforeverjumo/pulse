@@ -4133,3 +4133,141 @@ export async function refreshOpportunityContext(opportunityId: string, workspace
     { method: 'POST' }
   );
 }
+
+// ============================================================================
+// Studio
+// ============================================================================
+
+export interface StudioApp {
+  id: string;
+  workspace_id: string;
+  name: string;
+  slug: string;
+  description: string;
+  icon: string;
+  color: string;
+  status: 'draft' | 'published' | 'archived';
+  settings: Record<string, unknown>;
+  created_by: string;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StudioPage {
+  id: string;
+  app_id: string;
+  name: string;
+  slug: string;
+  route: string;
+  is_home: boolean;
+  component_tree: Record<string, unknown>;
+  page_settings: Record<string, unknown>;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StudioVersion {
+  id: string;
+  page_id: string;
+  version_number: number;
+  component_tree: Record<string, unknown>;
+  description: string;
+  created_by: string;
+  created_at: string;
+}
+
+// Apps
+export async function getStudioApps(workspaceId: string): Promise<StudioApp[]> {
+  const data = await api<{ apps: StudioApp[] }>(`/studio/apps?workspace_id=${workspaceId}`);
+  return data.apps;
+}
+
+export async function getStudioApp(appId: string): Promise<StudioApp> {
+  return api<StudioApp>(`/studio/apps/${appId}`);
+}
+
+export async function createStudioApp(data: {
+  workspace_id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  icon?: string;
+  color?: string;
+}): Promise<StudioApp> {
+  return api<StudioApp>('/studio/apps', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateStudioApp(appId: string, data: Partial<StudioApp>): Promise<StudioApp> {
+  return api<StudioApp>(`/studio/apps/${appId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteStudioApp(appId: string): Promise<void> {
+  await api(`/studio/apps/${appId}`, { method: 'DELETE' });
+}
+
+// Pages
+export async function getStudioPages(appId: string): Promise<StudioPage[]> {
+  const data = await api<{ pages: StudioPage[] }>(`/studio/apps/${appId}/pages`);
+  return data.pages;
+}
+
+export async function getStudioPage(pageId: string): Promise<StudioPage> {
+  return api<StudioPage>(`/studio/pages/${pageId}`);
+}
+
+export async function createStudioPage(appId: string, data: {
+  name: string;
+  slug: string;
+  route?: string;
+  is_home?: boolean;
+}): Promise<StudioPage> {
+  return api<StudioPage>(`/studio/apps/${appId}/pages`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateStudioPage(pageId: string, data: Partial<StudioPage>): Promise<StudioPage> {
+  return api<StudioPage>(`/studio/pages/${pageId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateStudioPageTree(pageId: string, componentTree: Record<string, unknown>): Promise<StudioPage> {
+  return api<StudioPage>(`/studio/pages/${pageId}/tree`, {
+    method: 'PUT',
+    body: JSON.stringify({ component_tree: componentTree }),
+  });
+}
+
+export async function deleteStudioPage(pageId: string): Promise<void> {
+  await api(`/studio/pages/${pageId}`, { method: 'DELETE' });
+}
+
+// Versions
+export async function getStudioVersions(pageId: string): Promise<StudioVersion[]> {
+  const data = await api<{ versions: StudioVersion[] }>(`/studio/pages/${pageId}/versions`);
+  return data.versions;
+}
+
+export async function createStudioVersion(pageId: string, description?: string): Promise<StudioVersion> {
+  return api<StudioVersion>(`/studio/pages/${pageId}/versions`, {
+    method: 'POST',
+    body: JSON.stringify({ description: description || '' }),
+  });
+}
+
+export async function restoreStudioVersion(pageId: string, versionId: string): Promise<StudioPage> {
+  return api<StudioPage>(`/studio/pages/${pageId}/versions/${versionId}/restore`, {
+    method: 'PUT',
+  });
+}
