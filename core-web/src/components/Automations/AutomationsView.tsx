@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import MiniAppHeader from "../MiniAppHeader/MiniAppHeader";
 import { Zap, Maximize2, Minimize2 } from "lucide-react";
 
 const AUTOMATIONS_BASE_URL = import.meta.env.VITE_AUTOMATIONS_URL || "https://automations.pulse.factoriaia.com";
