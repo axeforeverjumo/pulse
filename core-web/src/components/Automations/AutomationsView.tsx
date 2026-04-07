@@ -1,26 +1,20 @@
 import { useState, useEffect, useRef } from "react";
-import { useAuthStore } from "../../stores/authStore";
 import MiniAppHeader from "../MiniAppHeader/MiniAppHeader";
-import { Zap, ExternalLink, Maximize2, Minimize2 } from "lucide-react";
+import { Zap, Maximize2, Minimize2 } from "lucide-react";
 
 const AUTOMATIONS_BASE_URL = import.meta.env.VITE_AUTOMATIONS_URL || "https://automations.pulse.factoriaia.com";
 
 export default function AutomationsView() {
-  const token = useAuthStore((s) => s.session?.access_token);
   const [loading, setLoading] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Build the embed URL — pass token for SSO if available
   const embedUrl = `${AUTOMATIONS_BASE_URL}/flows`;
 
   useEffect(() => {
-    // Listen for messages from the iframe (e.g. flow saved, error)
     const handler = (event: MessageEvent) => {
       if (event.origin !== new URL(AUTOMATIONS_BASE_URL).origin) return;
-      // Handle messages from Activepieces iframe
       if (event.data?.type === "AP_FLOW_PUBLISHED") {
-        // Flow was published — could trigger a notification
         console.log("[Automations] Flow published:", event.data);
       }
     };
@@ -30,26 +24,19 @@ export default function AutomationsView() {
 
   return (
     <div className={`flex flex-col h-full ${fullscreen ? "fixed inset-0 z-50 bg-white" : ""}`}>
-      <MiniAppHeader title="Automatizaciones" icon={Zap}>
+      <div className="flex items-center justify-between px-4 py-2 border-b border-[#d7e4f2]">
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setFullscreen(!fullscreen)}
-            className="p-1.5 rounded-md hover:bg-bg-gray text-text-secondary transition-colors"
-            title={fullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
-          >
-            {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-          </button>
-          <a
-            href={AUTOMATIONS_BASE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="p-1.5 rounded-md hover:bg-bg-gray text-text-secondary transition-colors"
-            title="Abrir en nueva ventana"
-          >
-            <ExternalLink size={16} />
-          </a>
+          <Zap size={18} className="text-brand-primary" />
+          <span className="text-sm font-semibold text-text-dark">Automatizaciones</span>
         </div>
-      </MiniAppHeader>
+        <button
+          onClick={() => setFullscreen(!fullscreen)}
+          className="p-1.5 rounded-md hover:bg-bg-gray text-text-secondary transition-colors"
+          title={fullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
+        >
+          {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
+      </div>
 
       <div className="flex-1 relative">
         {loading && (
