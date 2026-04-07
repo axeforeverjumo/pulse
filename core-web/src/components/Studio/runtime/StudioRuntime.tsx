@@ -3,9 +3,7 @@ import { useParams } from 'react-router-dom';
 import { api } from '../../../api/client';
 import { registerAllWidgets } from '../widgets';
 import { registry } from '../engine/registry';
-import { createDefaultContext } from '../engine/evaluator';
 import type { ComponentNode } from '../engine/types';
-import CanvasNode from '../canvas/CanvasNode';
 
 registerAllWidgets();
 
