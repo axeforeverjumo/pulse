@@ -57,6 +57,7 @@ const CrmView = lazy(() => import("./components/CRM/CrmView"));
 const DevOpsView = lazy(() => import("./components/DevOps/DevOpsView"));
 const AutomationsView = lazy(() => import("./components/Automations/AutomationsView"));
 const StudioView = lazy(() => import("./components/Studio/StudioView"));
+const StudioRuntime = lazy(() => import("./components/Studio/runtime/StudioRuntime"));
 const OnboardingWizard = lazy(() => import("./components/Onboarding/OnboardingWizard"));
 const PENDING_INVITE_TOKEN_KEY = "pending_invite_token";
 const PENDING_INVITE_TOKEN_SET_AT_KEY = "pending_invite_token_set_at";
@@ -654,6 +655,10 @@ function AppContent() {
         {/* Website / Linktree Builder */}
         <Route path="/sites" element={<WebsiteBuilderView />} />
         <Route path="/sites/:siteId" element={<WebsiteBuilderView />} />
+
+        {/* Studio Runtime — published apps */}
+        <Route path="/app/:appSlug" element={<StudioRuntime />} />
+        <Route path="/app/:appSlug/:pageSlug" element={<StudioRuntime />} />
       </Routes>
     </AppLayout>
   );

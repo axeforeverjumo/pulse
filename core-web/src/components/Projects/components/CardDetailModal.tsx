@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import CustomFieldsRenderer from '../../Studio/custom-fields/CustomFieldsRenderer';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   XMarkIcon,
@@ -1027,6 +1028,15 @@ export default function CardDetailModal({ card, onClose, initialEdit = false, is
 
               {/* Refinement section */}
               <RefinementSection issueId={card.id} parentIssueId={card.parent_issue_id} onCreated={onClose} />
+
+              {/* Custom fields from Studio */}
+              {workspaceId && (
+                <CustomFieldsRenderer
+                  workspaceId={workspaceId}
+                  module="project_issues"
+                  entityId={card.id}
+                />
+              )}
 
               {/* Comments section */}
               <div className="border-t border-gray-100 pt-5">

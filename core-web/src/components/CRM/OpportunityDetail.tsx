@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import CustomFieldsRenderer from '../Studio/custom-fields/CustomFieldsRenderer';
 import {
   ArrowLeftIcon,
   CurrencyDollarIcon,
@@ -603,6 +604,11 @@ export default function OpportunityDetail({ opportunityId, workspaceId, onBack }
                     </>
                   )}
                 </dl>
+                <CustomFieldsRenderer
+                  workspaceId={workspaceId}
+                  module="crm_opportunities"
+                  entityId={opportunityId}
+                />
               </div>
             )}
 
