@@ -1,38 +1,20 @@
 import { useState, useEffect, useRef } from "react";
 import { Zap, Maximize2, Minimize2 } from "lucide-react";
 import { useAuthStore } from "../../stores/authStore";
-import { API_BASE } from "../../lib/apiBase";
 
 const AUTOMATIONS_BASE_URL = import.meta.env.VITE_AUTOMATIONS_URL || "https://automations.pulse.factoriaia.com";
 
 export default function AutomationsView() {
   const [loading, setLoading] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
-  const [embedUrl, setEmbedUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const session = useAuthStore((s) => s.session);
 
-  useEffect(() => {
-    if (!session?.access_token) return;
-
-    const init = async () => {
-      try {
-        const resp = await fetch(`${API_BASE}/automations/token`, {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
-        if (!resp.ok) throw new Error("Token fetch failed");
-        const data = await resp.json();
-        // Use embed-login.html to inject token into Activepieces localStorage
-        const url = `${AUTOMATIONS_BASE_URL}/embed-login.html?token=${encodeURIComponent(data.token)}&projectId=${encodeURIComponent(data.projectId)}&redirect=/flows`;
-        setEmbedUrl(url);
-      } catch (e) {
-        console.error("[Automations] Init failed:", e);
-        setError("No se pudo conectar con automatizaciones");
-      }
-    };
-    init();
-  }, [session?.access_token]);
+  // Pass Pulse JWT as query param — AP will auto-login via our patched guard
+  const pulseToken = session?.access_token || "";
+  const embedUrl = pulseToken
+    ? `${AUTOMATIONS_BASE_URL}/flows?pulseToken=${encodeURIComponent(pulseToken)}`
+    : null;
 
   return (
     <div className={`flex flex-col h-full ${fullscreen ? "fixed inset-0 z-50 bg-white" : ""}`}>
@@ -57,9 +39,7 @@ export default function AutomationsView() {
               <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center">
                 <Zap size={20} className="text-brand-primary animate-pulse" />
               </div>
-              <p className="text-sm text-text-secondary">
-                {error || "Cargando automatizaciones..."}
-              </p>
+              <p className="text-sm text-text-secondary">Cargando automatizaciones...</p>
             </div>
           </div>
         )}
