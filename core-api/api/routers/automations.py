@@ -3,7 +3,7 @@ Automations router — Internal API for Pulse Automations (Activepieces) custom 
 Auth: X-Pulse-Automation-Key header with shared secret.
 All endpoints operate on behalf of a workspace, passed as query param or body field.
 """
-from fastapi import APIRouter, HTTPException, status, Header, Query
+from fastapi import APIRouter, HTTPException, status, Header, Query, Depends
 from typing import Any, Dict, Optional, List
 from pydantic import BaseModel, Field
 from api.config import settings
@@ -16,11 +16,38 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/automations", tags=["automations"])
 
 AUTOMATION_SECRET = os.getenv("PULSE_AUTOMATION_SECRET", "pulse-auto-secret-2026")
+AUTOMATIONS_INTERNAL_URL = os.getenv("AUTOMATIONS_INTERNAL_URL", "http://127.0.0.1:8300")
+AUTOMATIONS_EMAIL = os.getenv("AUTOMATIONS_EMAIL", "jumo@factoriaia.com")
+AUTOMATIONS_PASSWORD = os.getenv("AUTOMATIONS_PASSWORD", "PulseAuto2026!")
 
 
 def _verify_automation_key(x_pulse_automation_key: str = Header(...)):
     if x_pulse_automation_key != AUTOMATION_SECRET:
         raise HTTPException(status_code=401, detail="Invalid automation key")
+
+
+# ============================================================================
+# SSO — Get Activepieces token for authenticated Pulse users
+# ============================================================================
+
+from api.dependencies import get_current_user_jwt
+
+@router.get("/token")
+async def get_automations_token(user_jwt: str = Depends(get_current_user_jwt)):
+    """Get an Activepieces session token for the current Pulse user.
+    Uses a shared admin account — all Pulse users share the same Activepieces workspace."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                f"{AUTOMATIONS_INTERNAL_URL}/api/v1/authentication/sign-in",
+                json={"email": AUTOMATIONS_EMAIL, "password": AUTOMATIONS_PASSWORD},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return {"token": data.get("token"), "projectId": data.get("projectId")}
+            raise HTTPException(502, "Failed to get automations token")
+    except httpx.RequestError as e:
+        raise HTTPException(502, f"Automations service unavailable: {e}")
 
 
 # ============================================================================
