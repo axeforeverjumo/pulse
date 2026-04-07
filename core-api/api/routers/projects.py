@@ -4,6 +4,7 @@ Projects router - HTTP endpoints for kanban-style boards with states and issues
 from fastapi import APIRouter, HTTPException, Request, status, Depends, Query
 from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List, Dict, Any, Tuple
+from lib.supabase_client import get_service_role_client
 from datetime import datetime
 import asyncio
 import html
