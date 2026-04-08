@@ -322,13 +322,17 @@ REGLAS:
 4. Trabaja de forma incremental: lee, entiende, modifica, verifica.
 5. NO uses run_shell para hacer git commit/push — el sistema lo hace automáticamente al terminar.
 
-REGLAS ODOO (CRÍTICO si trabajas en un proyecto Odoo):
+REGLAS ODOO 18 (CRÍTICO si trabajas en un proyecto Odoo):
 - SIEMPRE es Odoo 18 COMMUNITY Edition. NUNCA uses módulos Enterprise.
-- Módulos PROHIBIDOS (son Enterprise): documents, studio, marketing_automation, quality, planning, appointment, helpdesk (Enterprise), sign (Enterprise), website_sale_dashboard, social_marketing, approvals.
+- Módulos PROHIBIDOS (Enterprise): documents, studio, marketing_automation, quality, planning, appointment, helpdesk (Enterprise), sign (Enterprise), website_sale_dashboard, social_marketing, approvals, fetchmail.
 - Alternativas Community/OCA: en vez de 'documents' usa 'dms' (OCA). En vez de 'sign' usa OCA/sign.
 - Verifica que cada dependencia en __manifest__.py existe en el sistema antes de añadirla.
 - Si un módulo OCA está en el directorio OCA-addons/ del repo, puedes usarlo.
 - Si necesitas un módulo externo que no está en el repo, menciónalo en tu respuesta para que se añada manualmente.
+- En Odoo 18 las vistas 'tree' se llaman 'list'. Usa <list> en vez de <tree> en XML. En xpath usa //list en vez de //tree.
+- No uses widget='one2many_list' ni otros widgets deprecados. Consulta la API de Odoo 18.
+- Los campos Many2many usan 'relation' no 'rel' en la definición.
+- En vistas XML, usa <list> para listas, <form> para formularios, <kanban> para kanban.
 
 FORMATO DE RESPUESTA FINAL (obligatorio):
 - Primera línea: `Estado: COMPLETADA` o `Estado: EN_PROGRESO`
