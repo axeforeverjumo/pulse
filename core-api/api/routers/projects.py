@@ -2397,7 +2397,10 @@ async def _process_single_agent_job(
                 error=next_error,
                 payload_patch={**(job.get("payload") or {}), **result_payload},
             )
-            if not task_completed:
+            if task_completed:
+                # Auto-enqueue next pending task for this agent on the same board
+                await _auto_enqueue_next_task(supabase, job)
+            else:
                 if next_status == "blocked":
                     logger.info(
                         "Queue job %s blocked due to stagnation (issue=%s agent=%s)",
@@ -2453,6 +2456,86 @@ async def _process_single_agent_job(
                 max_attempts,
                 message,
             )
+
+
+async def _auto_enqueue_next_task(supabase: Any, completed_job: Dict[str, Any]) -> None:
+    """After an agent completes a task, auto-enqueue the next pending task
+    assigned to the same agent on the same board."""
+    agent_id = completed_job.get("agent_id")
+    board_id = completed_job.get("board_id")
+    if not agent_id or not board_id:
+        return
+    try:
+        # Get all issues in non-terminal states assigned to this agent on this board
+        assignees_res = await supabase.table("project_issue_assignees")\
+            .select("issue_id")\
+            .eq("agent_id", agent_id)\
+            .eq("assignee_type", "agent")\
+            .execute()
+        assigned_issue_ids = [a["issue_id"] for a in (assignees_res.data or [])]
+        if not assigned_issue_ids:
+            return
+
+        # Get issues on this board in To Do state
+        issues_res = await supabase.table("project_issues")\
+            .select("id, title, state_id, position, workspace_id, workspace_app_id, board_id, created_by, priority")\
+            .eq("board_id", board_id)\
+            .in_("id", assigned_issue_ids)\
+            .is_("completed_at", "null")\
+            .order("position", desc=False)\
+            .execute()
+        candidates = issues_res.data or []
+
+        # Filter to To Do states only (not in progress, not QA/Done)
+        states_res = await supabase.table("project_states")\
+            .select("id, name, is_done")\
+            .eq("board_id", board_id)\
+            .execute()
+        todo_state_ids = set()
+        for s in (states_res.data or []):
+            name = (s.get("name") or "").lower().strip()
+            if not s.get("is_done") and not _is_in_progress_state(name) and not _is_qa_state(name) and not _is_done_state(name):
+                todo_state_ids.add(s["id"])
+
+        candidates = [c for c in candidates if c.get("state_id") in todo_state_ids]
+        if not candidates:
+            logger.info("Auto-enqueue: no more To Do tasks for agent %s on board %s", agent_id, board_id)
+            return
+
+        # Check which already have active jobs
+        active_jobs_res = await supabase.table("project_agent_queue_jobs")\
+            .select("issue_id")\
+            .eq("agent_id", agent_id)\
+            .in_("status", ["queued", "running"])\
+            .execute()
+        active_issue_ids = set(j["issue_id"] for j in (active_jobs_res.data or []))
+
+        next_task = None
+        for c in candidates:
+            if c["id"] not in active_issue_ids:
+                next_task = c
+                break
+
+        if not next_task:
+            logger.info("Auto-enqueue: all remaining tasks already queued for agent %s", agent_id)
+            return
+
+        await enqueue_project_agent_job(
+            supabase,
+            next_task,
+            agent_id,
+            requested_by=next_task.get("created_by"),
+            source="auto_next_task",
+            max_attempts=4,
+        )
+        logger.info(
+            "Auto-enqueue: queued next task '%s' (issue=%s) for agent %s",
+            next_task.get("title", "?"),
+            next_task["id"],
+            agent_id,
+        )
+    except Exception as e:
+        logger.warning("Auto-enqueue failed for agent %s: %s", agent_id, e)
 
 
 async def _process_project_agent_queue_background(
