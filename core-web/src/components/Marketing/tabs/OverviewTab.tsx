@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   ChartBarIcon,
   EyeIcon,
@@ -13,6 +13,7 @@ import {
   getMarketingAuthStatus,
   getMarketingGa4Properties,
   getMarketingGscSites,
+  getMarketingSearchPerformance,
 } from "../../../api/client";
 import { toast } from "sonner";
 
@@ -23,31 +24,26 @@ interface Props {
 }
 
 export default function OverviewTab({ site, onSiteUpdated }: Props) {
-  const [googleAuth, setGoogleAuth] = useState<{
-    connected: boolean;
-    email?: string;
-  } | null>(null);
+  const [googleAuth, setGoogleAuth] = useState<{ connected: boolean; email?: string } | null>(null);
   const [connecting, setConnecting] = useState(false);
-
-  // Auto-discovery
   const [ga4Properties, setGa4Properties] = useState<any[]>([]);
   const [gscSites, setGscSites] = useState<any[]>([]);
   const [loadingProperties, setLoadingProperties] = useState(false);
-
-  // Selected values
-  const [selectedGa4, setSelectedGa4] = useState(site.ga4_property_id || "");
-  const [selectedGsc, setSelectedGsc] = useState(site.gsc_site_url || "");
-  const [saving, setSaving] = useState(false);
+  const [liveKpis, setLiveKpis] = useState<{ clicks?: number; impressions?: number; ctr?: number; position?: number } | null>(null);
+  const autoSavedRef = useRef(false);
 
   useEffect(() => {
     checkGoogleAuth();
   }, []);
 
   useEffect(() => {
-    if (googleAuth?.connected) {
-      loadProperties();
-    }
+    if (googleAuth?.connected) loadProperties();
   }, [googleAuth?.connected]);
+
+  // Load live KPIs if GSC is configured
+  useEffect(() => {
+    if (site.gsc_site_url) loadLiveKpis();
+  }, [site.gsc_site_url]);
 
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
@@ -67,6 +63,20 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
     } catch {}
   }
 
+  async function loadLiveKpis() {
+    try {
+      const perf = await getMarketingSearchPerformance(site.id);
+      if (perf?.totals) {
+        setLiveKpis({
+          clicks: perf.totals.clicks,
+          impressions: perf.totals.impressions,
+          ctr: perf.totals.avg_ctr,
+          position: perf.totals.avg_position,
+        });
+      }
+    } catch {}
+  }
+
   async function loadProperties() {
     setLoadingProperties(true);
     try {
@@ -77,23 +87,58 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
       setGa4Properties(props);
       setGscSites(sites);
 
-      // Auto-select if only one and not yet configured
-      if (props.length === 1 && !site.ga4_property_id) {
-        setSelectedGa4(props[0].property_id);
-      }
-      if (sites.length > 0 && !site.gsc_site_url) {
-        // Try to match by domain
-        const match = sites.find((s: any) =>
-          s.site_url.includes(site.domain)
-        );
-        if (match) setSelectedGsc(match.site_url);
-        else if (sites.length === 1) setSelectedGsc(sites[0].site_url);
+      // Auto-save if not yet configured
+      if (!autoSavedRef.current) {
+        let autoGa4 = site.ga4_property_id || "";
+        let autoGsc = site.gsc_site_url || "";
+        let needsSave = false;
+
+        if (!autoGa4 && props.length >= 1) {
+          autoGa4 = props[0].property_id;
+          needsSave = true;
+        }
+        if (!autoGsc && sites.length > 0) {
+          const match = sites.find((s: any) => s.site_url.includes(site.domain));
+          autoGsc = match ? match.site_url : sites[0].site_url;
+          needsSave = true;
+        }
+
+        if (needsSave) {
+          autoSavedRef.current = true;
+          await saveProperties(autoGa4, autoGsc);
+        }
       }
     } catch (e) {
       console.error("Failed to load properties", e);
     } finally {
       setLoadingProperties(false);
     }
+  }
+
+  async function saveProperties(ga4: string, gsc: string) {
+    try {
+      const updated = await updateMarketingSite(site.id, {
+        ga4_property_id: ga4 || null,
+        gsc_site_url: gsc || null,
+      });
+      onSiteUpdated?.(updated);
+      // Load KPIs immediately after saving GSC
+      if (gsc) {
+        setTimeout(() => loadLiveKpis(), 500);
+      }
+    } catch (e: any) {
+      console.error("Auto-save failed", e);
+    }
+  }
+
+  async function handleGa4Change(value: string) {
+    await saveProperties(value, site.gsc_site_url || "");
+    toast.success("Analytics configurado");
+  }
+
+  async function handleGscChange(value: string) {
+    await saveProperties(site.ga4_property_id || "", value);
+    toast.success("Search Console configurado");
   }
 
   async function handleConnectGoogle() {
@@ -111,44 +156,27 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
     }
   }
 
-  async function handleSaveConfig() {
-    setSaving(true);
-    try {
-      const updated = await updateMarketingSite(site.id, {
-        ga4_property_id: selectedGa4 || null,
-        gsc_site_url: selectedGsc || null,
-      });
-      onSiteUpdated?.(updated);
-      toast.success("Propiedades guardadas — los datos empezaran a cargarse");
-    } catch (e: any) {
-      toast.error("Error: " + (e.message || ""));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const hasChanges =
-    selectedGa4 !== (site.ga4_property_id || "") ||
-    selectedGsc !== (site.gsc_site_url || "");
+  // Use live KPIs or cached site values
+  const clicks = liveKpis?.clicks ?? site.organic_clicks_7d;
+  const impressions = liveKpis?.impressions ?? site.organic_impressions_7d;
+  const position = liveKpis?.position ?? site.avg_position;
 
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard label="SEO Score" value={site.last_audit_score != null ? `${site.last_audit_score}/100` : "--"} icon={<ChartBarIcon className="w-5 h-5" />} color={site.last_audit_score >= 80 ? "green" : site.last_audit_score >= 50 ? "yellow" : "red"} />
-        <KpiCard label="Clicks (7d)" value={site.organic_clicks_7d != null ? site.organic_clicks_7d.toLocaleString() : "--"} icon={<CursorArrowRaysIcon className="w-5 h-5" />} color="blue" />
-        <KpiCard label="Impresiones (7d)" value={site.organic_impressions_7d != null ? site.organic_impressions_7d.toLocaleString() : "--"} icon={<EyeIcon className="w-5 h-5" />} color="purple" />
-        <KpiCard label="Posicion media" value={site.avg_position != null ? site.avg_position.toFixed(1) : "--"} icon={<ArrowTrendingUpIcon className="w-5 h-5" />} color="orange" />
+        <KpiCard label="Clicks (28d)" value={clicks != null ? clicks.toLocaleString() : "--"} icon={<CursorArrowRaysIcon className="w-5 h-5" />} color="blue" />
+        <KpiCard label="Impresiones (28d)" value={impressions != null ? impressions.toLocaleString() : "--"} icon={<EyeIcon className="w-5 h-5" />} color="purple" />
+        <KpiCard label="Posicion media" value={position != null ? Number(position).toFixed(1) : "--"} icon={<ArrowTrendingUpIcon className="w-5 h-5" />} color="orange" />
       </div>
 
-      {/* Google Connection + Property Selection — unified card */}
+      {/* Google Connection + Property Selection */}
       <div className="bg-white rounded-2xl p-5 border border-slate-200">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <LinkIcon className="w-4 h-4 text-slate-500" />
-            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
-              Google
-            </h3>
+            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Google</h3>
           </div>
           {googleAuth?.connected ? (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg">
@@ -156,11 +184,8 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
               <span className="text-sm text-green-700">{googleAuth.email}</span>
             </div>
           ) : (
-            <button
-              onClick={handleConnectGoogle}
-              disabled={connecting}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors disabled:opacity-50"
-            >
+            <button onClick={handleConnectGoogle} disabled={connecting}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors disabled:opacity-50">
               <GoogleIcon />
               {connecting ? "Conectando..." : "Conectar Google"}
             </button>
@@ -168,9 +193,7 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
         </div>
 
         {!googleAuth?.connected && (
-          <p className="text-sm text-slate-400">
-            Conecta tu cuenta de Google para acceder a Analytics, Search Console, Tag Manager y Ads.
-          </p>
+          <p className="text-sm text-slate-400">Conecta tu cuenta de Google para acceder a Analytics, Search Console, Tag Manager y Ads.</p>
         )}
 
         {googleAuth?.connected && (
@@ -178,11 +201,10 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
             {loadingProperties ? (
               <div className="flex items-center gap-2 text-sm text-slate-400">
                 <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                Cargando propiedades...
+                Detectando propiedades...
               </div>
             ) : (
               <>
-                {/* GA4 Property Dropdown */}
                 <div>
                   <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
                     <AnalyticsIcon />
@@ -190,33 +212,18 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
                     {site.ga4_property_id && <CheckCircleIcon className="w-4 h-4 text-green-500" />}
                   </label>
                   {ga4Properties.length > 0 ? (
-                    <select
-                      value={selectedGa4}
-                      onChange={(e) => setSelectedGa4(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 bg-white"
-                    >
+                    <select value={site.ga4_property_id || ""} onChange={(e) => handleGa4Change(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 bg-white">
                       <option value="">Seleccionar propiedad...</option>
                       {ga4Properties.map((p) => (
-                        <option key={p.property_id} value={p.property_id}>
-                          {p.display_name} — {p.account} ({p.property_id})
-                        </option>
+                        <option key={p.property_id} value={p.property_id}>{p.display_name} — {p.account} ({p.property_id})</option>
                       ))}
                     </select>
                   ) : (
-                    <div>
-                      <input
-                        type="text"
-                        placeholder="properties/123456789"
-                        value={selectedGa4}
-                        onChange={(e) => setSelectedGa4(e.target.value)}
-                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
-                      />
-                      <p className="text-xs text-slate-400 mt-1">No se encontraron propiedades. Introduce el ID manualmente.</p>
-                    </div>
+                    <p className="text-sm text-slate-400">No se encontraron propiedades GA4 en esta cuenta.</p>
                   )}
                 </div>
 
-                {/* GSC Site Dropdown */}
                 <div>
                   <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
                     <GoogleIcon />
@@ -224,44 +231,17 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
                     {site.gsc_site_url && <CheckCircleIcon className="w-4 h-4 text-green-500" />}
                   </label>
                   {gscSites.length > 0 ? (
-                    <select
-                      value={selectedGsc}
-                      onChange={(e) => setSelectedGsc(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 bg-white"
-                    >
+                    <select value={site.gsc_site_url || ""} onChange={(e) => handleGscChange(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 bg-white">
                       <option value="">Seleccionar sitio...</option>
                       {gscSites.map((s) => (
-                        <option key={s.site_url} value={s.site_url}>
-                          {s.site_url} ({s.permission_level})
-                        </option>
+                        <option key={s.site_url} value={s.site_url}>{s.site_url} ({s.permission_level})</option>
                       ))}
                     </select>
                   ) : (
-                    <div>
-                      <input
-                        type="text"
-                        placeholder="sc-domain:tudominio.com"
-                        value={selectedGsc}
-                        onChange={(e) => setSelectedGsc(e.target.value)}
-                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
-                      />
-                      <p className="text-xs text-slate-400 mt-1">No se encontraron sitios. Introduce la URL manualmente.</p>
-                    </div>
+                    <p className="text-sm text-slate-400">No se encontraron sitios en Search Console.</p>
                   )}
                 </div>
-
-                {/* Save */}
-                {hasChanges && (
-                  <div className="flex justify-end pt-1">
-                    <button
-                      onClick={handleSaveConfig}
-                      disabled={saving}
-                      className="px-4 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors"
-                    >
-                      {saving ? "Guardando..." : "Guardar y activar"}
-                    </button>
-                  </div>
-                )}
               </>
             )}
           </div>
@@ -270,9 +250,7 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
 
       {/* Site Info */}
       <div className="bg-white rounded-2xl p-5 border border-slate-200">
-        <h3 className="text-sm font-semibold text-slate-500 mb-3 uppercase tracking-wide">
-          Informacion del sitio
-        </h3>
+        <h3 className="text-sm font-semibold text-slate-500 mb-3 uppercase tracking-wide">Informacion del sitio</h3>
         <div className="grid grid-cols-2 gap-4 text-sm">
           <InfoRow label="Dominio" value={site.domain} />
           <InfoRow label="URL" value={site.url} isLink />
@@ -306,7 +284,7 @@ function AnalyticsIcon() {
 }
 
 function KpiCard({ label, value, icon, color }: { label: string; value: string; icon: React.ReactNode; color: string }) {
-  const colorClasses: Record<string, string> = {
+  const c: Record<string, string> = {
     green: "bg-green-50 text-green-700 border-green-200",
     yellow: "bg-yellow-50 text-yellow-700 border-yellow-200",
     red: "bg-red-50 text-red-700 border-red-200",
@@ -315,7 +293,7 @@ function KpiCard({ label, value, icon, color }: { label: string; value: string; 
     orange: "bg-orange-50 text-orange-700 border-orange-200",
   };
   return (
-    <div className={`rounded-2xl p-4 border ${colorClasses[color] || colorClasses.blue}`}>
+    <div className={`rounded-2xl p-4 border ${c[color] || c.blue}`}>
       <div className="flex items-center gap-2 mb-2 opacity-60">{icon}</div>
       <p className="text-2xl font-bold">{value}</p>
       <p className="text-xs opacity-60 mt-1">{label}</p>
@@ -327,11 +305,8 @@ function InfoRow({ label, value, isLink }: { label: string; value: string; isLin
   return (
     <div>
       <p className="text-slate-400 text-xs mb-0.5">{label}</p>
-      {isLink ? (
-        <a href={value} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm">{value}</a>
-      ) : (
-        <p className="text-slate-800 text-sm">{value}</p>
-      )}
+      {isLink ? <a href={value} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm">{value}</a>
+        : <p className="text-slate-800 text-sm">{value}</p>}
     </div>
   );
 }
