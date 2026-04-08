@@ -33,8 +33,12 @@ from api.services.marketing.seo_audit import (
 from api.services.marketing.pagespeed import get_pagespeed
 from api.dependencies import get_current_user_jwt, get_current_user_id
 from api.exceptions import handle_api_exception
+from api.config import settings
 
+from fastapi.responses import HTMLResponse
 import logging
+import urllib.parse
+import secrets
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/marketing", tags=["marketing"])
@@ -406,3 +410,188 @@ async def api_pagespeed(
         raise
     except Exception as e:
         raise handle_api_exception(e)
+
+
+# ============================================================================
+# Google OAuth for Marketing (Analytics + Search Console)
+# ============================================================================
+
+MARKETING_SCOPES = [
+    "https://www.googleapis.com/auth/analytics.readonly",
+    "https://www.googleapis.com/auth/webmasters.readonly",
+    "openid",
+    "email",
+    "profile",
+]
+
+
+@router.get("/auth/url")
+async def api_google_auth_url(
+    user_id: str = Depends(get_current_user_id),
+):
+    """Generate Google OAuth URL for marketing scopes (Analytics + Search Console)."""
+    if not settings.google_client_id:
+        raise HTTPException(status_code=500, detail="Google OAuth not configured")
+
+    state = f"{user_id}:{secrets.token_urlsafe(16)}"
+    redirect_uri = f"{settings.frontend_url}/api/marketing/auth/callback"
+
+    params = {
+        "client_id": settings.google_client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": " ".join(MARKETING_SCOPES),
+        "access_type": "offline",
+        "prompt": "consent",
+        "state": state,
+    }
+
+    url = f"https://accounts.google.com/o/oauth2/v2/auth?{urllib.parse.urlencode(params)}"
+    return {"url": url, "state": state}
+
+
+@router.get("/auth/callback", response_class=HTMLResponse)
+async def api_google_auth_callback(
+    code: str = Query(...),
+    state: str = Query(""),
+):
+    """
+    Google OAuth callback - exchanges code for tokens, saves as google_marketing connection.
+    Returns HTML that notifies opener window and closes itself.
+    """
+    import httpx
+    from lib.supabase_client import get_service_role_client
+    from lib.token_encryption import encrypt_token_fields
+    from datetime import datetime, timezone, timedelta
+
+    user_id = state.split(":")[0] if ":" in state else ""
+    if not user_id:
+        return HTMLResponse("<html><body><h2>Error: invalid state</h2></body></html>", status_code=400)
+
+    redirect_uri = f"{settings.frontend_url}/api/marketing/auth/callback"
+
+    # Exchange code for tokens
+    async with httpx.AsyncClient() as client:
+        token_resp = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": settings.google_client_id,
+                "client_secret": settings.google_client_secret,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+            },
+        )
+
+    if token_resp.status_code != 200:
+        logger.error(f"Google token exchange failed: {token_resp.text}")
+        return HTMLResponse(f"<html><body><h2>Error exchanging token</h2><pre>{token_resp.text}</pre></body></html>", status_code=400)
+
+    tokens = token_resp.json()
+    access_token = tokens.get("access_token")
+    refresh_token = tokens.get("refresh_token")
+    expires_in = tokens.get("expires_in", 3600)
+
+    # Get user info
+    async with httpx.AsyncClient() as client:
+        userinfo_resp = await client.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+    userinfo = userinfo_resp.json() if userinfo_resp.status_code == 200 else {}
+
+    # Save to ext_connections
+    supabase = get_service_role_client()
+    token_expires_at = (datetime.now(timezone.utc) + timedelta(seconds=expires_in)).isoformat()
+
+    encrypted = encrypt_token_fields({
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+    })
+
+    # Upsert: check if marketing connection exists
+    existing = supabase.table("ext_connections")\
+        .select("id")\
+        .eq("user_id", user_id)\
+        .eq("provider", "google_marketing")\
+        .eq("is_active", True)\
+        .limit(1)\
+        .execute()
+
+    connection_data = {
+        "user_id": user_id,
+        "provider": "google_marketing",
+        "provider_user_id": userinfo.get("id", ""),
+        "provider_email": userinfo.get("email", ""),
+        "provider_name": userinfo.get("name", ""),
+        "provider_avatar": userinfo.get("picture", ""),
+        "access_token": encrypted["access_token"],
+        "refresh_token": encrypted["refresh_token"],
+        "token_expires_at": token_expires_at,
+        "is_active": True,
+        "is_primary": True,
+        "scopes": MARKETING_SCOPES,
+        "metadata": {
+            "connected_at": datetime.now(timezone.utc).isoformat(),
+            "client_id": settings.google_client_id,
+        },
+    }
+
+    if existing.data:
+        supabase.table("ext_connections")\
+            .update(connection_data)\
+            .eq("id", existing.data[0]["id"])\
+            .execute()
+    else:
+        supabase.table("ext_connections")\
+            .insert(connection_data)\
+            .execute()
+
+    provider_email = userinfo.get("email", "")
+    logger.info(f"Marketing Google OAuth connected for user {user_id}: {provider_email}")
+
+    return HTMLResponse(f"""
+    <html>
+    <body style="font-family: system-ui; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f8fafc;">
+        <div style="text-align: center; padding: 2rem;">
+            <div style="font-size: 48px; margin-bottom: 16px; color: #22c55e;">&#10003;</div>
+            <h2 style="color: #1e293b; margin: 0 0 8px;">Conectado</h2>
+            <p style="color: #64748b;">Google Analytics y Search Console conectados como <strong>{provider_email}</strong></p>
+            <p style="color: #94a3b8; font-size: 14px;">Esta ventana se cerrara automaticamente...</p>
+        </div>
+    </body>
+    <script>
+        if (window.opener) {{
+            window.opener.postMessage({{ type: 'google_marketing_connected', email: '{provider_email}' }}, '*');
+        }}
+        setTimeout(function() {{ window.close(); }}, 2000);
+    </script>
+    </html>
+    """)
+
+
+@router.get("/auth/status")
+async def api_google_auth_status(
+    user_id: str = Depends(get_current_user_id),
+):
+    """Check if the user has a google_marketing OAuth connection."""
+    from lib.supabase_client import get_service_role_client
+
+    supabase = get_service_role_client()
+    result = supabase.table("ext_connections")\
+        .select("id, provider_email, provider_name, provider_avatar, is_active")\
+        .eq("user_id", user_id)\
+        .eq("provider", "google_marketing")\
+        .eq("is_active", True)\
+        .limit(1)\
+        .execute()
+
+    if result.data:
+        conn = result.data[0]
+        return {
+            "connected": True,
+            "email": conn.get("provider_email"),
+            "name": conn.get("provider_name"),
+            "avatar": conn.get("provider_avatar"),
+        }
+    return {"connected": False}

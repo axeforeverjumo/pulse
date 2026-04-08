@@ -4396,3 +4396,12 @@ export async function getMarketingPageSpeed(siteId: string, strategy: 'mobile' |
   if (url) params.set('url', url);
   return api<any>(`/marketing/sites/${siteId}/pagespeed?${params}`);
 }
+
+// Google OAuth
+export async function getMarketingAuthUrl() {
+  return api<{ url: string; state: string }>('/marketing/auth/url');
+}
+
+export async function getMarketingAuthStatus() {
+  return api<{ connected: boolean; email?: string; name?: string; avatar?: string }>('/marketing/auth/status');
+}
