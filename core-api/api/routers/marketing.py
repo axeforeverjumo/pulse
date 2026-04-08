@@ -930,8 +930,6 @@ async def api_google_auth_callback(
         "provider": "google_marketing",
         "provider_user_id": userinfo.get("id", ""),
         "provider_email": userinfo.get("email", ""),
-        "provider_name": userinfo.get("name", ""),
-        "provider_avatar": userinfo.get("picture", ""),
         "access_token": encrypted["access_token"],
         "refresh_token": encrypted["refresh_token"],
         "token_expires_at": token_expires_at,
@@ -941,6 +939,8 @@ async def api_google_auth_callback(
         "metadata": {
             "connected_at": datetime.now(timezone.utc).isoformat(),
             "client_id": settings.google_client_id,
+            "provider_name": userinfo.get("name", ""),
+            "provider_avatar": userinfo.get("picture", ""),
         },
     }
 
@@ -986,7 +986,7 @@ async def api_google_auth_status(
 
     supabase = get_service_role_client()
     result = supabase.table("ext_connections")\
-        .select("id, provider_email, provider_name, provider_avatar, is_active")\
+        .select("id, provider_email, metadata, is_active")\
         .eq("user_id", user_id)\
         .eq("provider", "google_marketing")\
         .eq("is_active", True)\
@@ -995,10 +995,11 @@ async def api_google_auth_status(
 
     if result.data:
         conn = result.data[0]
+        meta = conn.get("metadata") or {}
         return {
             "connected": True,
             "email": conn.get("provider_email"),
-            "name": conn.get("provider_name"),
-            "avatar": conn.get("provider_avatar"),
+            "name": meta.get("provider_name", ""),
+            "avatar": meta.get("provider_avatar", ""),
         }
     return {"connected": False}
