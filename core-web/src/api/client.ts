@@ -4447,3 +4447,11 @@ export async function getMarketingAuthUrl() {
 export async function getMarketingAuthStatus() {
   return api<{ connected: boolean; email?: string; name?: string; avatar?: string }>('/marketing/auth/status');
 }
+
+export async function getMarketingGa4Properties() {
+  return api<{ property_id: string; display_name: string; account: string }[]>('/marketing/auth/ga4-properties');
+}
+
+export async function getMarketingGscSites() {
+  return api<{ site_url: string; permission_level: string }[]>('/marketing/auth/gsc-sites');
+}

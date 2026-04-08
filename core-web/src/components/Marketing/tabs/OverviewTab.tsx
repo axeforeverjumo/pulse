@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   ChartBarIcon,
   EyeIcon,
@@ -11,6 +11,8 @@ import {
   updateMarketingSite,
   getMarketingAuthUrl,
   getMarketingAuthStatus,
+  getMarketingGa4Properties,
+  getMarketingGscSites,
 } from "../../../api/client";
 import { toast } from "sonner";
 
@@ -21,21 +23,32 @@ interface Props {
 }
 
 export default function OverviewTab({ site, onSiteUpdated }: Props) {
-  const [ga4Id, setGa4Id] = useState(site.ga4_property_id || "");
-  const [gscUrl, setGscUrl] = useState(site.gsc_site_url || "");
-  const [saving, setSaving] = useState(false);
   const [googleAuth, setGoogleAuth] = useState<{
     connected: boolean;
     email?: string;
-    name?: string;
   } | null>(null);
   const [connecting, setConnecting] = useState(false);
+
+  // Auto-discovery
+  const [ga4Properties, setGa4Properties] = useState<any[]>([]);
+  const [gscSites, setGscSites] = useState<any[]>([]);
+  const [loadingProperties, setLoadingProperties] = useState(false);
+
+  // Selected values
+  const [selectedGa4, setSelectedGa4] = useState(site.ga4_property_id || "");
+  const [selectedGsc, setSelectedGsc] = useState(site.gsc_site_url || "");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     checkGoogleAuth();
   }, []);
 
-  // Listen for OAuth popup callback
+  useEffect(() => {
+    if (googleAuth?.connected) {
+      loadProperties();
+    }
+  }, [googleAuth?.connected]);
+
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
       if (event.data?.type === "google_marketing_connected") {
@@ -51,8 +64,35 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
     try {
       const status = await getMarketingAuthStatus();
       setGoogleAuth(status);
-    } catch {
-      // ignore
+    } catch {}
+  }
+
+  async function loadProperties() {
+    setLoadingProperties(true);
+    try {
+      const [props, sites] = await Promise.all([
+        getMarketingGa4Properties().catch(() => []),
+        getMarketingGscSites().catch(() => []),
+      ]);
+      setGa4Properties(props);
+      setGscSites(sites);
+
+      // Auto-select if only one and not yet configured
+      if (props.length === 1 && !site.ga4_property_id) {
+        setSelectedGa4(props[0].property_id);
+      }
+      if (sites.length > 0 && !site.gsc_site_url) {
+        // Try to match by domain
+        const match = sites.find((s: any) =>
+          s.site_url.includes(site.domain)
+        );
+        if (match) setSelectedGsc(match.site_url);
+        else if (sites.length === 1) setSelectedGsc(sites[0].site_url);
+      }
+    } catch (e) {
+      console.error("Failed to load properties", e);
+    } finally {
+      setLoadingProperties(false);
     }
   }
 
@@ -60,9 +100,7 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
     setConnecting(true);
     try {
       const { url } = await getMarketingAuthUrl();
-      // Open OAuth in popup
-      const w = 500;
-      const h = 600;
+      const w = 500, h = 600;
       const left = window.screenX + (window.outerWidth - w) / 2;
       const top = window.screenY + (window.outerHeight - h) / 2;
       window.open(url, "google_marketing_oauth", `width=${w},height=${h},left=${left},top=${top}`);
@@ -77,11 +115,11 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
     setSaving(true);
     try {
       const updated = await updateMarketingSite(site.id, {
-        ga4_property_id: ga4Id || null,
-        gsc_site_url: gscUrl || null,
+        ga4_property_id: selectedGa4 || null,
+        gsc_site_url: selectedGsc || null,
       });
       onSiteUpdated?.(updated);
-      toast.success("Configuracion guardada");
+      toast.success("Propiedades guardadas — los datos empezaran a cargarse");
     } catch (e: any) {
       toast.error("Error: " + (e.message || ""));
     } finally {
@@ -90,46 +128,26 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
   }
 
   const hasChanges =
-    ga4Id !== (site.ga4_property_id || "") ||
-    gscUrl !== (site.gsc_site_url || "");
+    selectedGa4 !== (site.ga4_property_id || "") ||
+    selectedGsc !== (site.gsc_site_url || "");
 
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard
-          label="SEO Score"
-          value={site.last_audit_score != null ? `${site.last_audit_score}/100` : "--"}
-          icon={<ChartBarIcon className="w-5 h-5" />}
-          color={site.last_audit_score >= 80 ? "green" : site.last_audit_score >= 50 ? "yellow" : "red"}
-        />
-        <KpiCard
-          label="Clicks (7d)"
-          value={site.organic_clicks_7d != null ? site.organic_clicks_7d.toLocaleString() : "--"}
-          icon={<CursorArrowRaysIcon className="w-5 h-5" />}
-          color="blue"
-        />
-        <KpiCard
-          label="Impresiones (7d)"
-          value={site.organic_impressions_7d != null ? site.organic_impressions_7d.toLocaleString() : "--"}
-          icon={<EyeIcon className="w-5 h-5" />}
-          color="purple"
-        />
-        <KpiCard
-          label="Posicion media"
-          value={site.avg_position != null ? site.avg_position.toFixed(1) : "--"}
-          icon={<ArrowTrendingUpIcon className="w-5 h-5" />}
-          color="orange"
-        />
+        <KpiCard label="SEO Score" value={site.last_audit_score != null ? `${site.last_audit_score}/100` : "--"} icon={<ChartBarIcon className="w-5 h-5" />} color={site.last_audit_score >= 80 ? "green" : site.last_audit_score >= 50 ? "yellow" : "red"} />
+        <KpiCard label="Clicks (7d)" value={site.organic_clicks_7d != null ? site.organic_clicks_7d.toLocaleString() : "--"} icon={<CursorArrowRaysIcon className="w-5 h-5" />} color="blue" />
+        <KpiCard label="Impresiones (7d)" value={site.organic_impressions_7d != null ? site.organic_impressions_7d.toLocaleString() : "--"} icon={<EyeIcon className="w-5 h-5" />} color="purple" />
+        <KpiCard label="Posicion media" value={site.avg_position != null ? site.avg_position.toFixed(1) : "--"} icon={<ArrowTrendingUpIcon className="w-5 h-5" />} color="orange" />
       </div>
 
-      {/* Google Connection */}
+      {/* Google Connection + Property Selection — unified card */}
       <div className="bg-white rounded-2xl p-5 border border-slate-200">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <LinkIcon className="w-4 h-4 text-slate-500" />
             <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
-              Cuenta Google
+              Google
             </h3>
           </div>
           {googleAuth?.connected ? (
@@ -151,71 +169,103 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
 
         {!googleAuth?.connected && (
           <p className="text-sm text-slate-400">
-            Conecta tu cuenta de Google para acceder a Analytics y Search Console.
-            Se pediran permisos de solo lectura.
+            Conecta tu cuenta de Google para acceder a Analytics, Search Console, Tag Manager y Ads.
           </p>
         )}
 
         {googleAuth?.connected && (
-          <p className="text-sm text-slate-400">
-            Cuenta conectada. Ahora configura los IDs de tus propiedades para ver datos en los tabs de Analytics y Search Console.
-          </p>
+          <div className="space-y-4 mt-4">
+            {loadingProperties ? (
+              <div className="flex items-center gap-2 text-sm text-slate-400">
+                <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                Cargando propiedades...
+              </div>
+            ) : (
+              <>
+                {/* GA4 Property Dropdown */}
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
+                    <AnalyticsIcon />
+                    Google Analytics 4
+                    {site.ga4_property_id && <CheckCircleIcon className="w-4 h-4 text-green-500" />}
+                  </label>
+                  {ga4Properties.length > 0 ? (
+                    <select
+                      value={selectedGa4}
+                      onChange={(e) => setSelectedGa4(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 bg-white"
+                    >
+                      <option value="">Seleccionar propiedad...</option>
+                      {ga4Properties.map((p) => (
+                        <option key={p.property_id} value={p.property_id}>
+                          {p.display_name} — {p.account} ({p.property_id})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div>
+                      <input
+                        type="text"
+                        placeholder="properties/123456789"
+                        value={selectedGa4}
+                        onChange={(e) => setSelectedGa4(e.target.value)}
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+                      />
+                      <p className="text-xs text-slate-400 mt-1">No se encontraron propiedades. Introduce el ID manualmente.</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* GSC Site Dropdown */}
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
+                    <GoogleIcon />
+                    Google Search Console
+                    {site.gsc_site_url && <CheckCircleIcon className="w-4 h-4 text-green-500" />}
+                  </label>
+                  {gscSites.length > 0 ? (
+                    <select
+                      value={selectedGsc}
+                      onChange={(e) => setSelectedGsc(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 bg-white"
+                    >
+                      <option value="">Seleccionar sitio...</option>
+                      {gscSites.map((s) => (
+                        <option key={s.site_url} value={s.site_url}>
+                          {s.site_url} ({s.permission_level})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div>
+                      <input
+                        type="text"
+                        placeholder="sc-domain:tudominio.com"
+                        value={selectedGsc}
+                        onChange={(e) => setSelectedGsc(e.target.value)}
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+                      />
+                      <p className="text-xs text-slate-400 mt-1">No se encontraron sitios. Introduce la URL manualmente.</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Save */}
+                {hasChanges && (
+                  <div className="flex justify-end pt-1">
+                    <button
+                      onClick={handleSaveConfig}
+                      disabled={saving}
+                      className="px-4 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors"
+                    >
+                      {saving ? "Guardando..." : "Guardar y activar"}
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         )}
-      </div>
-
-      {/* Property IDs Config */}
-      <div className="bg-white rounded-2xl p-5 border border-slate-200">
-        <h3 className="text-sm font-semibold text-slate-500 mb-4 uppercase tracking-wide">
-          Configuracion de propiedades
-        </h3>
-
-        <div className="space-y-4">
-          <div>
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
-              <AnalyticsIcon />
-              Google Analytics 4 — Property ID
-            </label>
-            <input
-              type="text"
-              placeholder="properties/123456789"
-              value={ga4Id}
-              onChange={(e) => setGa4Id(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
-            />
-            <p className="text-xs text-slate-400 mt-1">
-              GA4 &gt; Admin &gt; Property Details. Formato: properties/XXXXXXXXX
-            </p>
-          </div>
-
-          <div>
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
-              <GoogleIcon />
-              Google Search Console — Site URL
-            </label>
-            <input
-              type="text"
-              placeholder="sc-domain:factoriaia.com"
-              value={gscUrl}
-              onChange={(e) => setGscUrl(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
-            />
-            <p className="text-xs text-slate-400 mt-1">
-              Formato: sc-domain:tudominio.com o https://tudominio.com/
-            </p>
-          </div>
-
-          {hasChanges && (
-            <div className="flex justify-end pt-1">
-              <button
-                onClick={handleSaveConfig}
-                disabled={saving}
-                className="px-4 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors"
-              >
-                {saving ? "Guardando..." : "Guardar configuracion"}
-              </button>
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Site Info */}

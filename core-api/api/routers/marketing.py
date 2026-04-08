@@ -1003,3 +1003,54 @@ async def api_google_auth_status(
             "avatar": meta.get("provider_avatar", ""),
         }
     return {"connected": False}
+
+
+@router.get("/auth/ga4-properties")
+async def api_list_ga4_properties(
+    user_id: str = Depends(get_current_user_id),
+):
+    """List GA4 properties the connected Google account has access to."""
+    try:
+        from api.services.google_auth import get_credentials_for_user
+        from google.analytics.admin_v1beta import AnalyticsAdminServiceClient
+
+        credentials, _ = get_credentials_for_user(user_id, provider="google_marketing")
+        client = AnalyticsAdminServiceClient(credentials=credentials)
+
+        properties = []
+        for summary in client.list_account_summaries():
+            for prop in summary.property_summaries:
+                properties.append({
+                    "property_id": prop.property,  # e.g. "properties/123456789"
+                    "display_name": prop.display_name,
+                    "account": summary.display_name,
+                })
+        return properties
+    except Exception as e:
+        logger.error(f"Failed to list GA4 properties: {e}")
+        raise handle_api_exception(e)
+
+
+@router.get("/auth/gsc-sites")
+async def api_list_gsc_sites(
+    user_id: str = Depends(get_current_user_id),
+):
+    """List Search Console sites the connected Google account has access to."""
+    try:
+        from api.services.google_auth import get_credentials_for_user
+        from googleapiclient.discovery import build
+
+        credentials, _ = get_credentials_for_user(user_id, provider="google_marketing")
+        service = build("webmasters", "v3", credentials=credentials)
+
+        result = service.sites().list().execute()
+        sites = []
+        for site in result.get("siteEntry", []):
+            sites.append({
+                "site_url": site.get("siteUrl"),
+                "permission_level": site.get("permissionLevel"),
+            })
+        return sites
+    except Exception as e:
+        logger.error(f"Failed to list GSC sites: {e}")
+        raise handle_api_exception(e)
