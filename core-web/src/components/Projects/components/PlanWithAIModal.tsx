@@ -13,8 +13,10 @@ interface Props {
 export default function PlanWithAIModal({ boardId, onClose, onCreated }: Props) {
   const [spec, setSpec] = useState('');
   const [agentId, setAgentId] = useState<string>('');
+  const [autoStart, setAutoStart] = useState(false);
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<{ id: string; number: number; title: string }[] | null>(null);
+  const [enqueued, setEnqueued] = useState(0);
   const [agents, setAgents] = useState<OpenClawAgent[]>([]);
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
@@ -33,13 +35,15 @@ export default function PlanWithAIModal({ boardId, onClose, onCreated }: Props) 
     }
     setLoading(true);
     try {
-      const result = await planWithAI(boardId, spec, agentId || undefined);
+      const result = await planWithAI(boardId, spec, agentId || undefined, autoStart && !!agentId);
       if (result.tasks.length === 0) {
         toast.error('La IA no genero tareas. Intenta con un spec mas detallado.');
         return;
       }
       setPreview(result.tasks);
-      toast.success(`${result.count} tareas creadas`);
+      setEnqueued(result.enqueued || 0);
+      const autoMsg = result.enqueued ? ` | ${result.enqueued} en ejecucion` : '';
+      toast.success(`${result.count} tareas creadas${autoMsg}`);
       onCreated();
     } catch {
       toast.error('Error al planificar con IA');
@@ -97,11 +101,33 @@ export default function PlanWithAIModal({ boardId, onClose, onCreated }: Props) 
                   ))}
                 </select>
               </div>
+              {agentId && (
+                <label className="flex items-center gap-2.5 px-3 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={autoStart}
+                    onChange={(e) => setAutoStart(e.target.checked)}
+                    className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-200"
+                  />
+                  <div>
+                    <span className="text-[13px] font-medium text-indigo-900">Iniciar ejecucion autonoma</span>
+                    <p className="text-[11px] text-indigo-600 mt-0.5">
+                      Las tareas raiz se encolan inmediatamente. Al completarse, las siguientes se ejecutan automaticamente.
+                    </p>
+                  </div>
+                </label>
+              )}
             </>
           ) : (
             <div className="space-y-2">
               <p className="text-[13px] font-medium text-gray-700">
-                {preview.length} tareas creadas en el tablero:
+                {preview.length} tareas creadas en el tablero
+                {enqueued > 0 && (
+                  <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 text-[11px] font-medium rounded-full">
+                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                    {enqueued} en ejecucion
+                  </span>
+                )}
               </p>
               <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
                 {preview.map((task, i) => (

@@ -2851,10 +2851,25 @@ export async function deleteProjectIssue(issueId: string): Promise<{ status: str
 
 // --- Plan with AI ---
 
-export async function planWithAI(boardId: string, specText: string, agentId?: string): Promise<{ tasks: { id: string; number: number; title: string }[]; count: number }> {
+export async function planWithAI(boardId: string, specText: string, agentId?: string, autoStart?: boolean): Promise<{ tasks: { id: string; number: number; title: string }[]; count: number; enqueued: number }> {
   return api(`/projects/boards/${boardId}/plan-with-ai`, {
     method: 'POST',
-    body: JSON.stringify({ spec_text: specText, agent_id: agentId }),
+    body: JSON.stringify({ spec_text: specText, agent_id: agentId, auto_start: autoStart ?? false }),
+  });
+}
+
+export async function autonomousRun(boardId: string, prompt: string, agentId: string): Promise<{
+  tasks: { index: number; id: string; number: number; title: string; depends_on_indices: number[] }[];
+  count: number;
+  dependencies_created: number;
+  root_tasks: number[];
+  enqueued: number;
+  auto_started: boolean;
+  project_type: string | null;
+}> {
+  return api(`/projects/boards/${boardId}/autonomous-run`, {
+    method: 'POST',
+    body: JSON.stringify({ prompt, agent_id: agentId }),
   });
 }
 
@@ -4270,4 +4285,114 @@ export async function restoreStudioVersion(pageId: string, versionId: string): P
   return api<StudioPage>(`/studio/pages/${pageId}/versions/${versionId}/restore`, {
     method: 'PUT',
   });
+}
+
+// ============================================================================
+// Marketing API
+// ============================================================================
+
+export async function getMarketingSites(workspaceId: string, search?: string) {
+  const params = new URLSearchParams({ workspace_id: workspaceId });
+  if (search) params.set('search', search);
+  return api<{ sites: any[]; count: number }>(`/marketing/sites?${params}`);
+}
+
+export async function getMarketingSite(siteId: string) {
+  return api<any>(`/marketing/sites/${siteId}`);
+}
+
+export async function createMarketingSite(workspaceId: string, data: { name: string; url: string; domain?: string; site_type?: string; ga4_property_id?: string; gsc_site_url?: string; board_id?: string }) {
+  return api<any>('/marketing/sites', {
+    method: 'POST',
+    body: JSON.stringify({ workspace_id: workspaceId, ...data }),
+  });
+}
+
+export async function updateMarketingSite(siteId: string, data: Record<string, any>) {
+  return api<any>(`/marketing/sites/${siteId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteMarketingSite(siteId: string) {
+  return api<void>(`/marketing/sites/${siteId}`, { method: 'DELETE' });
+}
+
+export async function createMarketingSiteFromBoard(boardId: string, workspaceId: string) {
+  return api<any>(`/marketing/sites/from-board/${boardId}?workspace_id=${encodeURIComponent(workspaceId)}`, { method: 'POST' });
+}
+
+// Analytics (GA4)
+export async function getMarketingAnalyticsOverview(siteId: string, startDate?: string, endDate?: string) {
+  const params = new URLSearchParams();
+  if (startDate) params.set('start_date', startDate);
+  if (endDate) params.set('end_date', endDate);
+  return api<any>(`/marketing/sites/${siteId}/analytics/overview?${params}`);
+}
+
+export async function getMarketingAnalyticsRealtime(siteId: string) {
+  return api<any>(`/marketing/sites/${siteId}/analytics/realtime`);
+}
+
+export async function getMarketingAnalyticsPages(siteId: string, startDate?: string) {
+  const params = new URLSearchParams();
+  if (startDate) params.set('start_date', startDate);
+  return api<any[]>(`/marketing/sites/${siteId}/analytics/pages?${params}`);
+}
+
+export async function getMarketingAnalyticsSources(siteId: string, startDate?: string) {
+  const params = new URLSearchParams();
+  if (startDate) params.set('start_date', startDate);
+  return api<any[]>(`/marketing/sites/${siteId}/analytics/sources?${params}`);
+}
+
+// Search Console
+export async function getMarketingSearchPerformance(siteId: string, startDate?: string, endDate?: string) {
+  const params = new URLSearchParams();
+  if (startDate) params.set('start_date', startDate);
+  if (endDate) params.set('end_date', endDate);
+  return api<any>(`/marketing/sites/${siteId}/search/performance?${params}`);
+}
+
+export async function getMarketingSearchKeywords(siteId: string, startDate?: string, endDate?: string, limit?: number) {
+  const params = new URLSearchParams();
+  if (startDate) params.set('start_date', startDate);
+  if (endDate) params.set('end_date', endDate);
+  if (limit) params.set('limit', String(limit));
+  return api<any[]>(`/marketing/sites/${siteId}/search/keywords?${params}`);
+}
+
+export async function getMarketingSearchPages(siteId: string, startDate?: string, endDate?: string) {
+  const params = new URLSearchParams();
+  if (startDate) params.set('start_date', startDate);
+  if (endDate) params.set('end_date', endDate);
+  return api<any[]>(`/marketing/sites/${siteId}/search/pages?${params}`);
+}
+
+export async function getMarketingSearchIndexing(siteId: string) {
+  return api<any>(`/marketing/sites/${siteId}/search/indexing`);
+}
+
+// SEO Audit
+export async function runMarketingSeoAudit(siteId: string, url?: string) {
+  return api<any>(`/marketing/sites/${siteId}/audit`, {
+    method: 'POST',
+    body: JSON.stringify(url ? { url } : {}),
+  });
+}
+
+export async function getMarketingSeoAudits(siteId: string) {
+  return api<any[]>(`/marketing/sites/${siteId}/audits`);
+}
+
+export async function getMarketingSeoAudit(siteId: string, auditId: string) {
+  return api<any>(`/marketing/sites/${siteId}/audits/${auditId}`);
+}
+
+// PageSpeed
+export async function getMarketingPageSpeed(siteId: string, strategy: 'mobile' | 'desktop' = 'mobile', url?: string) {
+  const params = new URLSearchParams({ strategy });
+  if (url) params.set('url', url);
+  return api<any>(`/marketing/sites/${siteId}/pagespeed?${params}`);
 }

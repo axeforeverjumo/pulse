@@ -176,6 +176,13 @@ class PlanWithAIRequest(BaseModel):
     """Request model for AI-powered task planning from a spec."""
     spec_text: str = Field(..., min_length=10, description="Spec or requirements text to decompose into tasks")
     agent_id: Optional[str] = Field(None, description="Agent to assign to generated tasks")
+    auto_start: bool = Field(False, description="Auto-enqueue root tasks after creation")
+
+
+class AutonomousRunRequest(BaseModel):
+    """Request model for fully autonomous execution."""
+    prompt: str = Field(..., min_length=5, description="High-level description of what to build")
+    agent_id: str = Field(..., description="Agent to assign and execute all tasks")
 
 
 class CreateRefinementRequest(BaseModel):
@@ -2506,14 +2513,19 @@ async def _process_single_agent_job(
 
 
 async def _auto_enqueue_next_task(supabase: Any, completed_job: Dict[str, Any]) -> None:
-    """After an agent completes a task, auto-enqueue the next pending task
-    assigned to the same agent on the same board."""
+    """After an agent completes a task, find ALL newly-unblocked tasks
+    (DAG-aware) and enqueue them in parallel.
+
+    Old behavior: pick the next task by position (sequential).
+    New behavior: check dependency graph, enqueue EVERY task whose
+    dependencies are now ALL completed. This enables parallel execution."""
     agent_id = completed_job.get("agent_id")
     board_id = completed_job.get("board_id")
+    completed_issue_id = completed_job.get("issue_id")
     if not agent_id or not board_id:
         return
     try:
-        # Get all issues in non-terminal states assigned to this agent on this board
+        # Get all issues assigned to this agent on this board
         assignees_res = await supabase.table("project_issue_assignees")\
             .select("issue_id")\
             .eq("agent_id", agent_id)\
@@ -2523,17 +2535,19 @@ async def _auto_enqueue_next_task(supabase: Any, completed_job: Dict[str, Any]) 
         if not assigned_issue_ids:
             return
 
-        # Get issues on this board in To Do state
+        # Get all issues on this board (assigned to this agent)
         issues_res = await supabase.table("project_issues")\
-            .select("id, title, state_id, position, workspace_id, workspace_app_id, board_id, created_by, priority")\
+            .select("id, title, state_id, position, workspace_id, workspace_app_id, board_id, created_by, priority, completed_at")\
             .eq("board_id", board_id)\
             .in_("id", assigned_issue_ids)\
-            .is_("completed_at", "null")\
             .order("position", desc=False)\
             .execute()
-        candidates = issues_res.data or []
+        all_issues = issues_res.data or []
 
-        # Filter to To Do states only (not in progress, not QA/Done)
+        # Build completed set
+        completed_ids = set(i["id"] for i in all_issues if i.get("completed_at"))
+
+        # Get To Do state IDs
         states_res = await supabase.table("project_states")\
             .select("id, name, is_done")\
             .eq("board_id", board_id)\
@@ -2544,13 +2558,36 @@ async def _auto_enqueue_next_task(supabase: Any, completed_job: Dict[str, Any]) 
             if not s.get("is_done") and not _is_in_progress_state(name) and not _is_qa_state(name) and not _is_done_state(name):
                 todo_state_ids.add(s["id"])
 
-        candidates = [c for c in candidates if c.get("state_id") in todo_state_ids]
+        # Pending candidates: in To Do, not completed
+        candidates = [c for c in all_issues if c.get("state_id") in todo_state_ids and not c.get("completed_at")]
+
         if not candidates:
             logger.info("Auto-enqueue: no more To Do tasks for agent %s on board %s — triggering auto-deploy", agent_id, board_id)
             asyncio.create_task(_auto_deploy_board(supabase, board_id, agent_id))
             return
 
-        # Check which already have active jobs
+        # Get ALL dependencies for candidate issues
+        candidate_ids = [c["id"] for c in candidates]
+        deps_res = await supabase.table("project_issue_dependencies")\
+            .select("issue_id, depends_on_issue_id")\
+            .in_("issue_id", candidate_ids)\
+            .execute()
+        deps_by_issue: Dict[str, List[str]] = {}
+        for d in (deps_res.data or []):
+            deps_by_issue.setdefault(d["issue_id"], []).append(d["depends_on_issue_id"])
+
+        # Find tasks whose ALL dependencies are completed (DAG-aware)
+        unblocked = []
+        for c in candidates:
+            deps = deps_by_issue.get(c["id"], [])
+            if not deps or all(d in completed_ids for d in deps):
+                unblocked.append(c)
+
+        if not unblocked:
+            logger.info("Auto-enqueue: all candidates still blocked by deps for agent %s", agent_id)
+            return
+
+        # Filter out those that already have active jobs
         active_jobs_res = await supabase.table("project_agent_queue_jobs")\
             .select("issue_id")\
             .eq("agent_id", agent_id)\
@@ -2558,30 +2595,46 @@ async def _auto_enqueue_next_task(supabase: Any, completed_job: Dict[str, Any]) 
             .execute()
         active_issue_ids = set(j["issue_id"] for j in (active_jobs_res.data or []))
 
-        next_task = None
-        for c in candidates:
-            if c["id"] not in active_issue_ids:
-                next_task = c
-                break
+        to_enqueue = [c for c in unblocked if c["id"] not in active_issue_ids]
 
-        if not next_task:
-            logger.info("Auto-enqueue: all remaining tasks already queued for agent %s", agent_id)
+        if not to_enqueue:
+            logger.info("Auto-enqueue: all unblocked tasks already queued for agent %s", agent_id)
             return
 
-        await enqueue_project_agent_job(
-            supabase,
-            next_task,
-            agent_id,
-            requested_by=next_task.get("created_by"),
-            source="auto_next_task",
-            max_attempts=4,
-        )
-        logger.info(
-            "Auto-enqueue: queued next task '%s' (issue=%s) for agent %s",
-            next_task.get("title", "?"),
-            next_task["id"],
-            agent_id,
-        )
+        # Enqueue ALL unblocked tasks (parallel DAG execution)
+        enqueued = 0
+        for task in to_enqueue:
+            try:
+                await enqueue_project_agent_job(
+                    supabase,
+                    task,
+                    agent_id,
+                    requested_by=task.get("created_by"),
+                    source="auto_next_task_dag",
+                    max_attempts=4,
+                )
+                enqueued += 1
+                logger.info(
+                    "Auto-enqueue (DAG): queued '%s' (issue=%s) for agent %s",
+                    task.get("title", "?"), task["id"], agent_id,
+                )
+            except Exception as e:
+                logger.warning("Auto-enqueue failed for issue %s: %s", task["id"], e)
+
+        if enqueued > 0:
+            logger.info("Auto-enqueue (DAG): enqueued %d tasks in parallel for agent %s on board %s", enqueued, agent_id, board_id)
+            # Trigger immediate queue processing
+            try:
+                asyncio.create_task(
+                    _process_project_agent_queue_background(
+                        user_jwt=None,
+                        fallback_user_id=None,
+                        max_jobs=enqueued,
+                    )
+                )
+            except Exception:
+                pass
+
     except Exception as e:
         logger.warning("Auto-enqueue failed for agent %s: %s", agent_id, e)
 
@@ -4129,7 +4182,34 @@ async def plan_with_ai_endpoint(
                 except Exception:
                     pass  # Non-critical: duplicate or missing FK
 
-        return {"tasks": created, "count": len(created)}
+        # Auto-start: enqueue root tasks if requested
+        enqueued = 0
+        if request.auto_start and request.agent_id and len(created) > 0:
+            try:
+                from lib.supabase_client import get_async_service_role_client
+                svc = await get_async_service_role_client()
+
+                # Find root tasks (index 0 always has no deps in sequential chain)
+                root_id = created[0].get("id")
+                if root_id:
+                    root_issue_res = await svc.table("project_issues")\
+                        .select("*").eq("id", root_id).maybe_single().execute()
+                    if root_issue_res and root_issue_res.data:
+                        await enqueue_project_agent_job(
+                            svc, root_issue_res.data, request.agent_id,
+                            requested_by=user_id, source="plan_with_ai_auto_start", max_attempts=4,
+                        )
+                        enqueued = 1
+                        # Trigger immediate processing
+                        asyncio.create_task(
+                            _process_project_agent_queue_background(
+                                user_jwt=None, fallback_user_id=user_id, max_jobs=1,
+                            )
+                        )
+            except Exception as e:
+                logger.warning("Auto-start after plan-with-ai failed: %s", e)
+
+        return {"tasks": created, "count": len(created), "enqueued": enqueued}
 
     except HTTPException:
         raise
@@ -4137,6 +4217,44 @@ async def plan_with_ai_endpoint(
         raise HTTPException(status_code=422, detail="AI did not return valid JSON. Try again or simplify the spec.")
     except Exception as e:
         handle_api_exception(e, "Failed to plan with AI", logger)
+
+
+@router.post("/boards/{board_id}/autonomous-run")
+async def autonomous_run_endpoint(
+    board_id: str,
+    request: AutonomousRunRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Fully autonomous execution: one prompt → decompose into DAG → execute all.
+
+    The LLM analyzes the prompt + repo context, creates a dependency graph
+    of tasks, assigns the agent, and enqueues all root tasks immediately.
+    As tasks complete, newly-unblocked tasks are auto-enqueued in parallel.
+    """
+    from api.services.projects.task_decomposer import autonomous_decompose_and_run
+    from lib.supabase_client import get_async_service_role_client
+
+    try:
+        supabase = await get_async_service_role_client()
+
+        result = await autonomous_decompose_and_run(
+            supabase,
+            board_id=board_id,
+            prompt=request.prompt,
+            agent_id=request.agent_id,
+            user_id=user_id,
+            user_jwt=user_jwt,
+            auto_start=True,
+        )
+
+        return result
+
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        handle_api_exception(e, "Autonomous run failed", logger)
 
 
 @router.get("/boards/{board_id}/issues/search")
