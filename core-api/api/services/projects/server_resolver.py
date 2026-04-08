@@ -39,10 +39,10 @@ _SEARCH_PATHS = [
 @dataclass
 class ExecutionTarget:
     """Base for all execution targets."""
-    mode: str  # local | external | dedicated
-    repo_url: str
-    repo_full_name: str
-    work_dir: str  # resolved path where the repo lives / will live
+    mode: str = "local"  # local | external | dedicated
+    repo_url: str = ""
+    repo_full_name: str = ""
+    work_dir: str = ""  # resolved path where the repo lives / will live
     needs_clone: bool = False
     project_type: Optional[str] = None  # odoo | nextjs | django | docker | generic
 
