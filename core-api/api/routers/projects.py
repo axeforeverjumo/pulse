@@ -2817,6 +2817,79 @@ async def _process_project_agent_queue_background(
 
 
 # ============================================================================
+# Project Onboard Chat
+# ============================================================================
+
+
+class OnboardChatRequest(BaseModel):
+    message: str = Field(..., description="User message")
+    history: List[Dict[str, Any]] = Field(default_factory=list, description="Chat history [{role, content}]")
+    workspace_app_id: Optional[str] = Field(None, description="Workspace app ID for context")
+
+
+class OnboardChatResponse(BaseModel):
+    reply: str
+    project_config: Optional[Dict[str, Any]] = None
+
+
+@router.post("/onboard-chat", response_model=OnboardChatResponse)
+async def project_onboard_chat(
+    request: OnboardChatRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """
+    Conversational project setup. The AI asks questions and when it has
+    enough info, returns a project_config that the frontend uses to
+    auto-create the board.
+    """
+    from api.services.projects.onboard_chat import chat_onboard_project
+
+    # Build workspace context (servers, existing boards)
+    workspace_context: Dict[str, Any] = {}
+    if request.workspace_app_id:
+        try:
+            from lib.supabase_client import get_authenticated_async_client
+            supabase = await get_authenticated_async_client(user_jwt)
+
+            # Get workspace_id from app
+            app_res = await supabase.table("workspace_apps")\
+                .select("workspace_id")\
+                .eq("id", request.workspace_app_id)\
+                .maybe_single()\
+                .execute()
+            workspace_id = (app_res.data or {}).get("workspace_id") if app_res else None
+
+            if workspace_id:
+                # Load servers
+                servers_res = await supabase.table("workspace_servers")\
+                    .select("id, name, host, port, username, status")\
+                    .eq("workspace_id", workspace_id)\
+                    .execute()
+                workspace_context["servers"] = servers_res.data or []
+
+                # Load existing boards
+                boards_res = await supabase.table("project_boards")\
+                    .select("name, is_development, deploy_mode")\
+                    .eq("workspace_app_id", request.workspace_app_id)\
+                    .limit(20)\
+                    .execute()
+                workspace_context["boards"] = boards_res.data or []
+        except Exception as e:
+            logger.warning("Onboard chat: failed to load workspace context: %s", e)
+
+    result = await chat_onboard_project(
+        user_message=request.message,
+        history=request.history,
+        workspace_context=workspace_context,
+    )
+
+    return OnboardChatResponse(
+        reply=result["reply"],
+        project_config=result.get("project_config"),
+    )
+
+
+# ============================================================================
 # Board Endpoints
 # ============================================================================
 

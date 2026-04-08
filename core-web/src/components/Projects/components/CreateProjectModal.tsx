@@ -4,6 +4,7 @@ import { useProjectsStore } from '../../../stores/projectsStore';
 import { useCreateBoard } from '../../../hooks/queries/useProjects';
 import { api, createGitHubRepo, listServers, listRepoTokens, type WorkspaceServer, type RepoToken } from '../../../api/client';
 import Modal from '../../Modal/Modal';
+import ProjectOnboardChat from './ProjectOnboardChat';
 
 type DeployMode = 'local' | 'external' | 'dedicated';
 
@@ -51,6 +52,8 @@ export default function CreateProjectModal({
   const [savedTokens, setSavedTokens] = useState<RepoToken[]>([]);
   const [selectedTokenId, setSelectedTokenId] = useState<string>('');
   const [useManualToken, setUseManualToken] = useState(false);
+
+  const [mode, setMode] = useState<'chat' | 'form'>('chat');
 
   const navigate = useNavigate();
   const workspaceAppId = useProjectsStore((state) => state.workspaceAppId);
@@ -126,6 +129,47 @@ export default function CreateProjectModal({
     setSavedTokens([]);
     setSelectedTokenId('');
     setUseManualToken(false);
+    setMode('chat');
+  };
+
+  // Create board from chat-extracted config
+  const handleChatProjectReady = async (config: {
+    name: string;
+    description?: string;
+    is_development?: boolean;
+    repository_url?: string;
+    repository_full_name?: string;
+    deploy_mode?: 'local' | 'external' | 'dedicated';
+    server_ip?: string;
+    server_user?: string;
+    server_port?: number;
+    project_url?: string;
+  }) => {
+    try {
+      const result = await createBoard.mutateAsync({
+        name: config.name,
+        description: config.description || undefined,
+        is_development: config.is_development ?? false,
+        ...(config.is_development
+          ? {
+              deploy_mode: config.deploy_mode || 'local',
+              repository_url: config.repository_url || undefined,
+              repository_full_name: config.repository_full_name || undefined,
+              server_ip: config.server_ip || undefined,
+              server_user: config.server_user || undefined,
+              server_port: config.server_port || undefined,
+              project_url: config.project_url || undefined,
+            }
+          : {}),
+      });
+      if (result.board && onCreated) {
+        onCreated(result.board.id);
+      }
+      reset();
+      onClose();
+    } catch (error) {
+      console.error('Failed to create project from chat:', error);
+    }
   };
 
   // Resolve the effective token (manual or saved)
@@ -197,6 +241,41 @@ export default function CreateProjectModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Nuevo proyecto">
+      {/* Mode toggle */}
+      <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5 mb-4" style={{ maxWidth: 480 }}>
+        <button
+          type="button"
+          onClick={() => setMode('chat')}
+          className={`flex-1 px-3 py-1.5 text-[12px] rounded-md transition-colors ${
+            mode === 'chat'
+              ? 'bg-white text-gray-900 shadow-sm font-medium'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Chat con IA
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode('form')}
+          className={`flex-1 px-3 py-1.5 text-[12px] rounded-md transition-colors ${
+            mode === 'form'
+              ? 'bg-white text-gray-900 shadow-sm font-medium'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Formulario
+        </button>
+      </div>
+
+      {mode === 'chat' ? (
+        <div style={{ maxWidth: 480 }}>
+          <ProjectOnboardChat
+            workspaceAppId={workspaceAppId}
+            onProjectReady={handleChatProjectReady}
+            onCancel={() => setMode('form')}
+          />
+        </div>
+      ) : (
       <form onSubmit={handleSubmit} className="space-y-4" style={{ maxWidth: 480 }}>
         {/* Name */}
         <div>
@@ -496,6 +575,7 @@ export default function CreateProjectModal({
           </button>
         </div>
       </form>
+      )}
     </Modal>
   );
 }
