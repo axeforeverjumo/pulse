@@ -19,7 +19,7 @@ export default function SitesList({
         {[1, 2, 3].map((i) => (
           <div
             key={i}
-            className="h-16 bg-white/5 rounded-lg animate-pulse"
+            className="h-16 bg-slate-100 rounded-xl animate-pulse"
           />
         ))}
       </div>
@@ -28,7 +28,7 @@ export default function SitesList({
 
   if (sites.length === 0) {
     return (
-      <div className="p-4 text-center text-white/40 text-sm">
+      <div className="p-4 text-center text-slate-400 text-sm">
         No hay sitios configurados
       </div>
     );
@@ -40,34 +40,34 @@ export default function SitesList({
         <button
           key={site.id}
           onClick={() => onSelect(site.id)}
-          className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
+          className={`w-full text-left px-3 py-2.5 rounded-xl transition-colors ${
             selectedId === site.id
-              ? "bg-blue-600/20 border border-blue-500/30"
-              : "hover:bg-white/5 border border-transparent"
+              ? "bg-blue-50 border border-blue-200"
+              : "hover:bg-slate-50 border border-transparent"
           }`}
         >
           <div className="flex items-center gap-2.5">
             <div
               className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                selectedId === site.id ? "bg-blue-600/30" : "bg-white/10"
+                selectedId === site.id ? "bg-blue-100" : "bg-slate-100"
               }`}
             >
-              <GlobeAltIcon className="w-4 h-4 text-white/70" />
+              <GlobeAltIcon className="w-4 h-4 text-slate-500" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">
+              <p className="text-sm font-medium text-slate-900 truncate">
                 {site.name}
               </p>
-              <p className="text-xs text-white/40 truncate">{site.domain}</p>
+              <p className="text-xs text-slate-400 truncate">{site.domain}</p>
             </div>
             {site.last_audit_score != null && (
               <div
                 className={`text-xs font-bold px-2 py-0.5 rounded ${
                   site.last_audit_score >= 80
-                    ? "bg-green-500/20 text-green-400"
+                    ? "bg-green-50 text-green-600"
                     : site.last_audit_score >= 50
-                    ? "bg-yellow-500/20 text-yellow-400"
-                    : "bg-red-500/20 text-red-400"
+                    ? "bg-yellow-50 text-yellow-600"
+                    : "bg-red-50 text-red-600"
                 }`}
               >
                 {site.last_audit_score}

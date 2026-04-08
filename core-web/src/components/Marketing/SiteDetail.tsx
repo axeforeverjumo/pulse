@@ -4,7 +4,6 @@ import {
   MagnifyingGlassCircleIcon,
   ShieldCheckIcon,
   BoltIcon,
-  Cog6ToothIcon,
   PresentationChartLineIcon,
 } from "@heroicons/react/24/outline";
 import OverviewTab from "./tabs/OverviewTab";
@@ -44,19 +43,19 @@ export default function SiteDetail({
       <div className="px-6 pt-5 pb-0">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-xl font-semibold text-white">{site.name}</h2>
+            <h2 className="text-xl font-semibold text-slate-900">{site.name}</h2>
             <a
               href={site.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm text-blue-400 hover:underline"
+              className="text-sm text-blue-600 hover:underline"
             >
               {site.domain}
             </a>
           </div>
           <div className="flex items-center gap-2">
             {site.site_type && (
-              <span className="text-xs px-2 py-1 rounded bg-white/10 text-white/60">
+              <span className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-500">
                 {site.site_type}
               </span>
             )}
@@ -64,7 +63,7 @@ export default function SiteDetail({
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 border-b border-white/10">
+        <div className="flex gap-1 border-b border-[#e4edf8]">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -73,8 +72,8 @@ export default function SiteDetail({
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.id
-                    ? "border-blue-500 text-blue-400"
-                    : "border-transparent text-white/50 hover:text-white/70"
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-slate-400 hover:text-slate-600"
                 }`}
               >
                 <Icon className="w-4 h-4" />

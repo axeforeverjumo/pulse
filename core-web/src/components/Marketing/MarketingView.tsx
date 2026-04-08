@@ -5,10 +5,6 @@ import {
   PlusIcon,
   MagnifyingGlassIcon,
   ChartBarIcon,
-  MagnifyingGlassCircleIcon,
-  ShieldCheckIcon,
-  BoltIcon,
-  ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { HeaderButtons } from "../MiniAppHeader";
@@ -85,81 +81,94 @@ export default function MarketingView() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <HeaderButtons
-        title="Marketing"
-        icon={<ChartBarIcon className="w-5 h-5" />}
-        actions={
-          <button
-            onClick={() => setShowAddSite(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors"
-          >
-            <PlusIcon className="w-4 h-4" />
-            Nuevo sitio
-          </button>
-        }
-      />
-
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar: sites list */}
-        <div className="w-72 border-r border-white/10 flex flex-col flex-shrink-0">
-          {/* Search */}
-          <div className="p-3 border-b border-white/10">
-            <div className="relative">
-              <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
-              <input
-                type="text"
-                placeholder="Buscar sitios..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && fetchSites()}
-                className="w-full pl-9 pr-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-white/40 focus:outline-none focus:border-blue-500/50"
-              />
+    <div className="flex-1 flex h-full min-w-0 overflow-hidden">
+      <div className="relative flex-1 flex min-w-0 overflow-hidden rounded-[20px] bg-gradient-to-b from-[#f6fbff] to-[#edf4fb]">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white/92 md:rounded-[20px]">
+          {/* Header toolbar */}
+          <div className="h-14 flex items-center justify-between gap-2 border-b border-[#e4edf8] pl-3 pr-2 sm:pl-5 sm:pr-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <ChartBarIcon className="w-[18px] h-[18px] text-slate-700 hidden sm:block" />
+              <h1 className="text-sm sm:text-base font-semibold text-slate-900 truncate">
+                Marketing
+              </h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowAddSite(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-xl border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+              >
+                <PlusIcon className="w-4 h-4" />
+                Nuevo sitio
+              </button>
+              <HeaderButtons />
             </div>
           </div>
 
-          {/* Sites list */}
-          <div className="flex-1 overflow-y-auto">
-            <SitesList
-              sites={sites}
-              loading={loading}
-              selectedId={selectedSiteId}
-              onSelect={setSelectedSiteId}
-            />
-          </div>
-        </div>
+          {/* Content area */}
+          <div className="flex flex-1 overflow-hidden">
+            {/* Sidebar: sites list */}
+            <div className="w-72 border-r border-[#e4edf8] flex flex-col flex-shrink-0 bg-white/60">
+              {/* Search */}
+              <div className="p-3 border-b border-[#e4edf8]">
+                <div className="relative">
+                  <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar sitios..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && fetchSites()}
+                    className="w-full pl-9 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition-colors"
+                  />
+                </div>
+              </div>
 
-        {/* Main content */}
-        <div className="flex-1 overflow-y-auto">
-          {selectedSite ? (
-            <SiteDetail
-              site={selectedSite}
-              workspaceId={effectiveWorkspaceId}
-              onUpdated={handleSiteUpdated}
-              onDeleted={handleSiteDeleted}
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-white/40">
-              <GlobeAltIcon className="w-16 h-16 mb-4" />
-              <p className="text-lg font-medium mb-1">Selecciona un sitio</p>
-              <p className="text-sm">
-                o crea uno nuevo para empezar a monitorizar su SEO
-              </p>
+              {/* Sites list */}
+              <div className="flex-1 overflow-y-auto">
+                <SitesList
+                  sites={sites}
+                  loading={loading}
+                  selectedId={selectedSiteId}
+                  onSelect={setSelectedSiteId}
+                />
+              </div>
             </div>
-          )}
+
+            {/* Main content */}
+            <div className="flex-1 overflow-y-auto">
+              {selectedSite ? (
+                <SiteDetail
+                  site={selectedSite}
+                  workspaceId={effectiveWorkspaceId}
+                  onUpdated={handleSiteUpdated}
+                  onDeleted={handleSiteDeleted}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                  <GlobeAltIcon className="w-16 h-16 mb-4 text-slate-300" />
+                  <p className="text-lg font-medium mb-1 text-slate-500">
+                    Selecciona un sitio
+                  </p>
+                  <p className="text-sm">
+                    o crea uno nuevo para empezar a monitorizar su SEO
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Add site modal */}
       {showAddSite && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-white mb-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-md shadow-xl">
+            <h3 className="text-lg font-semibold text-slate-900 mb-4">
               Nuevo sitio web
             </h3>
             <div className="space-y-3">
               <div>
-                <label className="block text-sm text-white/60 mb-1">
+                <label className="block text-sm text-slate-600 mb-1">
                   Nombre
                 </label>
                 <input
@@ -169,11 +178,11 @@ export default function MarketingView() {
                   onChange={(e) =>
                     setNewSite((p) => ({ ...p, name: e.target.value }))
                   }
-                  className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-white/40 focus:outline-none focus:border-blue-500/50"
+                  className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
                 />
               </div>
               <div>
-                <label className="block text-sm text-white/60 mb-1">URL</label>
+                <label className="block text-sm text-slate-600 mb-1">URL</label>
                 <input
                   type="url"
                   placeholder="https://example.com"
@@ -181,21 +190,21 @@ export default function MarketingView() {
                   onChange={(e) =>
                     setNewSite((p) => ({ ...p, url: e.target.value }))
                   }
-                  className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-white/40 focus:outline-none focus:border-blue-500/50"
+                  className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
                 />
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
               <button
                 onClick={() => setShowAddSite(false)}
-                className="px-4 py-2 text-sm rounded-lg border border-white/10 text-white/60 hover:bg-white/5"
+                className="px-4 py-2 text-sm rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleCreateSite}
                 disabled={creating || !newSite.name || !newSite.url}
-                className="px-4 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+                className="px-4 py-2 text-sm rounded-xl bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors"
               >
                 {creating ? "Creando..." : "Crear sitio"}
               </button>

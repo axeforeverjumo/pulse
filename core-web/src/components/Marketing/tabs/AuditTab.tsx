@@ -66,11 +66,11 @@ export default function AuditTab({ site, onSiteUpdated }: Props) {
     <div className="space-y-6">
       {/* Action bar */}
       <div className="flex items-center justify-between">
-        <h3 className="text-white font-medium">Auditorias SEO</h3>
+        <h3 className="text-slate-800 font-medium">Auditorias SEO</h3>
         <button
           onClick={handleRunAudit}
           disabled={running}
-          className="px-4 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors"
+          className="px-4 py-2 text-sm rounded-xl bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors"
         >
           {running ? "Analizando..." : "Nueva auditoria"}
         </button>
@@ -83,13 +83,13 @@ export default function AuditTab({ site, onSiteUpdated }: Props) {
             <button
               key={a.id}
               onClick={() => handleSelectAudit(a.id)}
-              className={`flex-shrink-0 px-3 py-2 rounded-lg border text-sm transition-colors ${
+              className={`flex-shrink-0 px-3 py-2 rounded-xl border text-sm transition-colors ${
                 selectedAudit?.id === a.id
-                  ? "bg-blue-600/20 border-blue-500/30 text-blue-400"
-                  : "border-white/10 text-white/50 hover:bg-white/5"
+                  ? "bg-blue-50 border-blue-200 text-blue-600"
+                  : "border-slate-200 text-slate-500 hover:bg-slate-50"
               }`}
             >
-              <span className="font-mono font-bold">{a.seo_score ?? "—"}</span>
+              <span className="font-mono font-bold">{a.seo_score ?? "--"}</span>
               <span className="text-xs ml-2 opacity-60">
                 {new Date(a.created_at).toLocaleDateString("es-ES")}
               </span>
@@ -106,20 +106,18 @@ export default function AuditTab({ site, onSiteUpdated }: Props) {
             <div
               className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold border-4 ${
                 (selectedAudit.seo_score ?? 0) >= 80
-                  ? "border-green-500 text-green-400"
+                  ? "border-green-400 text-green-600"
                   : (selectedAudit.seo_score ?? 0) >= 50
-                  ? "border-yellow-500 text-yellow-400"
-                  : "border-red-500 text-red-400"
+                  ? "border-yellow-400 text-yellow-600"
+                  : "border-red-400 text-red-600"
               }`}
             >
-              {selectedAudit.seo_score ?? "—"}
+              {selectedAudit.seo_score ?? "--"}
             </div>
             <div>
-              <p className="text-white font-medium">SEO Score</p>
-              <p className="text-sm text-white/40">
-                {selectedAudit.audited_url}
-              </p>
-              <p className="text-xs text-white/30">
+              <p className="text-slate-800 font-medium">SEO Score</p>
+              <p className="text-sm text-slate-400">{selectedAudit.audited_url}</p>
+              <p className="text-xs text-slate-300">
                 {selectedAudit.diagnostics?.pages_crawled || 0} paginas analizadas
               </p>
             </div>
@@ -128,62 +126,50 @@ export default function AuditTab({ site, onSiteUpdated }: Props) {
           {/* Issue summary */}
           {selectedAudit.diagnostics?.issue_summary && (
             <div className="grid grid-cols-3 gap-3">
-              <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/20">
-                <p className="text-2xl font-bold text-red-400">
-                  {selectedAudit.diagnostics.issue_summary.critical}
-                </p>
-                <p className="text-xs text-red-400/60">Criticos</p>
+              <div className="bg-red-50 rounded-2xl p-3 border border-red-200">
+                <p className="text-2xl font-bold text-red-600">{selectedAudit.diagnostics.issue_summary.critical}</p>
+                <p className="text-xs text-red-400">Criticos</p>
               </div>
-              <div className="bg-yellow-500/10 rounded-xl p-3 border border-yellow-500/20">
-                <p className="text-2xl font-bold text-yellow-400">
-                  {selectedAudit.diagnostics.issue_summary.warning}
-                </p>
-                <p className="text-xs text-yellow-400/60">Advertencias</p>
+              <div className="bg-yellow-50 rounded-2xl p-3 border border-yellow-200">
+                <p className="text-2xl font-bold text-yellow-600">{selectedAudit.diagnostics.issue_summary.warning}</p>
+                <p className="text-xs text-yellow-400">Advertencias</p>
               </div>
-              <div className="bg-blue-500/10 rounded-xl p-3 border border-blue-500/20">
-                <p className="text-2xl font-bold text-blue-400">
-                  {selectedAudit.diagnostics.issue_summary.info}
-                </p>
-                <p className="text-xs text-blue-400/60">Info</p>
+              <div className="bg-blue-50 rounded-2xl p-3 border border-blue-200">
+                <p className="text-2xl font-bold text-blue-600">{selectedAudit.diagnostics.issue_summary.info}</p>
+                <p className="text-xs text-blue-400">Info</p>
               </div>
             </div>
           )}
 
           {/* Issues list */}
           {selectedAudit.issues?.length > 0 && (
-            <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
-              <div className="px-4 py-3 border-b border-white/10">
-                <h4 className="text-sm font-medium text-white/70">
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
+                <h4 className="text-sm font-medium text-slate-600">
                   Issues ({selectedAudit.issues.length})
                 </h4>
               </div>
-              <div className="divide-y divide-white/5 max-h-96 overflow-y-auto">
+              <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
                 {selectedAudit.issues.map((issue: any, i: number) => (
                   <div key={i} className="px-4 py-3 flex items-start gap-3">
                     <span
                       className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${
-                        issue.severity === "critical"
-                          ? "bg-red-400"
-                          : issue.severity === "warning"
-                          ? "bg-yellow-400"
-                          : "bg-blue-400"
+                        issue.severity === "critical" ? "bg-red-400" :
+                        issue.severity === "warning" ? "bg-yellow-400" :
+                        "bg-blue-400"
                       }`}
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white">{issue.message}</p>
+                      <p className="text-sm text-slate-800">{issue.message}</p>
                       {issue.url && (
-                        <p className="text-xs text-white/30 truncate mt-0.5">
-                          {issue.url}
-                        </p>
+                        <p className="text-xs text-slate-300 truncate mt-0.5">{issue.url}</p>
                       )}
                     </div>
                     <span
-                      className={`text-xs px-2 py-0.5 rounded flex-shrink-0 ${
-                        issue.severity === "critical"
-                          ? "bg-red-500/20 text-red-400"
-                          : issue.severity === "warning"
-                          ? "bg-yellow-500/20 text-yellow-400"
-                          : "bg-blue-500/20 text-blue-400"
+                      className={`text-xs px-2 py-0.5 rounded-lg flex-shrink-0 ${
+                        issue.severity === "critical" ? "bg-red-50 text-red-600" :
+                        issue.severity === "warning" ? "bg-yellow-50 text-yellow-600" :
+                        "bg-blue-50 text-blue-600"
                       }`}
                     >
                       {issue.type}
@@ -197,8 +183,8 @@ export default function AuditTab({ site, onSiteUpdated }: Props) {
       )}
 
       {!loading && audits.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-12 text-white/40">
-          <p className="text-lg font-medium mb-2">Sin auditorias</p>
+        <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+          <p className="text-lg font-medium mb-2 text-slate-500">Sin auditorias</p>
           <p className="text-sm">
             Ejecuta una nueva auditoria para analizar el SEO de tu sitio.
           </p>

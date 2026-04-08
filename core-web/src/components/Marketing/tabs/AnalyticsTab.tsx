@@ -41,9 +41,9 @@ export default function AnalyticsTab({ site }: Props) {
 
   if (!site.ga4_property_id) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-white/40">
-        <p className="text-lg font-medium mb-2">Google Analytics no configurado</p>
-        <p className="text-sm mb-4">
+      <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+        <p className="text-lg font-medium mb-2 text-slate-500">Google Analytics no configurado</p>
+        <p className="text-sm">
           Configura el GA4 Property ID en los ajustes del sitio para ver las metricas.
         </p>
       </div>
@@ -54,7 +54,7 @@ export default function AnalyticsTab({ site }: Props) {
     return (
       <div className="space-y-4">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-20 bg-white/5 rounded-lg animate-pulse" />
+          <div key={i} className="h-20 bg-slate-100 rounded-xl animate-pulse" />
         ))}
       </div>
     );
@@ -72,10 +72,10 @@ export default function AnalyticsTab({ site }: Props) {
           <button
             key={opt.value}
             onClick={() => setDateRange(opt.value)}
-            className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+            className={`px-3 py-1.5 text-sm rounded-xl border transition-colors ${
               dateRange === opt.value
-                ? "bg-blue-600/20 border-blue-500/30 text-blue-400"
-                : "border-white/10 text-white/50 hover:bg-white/5"
+                ? "bg-blue-50 border-blue-200 text-blue-600"
+                : "border-slate-200 text-slate-500 hover:bg-slate-50"
             }`}
           >
             {opt.label}
@@ -96,10 +96,10 @@ export default function AnalyticsTab({ site }: Props) {
         </div>
       )}
 
-      {/* Daily chart placeholder */}
+      {/* Daily chart */}
       {overview?.daily && overview.daily.length > 0 && (
-        <div className="bg-white/5 rounded-xl p-5 border border-white/10">
-          <h3 className="text-sm font-semibold text-white/70 mb-3">Trafico diario</h3>
+        <div className="bg-white rounded-2xl p-5 border border-slate-200">
+          <h3 className="text-sm font-semibold text-slate-500 mb-3">Trafico diario</h3>
           <div className="flex items-end gap-1 h-32">
             {overview.daily.map((day: any, i: number) => {
               const maxSessions = Math.max(...overview.daily.map((d: any) => d.sessions));
@@ -107,7 +107,7 @@ export default function AnalyticsTab({ site }: Props) {
               return (
                 <div
                   key={i}
-                  className="flex-1 bg-blue-500/40 rounded-t hover:bg-blue-500/60 transition-colors group relative"
+                  className="flex-1 bg-blue-200 rounded-t hover:bg-blue-400 transition-colors"
                   style={{ height: `${Math.max(height, 2)}%` }}
                   title={`${day.date}: ${day.sessions} sesiones`}
                 />
@@ -119,19 +119,16 @@ export default function AnalyticsTab({ site }: Props) {
 
       {/* Top pages */}
       {pages.length > 0 && (
-        <div className="bg-white/5 rounded-xl p-5 border border-white/10">
-          <h3 className="text-sm font-semibold text-white/70 mb-3">Paginas mas visitadas</h3>
+        <div className="bg-white rounded-2xl p-5 border border-slate-200">
+          <h3 className="text-sm font-semibold text-slate-500 mb-3">Paginas mas visitadas</h3>
           <div className="space-y-2">
             {pages.slice(0, 10).map((page: any, i: number) => (
-              <div
-                key={i}
-                className="flex items-center justify-between py-2 border-b border-white/5 last:border-0"
-              >
+              <div key={i} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white truncate">{page.path}</p>
-                  <p className="text-xs text-white/40 truncate">{page.title}</p>
+                  <p className="text-sm text-slate-800 truncate">{page.path}</p>
+                  <p className="text-xs text-slate-400 truncate">{page.title}</p>
                 </div>
-                <div className="text-sm text-white/70 font-mono ml-4">
+                <div className="text-sm text-slate-600 font-mono ml-4">
                   {page.pageviews.toLocaleString()}
                 </div>
               </div>
@@ -142,19 +139,16 @@ export default function AnalyticsTab({ site }: Props) {
 
       {/* Traffic sources */}
       {sources.length > 0 && (
-        <div className="bg-white/5 rounded-xl p-5 border border-white/10">
-          <h3 className="text-sm font-semibold text-white/70 mb-3">Fuentes de trafico</h3>
+        <div className="bg-white rounded-2xl p-5 border border-slate-200">
+          <h3 className="text-sm font-semibold text-slate-500 mb-3">Fuentes de trafico</h3>
           <div className="space-y-2">
             {sources.slice(0, 10).map((src: any, i: number) => (
-              <div
-                key={i}
-                className="flex items-center justify-between py-2 border-b border-white/5 last:border-0"
-              >
+              <div key={i} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
                 <div>
-                  <p className="text-sm text-white">{src.channel}</p>
-                  <p className="text-xs text-white/40">{src.source}</p>
+                  <p className="text-sm text-slate-800">{src.channel}</p>
+                  <p className="text-xs text-slate-400">{src.source}</p>
                 </div>
-                <div className="text-sm text-white/70 font-mono">
+                <div className="text-sm text-slate-600 font-mono">
                   {src.sessions.toLocaleString()} sesiones
                 </div>
               </div>
@@ -168,9 +162,9 @@ export default function AnalyticsTab({ site }: Props) {
 
 function MetricCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-      <p className="text-xs text-white/40 mb-1">{label}</p>
-      <p className="text-xl font-bold text-white">
+    <div className="bg-white rounded-2xl p-4 border border-slate-200">
+      <p className="text-xs text-slate-400 mb-1">{label}</p>
+      <p className="text-xl font-bold text-slate-900">
         {typeof value === "number" ? value.toLocaleString() : value}
       </p>
     </div>
