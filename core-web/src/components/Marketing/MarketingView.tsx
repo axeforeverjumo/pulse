@@ -12,6 +12,7 @@ import SitesList from "./SitesList";
 import SiteDetail from "./SiteDetail";
 import { getMarketingSites, createMarketingSite } from "../../api/client";
 import { toast } from "sonner";
+import Modal from "../Modal/Modal";
 
 export default function MarketingView() {
   const { workspaceId, siteId: urlSiteId } = useParams<{
@@ -160,58 +161,58 @@ export default function MarketingView() {
       </div>
 
       {/* Add site modal */}
-      {showAddSite && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-md shadow-xl">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">
-              Nuevo sitio web
-            </h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm text-slate-600 mb-1">
-                  Nombre
-                </label>
-                <input
-                  type="text"
-                  placeholder="Mi Web"
-                  value={newSite.name}
-                  onChange={(e) =>
-                    setNewSite((p) => ({ ...p, name: e.target.value }))
-                  }
-                  className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-slate-600 mb-1">URL</label>
-                <input
-                  type="url"
-                  placeholder="https://example.com"
-                  value={newSite.url}
-                  onChange={(e) =>
-                    setNewSite((p) => ({ ...p, url: e.target.value }))
-                  }
-                  className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 mt-6">
-              <button
-                onClick={() => setShowAddSite(false)}
-                className="px-4 py-2 text-sm rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleCreateSite}
-                disabled={creating || !newSite.name || !newSite.url}
-                className="px-4 py-2 text-sm rounded-xl bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors"
-              >
-                {creating ? "Creando..." : "Crear sitio"}
-              </button>
-            </div>
+      <Modal
+        isOpen={showAddSite}
+        onClose={() => setShowAddSite(false)}
+        title="Nuevo sitio web"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre
+            </label>
+            <input
+              type="text"
+              placeholder="Mi Web"
+              value={newSite.name}
+              onChange={(e) =>
+                setNewSite((p) => ({ ...p, name: e.target.value }))
+              }
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              URL
+            </label>
+            <input
+              type="url"
+              placeholder="https://example.com"
+              value={newSite.url}
+              onChange={(e) =>
+                setNewSite((p) => ({ ...p, url: e.target.value }))
+              }
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              onClick={() => setShowAddSite(false)}
+              className="px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleCreateSite}
+              disabled={creating || !newSite.name || !newSite.url}
+              className="px-4 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors"
+            >
+              {creating ? "Creando..." : "Crear sitio"}
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }
