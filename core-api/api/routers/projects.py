@@ -2035,8 +2035,8 @@ async def _execute_project_agent_job(
 
         # Determine queue recommendation
         if cc_status == "completed" and not cc_result.get("is_error"):
-            # Move directly to Done (autonomous mode — skip QA)
-            target_state = done_id or qa_id
+            # Move to QA (agent's "done") — always set completed_at to unblock dependencies
+            target_state = qa_id or done_id
             if target_state:
                 await supabase.table("project_issues").update({
                     "state_id": target_state,
@@ -2286,9 +2286,9 @@ async def _execute_project_agent_job(
 
     if task_marked_complete:
         updates: Dict[str, Any] = {}
-        done_or_qa = done_id or qa_id
-        if done_or_qa:
-            updates["state_id"] = done_or_qa
+        qa_or_done = qa_id or done_id
+        if qa_or_done:
+            updates["state_id"] = qa_or_done
             updates["completed_at"] = datetime.utcnow().isoformat()
         if checklist_items:
             updates["checklist_items"] = _mark_checklist_done(checklist_items)
@@ -2299,7 +2299,7 @@ async def _execute_project_agent_job(
                 issue_id=issue_id,
                 comment_user_id=comment_user_id,
                 agent=agent,
-                content="✅ Tarea terminada. La tarjeta se movió a Done.",
+                content=f"✅ Tarea terminada. La tarjeta se movió a {'QA' if qa_id else 'Done'}.",
                 workspace_id=task.get("workspace_id"),
                 workspace_app_id=task.get("workspace_app_id"),
             )
