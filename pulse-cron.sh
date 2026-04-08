@@ -46,4 +46,11 @@ if (( HOUR == 2 && MINUTE == 0 )); then
     curl -sf -m 300 "$API/daily-verification" -H "$AUTH" >> "$LOG" 2>&1 || log "WARN: daily-verification failed"
 fi
 
+# Weekly Monday at 3 AM: SEO keyword snapshot
+DOW=$(date +%u)  # 1=Monday
+if (( DOW == 1 && HOUR == 3 && MINUTE == 0 )); then
+    log "Running seo-snapshot"
+    curl -sf -m 300 "$API/seo-snapshot" -H "$AUTH" >> "$LOG" 2>&1 || log "WARN: seo-snapshot failed"
+fi
+
 log "Cron cycle complete"

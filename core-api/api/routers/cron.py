@@ -1517,6 +1517,121 @@ async def cron_pulse_context(authorization: str = Header(None)):
         )
 
 
+class SeoSnapshotCronResponse(BaseModel):
+    """Response for SEO snapshot cron job."""
+    status: str
+    sites_processed: int = 0
+    keywords_saved: int = 0
+    errors: int = 0
+    duration_seconds: Optional[float] = None
+
+
+@router.get("/seo-snapshot", response_model=SeoSnapshotCronResponse)
+async def cron_seo_snapshot(authorization: str = Header(None)):
+    """
+    CRON JOB: Weekly SEO keyword snapshot
+
+    RUNS: Weekly (Monday 3:00 AM UTC)
+
+    PURPOSE: Fetches Search Console performance data for all marketing sites
+    with gsc_site_url configured and saves keyword snapshots + updates cached metrics.
+    """
+    logger.info("=" * 80)
+    logger.info("CRON: Starting SEO snapshot")
+
+    if not verify_cron_auth(authorization):
+        logger.warning("Unauthorized cron attempt")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+
+    start_time = datetime.now(timezone.utc)
+
+    try:
+        supabase = get_service_role_client()
+
+        # Get all sites with GSC configured
+        sites_result = supabase.table("marketing_sites")\
+            .select("id, workspace_id, gsc_site_url, created_by")\
+            .not_.is_("gsc_site_url", "null")\
+            .execute()
+
+        sites = sites_result.data or []
+        sites_processed = 0
+        keywords_saved = 0
+        errors = 0
+
+        for site in sites:
+            try:
+                if not site.get("created_by") or not site.get("gsc_site_url"):
+                    continue
+
+                from api.services.marketing.search_console import gsc_keywords, gsc_performance
+
+                # Fetch keywords
+                kw_data = await gsc_keywords(
+                    user_id=site["created_by"],
+                    site_url=site["gsc_site_url"],
+                    limit=100,
+                )
+
+                # Save snapshots
+                today = datetime.now(timezone.utc).date()
+                week_ago = today - timedelta(days=7)
+
+                for kw in kw_data:
+                    supabase.table("marketing_keyword_snapshots").insert({
+                        "site_id": site["id"],
+                        "workspace_id": site["workspace_id"],
+                        "query": kw["query"],
+                        "clicks": kw.get("clicks", 0),
+                        "impressions": kw.get("impressions", 0),
+                        "ctr": kw.get("ctr", 0),
+                        "position": kw.get("position", 0),
+                        "date_range_start": week_ago.isoformat(),
+                        "date_range_end": today.isoformat(),
+                        "snapshot_date": today.isoformat(),
+                    }).execute()
+                    keywords_saved += 1
+
+                # Update cached metrics on the site
+                perf_data = await gsc_performance(
+                    user_id=site["created_by"],
+                    site_url=site["gsc_site_url"],
+                )
+                totals = perf_data.get("totals", {})
+                supabase.table("marketing_sites").update({
+                    "organic_clicks_7d": totals.get("clicks", 0),
+                    "organic_impressions_7d": totals.get("impressions", 0),
+                    "avg_position": totals.get("avg_position", 0),
+                }).eq("id", site["id"]).execute()
+
+                sites_processed += 1
+
+            except Exception as e:
+                logger.error(f"SEO snapshot error for site {site['id']}: {e}")
+                errors += 1
+
+        duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+        logger.info(f"CRON [seo-snapshot]: Done in {duration:.2f}s — sites={sites_processed}, keywords={keywords_saved}, errors={errors}")
+        logger.info("=" * 80)
+
+        return {
+            "status": "completed",
+            "sites_processed": sites_processed,
+            "keywords_saved": keywords_saved,
+            "errors": errors,
+            "duration_seconds": duration,
+        }
+
+    except Exception as e:
+        logger.error(f"CRON [seo-snapshot]: Failed: {str(e)}")
+        logger.exception("Full traceback:")
+        logger.info("=" * 80)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"SEO snapshot cron failed: {str(e)}"
+        )
+
+
 @router.get("/health", response_model=CronHealthResponse)
 async def cron_health():
     """
@@ -1587,6 +1702,11 @@ async def cron_health():
                 "name": "pulse-context",
                 "schedule": "Daily at 2:00 AM UTC",
                 "description": "AI Pulse Context refresh for active CRM opportunities"
+            },
+            {
+                "name": "seo-snapshot",
+                "schedule": "Weekly (Monday 3:00 AM UTC)",
+                "description": "Fetches Search Console data for all marketing sites and saves keyword snapshots"
             }
         ]
     }

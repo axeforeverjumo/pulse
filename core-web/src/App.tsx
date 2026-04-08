@@ -57,6 +57,7 @@ const CrmView = lazy(() => import("./components/CRM/CrmView"));
 const DevOpsView = lazy(() => import("./components/DevOps/DevOpsView"));
 const AutomationsView = lazy(() => import("./components/Automations/AutomationsView"));
 const StudioView = lazy(() => import("./components/Studio/StudioView"));
+const MarketingView = lazy(() => import("./components/Marketing/MarketingView"));
 const StudioRuntime = lazy(() => import("./components/Studio/runtime/StudioRuntime"));
 const OnboardingWizard = lazy(() => import("./components/Onboarding/OnboardingWizard"));
 const PENDING_INVITE_TOKEN_KEY = "pending_invite_token";
@@ -648,6 +649,8 @@ function AppContent() {
         <Route path="/workspace/:workspaceId/crm" element={<CrmView />} />
         <Route path="/workspace/:workspaceId/devops" element={<DevOpsView />} />
         <Route path="/workspace/:workspaceId/automations" element={<AutomationsView />} />
+        <Route path="/workspace/:workspaceId/marketing" element={<MarketingView />} />
+        <Route path="/workspace/:workspaceId/marketing/:siteId" element={<MarketingView />} />
         <Route path="/workspace/:workspaceId/studio" element={<StudioView />} />
         <Route path="/workspace/:workspaceId/studio/:appId" element={<StudioView />} />
         <Route path="/workspace/:workspaceId/studio/:appId/:pageId" element={<StudioView />} />
