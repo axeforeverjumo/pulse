@@ -105,7 +105,7 @@ export default function ProjectsSettingsModal({
         server_user: isDevelopment ? (serverUser.trim() || undefined) : undefined,
         server_password: isDevelopment ? (serverPassword.trim() || undefined) : undefined,
         server_port: isDevelopment && serverPort.trim() ? Number(serverPort.trim()) : undefined,
-        deploy_mode: isDevelopment ? (deployServerId.trim() ? 'dedicated' : 'local') : undefined,
+        deploy_mode: isDevelopment ? deployMode : undefined,
         deploy_server_id: isDevelopment && deployServerId.trim() ? deployServerId.trim() : undefined,
         deploy_subdomain: isDevelopment && deploySubdomain.trim() ? deploySubdomain.trim() : undefined,
         deploy_url: isDevelopment && deployUrl.trim() ? deployUrl.trim() : undefined,
@@ -315,7 +315,36 @@ export default function ProjectsSettingsModal({
                       El commit automático del agente usa credenciales seguras del servidor; aquí solo defines el repo objetivo.
                     </p>
 
-                    {/* Server selector from DevOps */}
+                    {/* Deploy mode selector */}
+                    <div>
+                      <label className="block text-xs text-text-secondary mb-1.5">Modo de ejecucion</label>
+                      <div className="flex gap-2">
+                        {([
+                          { value: 'local' as const, label: 'Local', desc: 'Agente trabaja en este servidor' },
+                          { value: 'external' as const, label: 'Externo', desc: 'SSH a otro servidor' },
+                          { value: 'dedicated' as const, label: 'Dedicado', desc: 'GitHub + servidor dedicado' },
+                        ]).map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setDeployMode(opt.value)}
+                            className={`flex-1 px-3 py-2 text-[12px] rounded-lg border transition-colors ${
+                              deployMode === opt.value
+                                ? 'border-gray-900 bg-gray-900 text-white'
+                                : 'border-border-gray bg-white text-text-secondary hover:border-gray-400'
+                            }`}
+                          >
+                            <div className="font-medium">{opt.label}</div>
+                            <div className={`text-[10px] mt-0.5 ${deployMode === opt.value ? 'text-gray-300' : 'text-text-tertiary'}`}>
+                              {opt.desc}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Server selector from DevOps — shown for external/dedicated modes */}
+                    {deployMode !== 'local' && (
                     <div>
                       <label className="block text-xs text-text-secondary mb-1">Servidor</label>
                       <ServerSelector
@@ -350,15 +379,28 @@ export default function ProjectsSettingsModal({
                     )}
 
                     <p className="text-[11px] text-text-tertiary">
-                      Estos datos se usan como contexto de ejecución para agentes.
+                      Estos datos se usan como contexto de ejecucion para agentes.
                     </p>
+                    </div>
+                    )}
 
-                    {/* Deploy info — auto-detected from server selection */}
+                    {/* Deploy mode info */}
+                    {deployMode === 'local' && (
+                      <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-[11px] text-blue-800">
+                          <span className="font-medium">Modo Local:</span> El agente buscara el repositorio en el servidor ({repositoryFullName ? `/opt/projects/${repositoryFullName.split('/').pop()}` : 'auto-detectado'}). Si no existe, lo clonara automaticamente.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Deploy info */}
                     <div className="border-t border-border-light pt-3 mt-3">
                       <p className="text-[11px] text-text-tertiary">
-                        {deployServerId
-                          ? `Despliegue en servidor seleccionado (${serverHost || 'servidor'})`
-                          : 'Sin servidor asignado — desarrollo local'}
+                        {deployMode === 'local'
+                          ? 'Modo local — el agente trabaja directamente en el servidor'
+                          : deployMode === 'external'
+                          ? `Modo externo — SSH a ${serverIp || 'servidor por configurar'}`
+                          : `Modo dedicado — deploy en ${serverHost || 'servidor por configurar'}`}
                       </p>
 
                       {deployServerId && deploySubdomain && (

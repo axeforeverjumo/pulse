@@ -61,6 +61,25 @@ from api.services.projects.agent_queue import (
     list_project_agent_jobs,
     revive_stale_running_jobs,
 )
+from api.services.projects.server_resolver import (
+    ServerResolver,
+    ExecutionTarget,
+    LocalTarget,
+    RemoteTarget,
+    DedicatedTarget,
+)
+from api.services.projects.repo_manager import RepoManager
+from api.services.projects.deploy_pipeline import DeployPipeline
+from api.services.projects.pre_flight import (
+    run_pre_flight_checks,
+    has_blocking_issues,
+    format_issues_for_comment,
+)
+from api.services.projects.unified_code_executor import (
+    execute_unified_code_task,
+    execute_simple_chat_task,
+    build_dev_task_prompt as build_unified_dev_prompt,
+)
 from lib.image_proxy import generate_file_url
 import logging
 
@@ -1728,12 +1747,28 @@ async def _execute_project_agent_job(
             }
 
     board_result = await supabase.table("project_boards")\
-        .select("id, name, description, is_development, project_url, repository_url, repository_full_name, server_host, server_ip, server_user, server_port")\
+        .select("id, name, description, is_development, project_url, repository_url, repository_full_name, server_host, server_ip, server_user, server_password, server_port, deploy_mode, deploy_server_id, deploy_subdomain, deploy_url, specs_enabled, workspace_id, workspace_app_id")\
         .eq("id", task["board_id"])\
         .maybe_single()\
         .execute()
     board = board_result.data or {}
     repo_full_name_for_automation = _extract_repo_full_name(board) if board.get("is_development") else None
+
+    # ── Server-Aware Execution: resolve WHERE to work ──
+    execution_target: Optional[ExecutionTarget] = None
+    repo_context = None
+    if board.get("is_development") or task.get("is_dev_task"):
+        try:
+            resolver = ServerResolver()
+            execution_target = await resolver.resolve(board)
+            logger.info(
+                "ServerResolver: mode=%s work_dir=%s needs_clone=%s type=%s",
+                execution_target.mode, execution_target.work_dir,
+                execution_target.needs_clone, execution_target.project_type,
+            )
+        except Exception as e:
+            logger.warning("ServerResolver failed (falling back to legacy): %s", e)
+            execution_target = None
 
     comment_user_id = job.get("requested_by") or fallback_user_id or task.get("created_by")
 
@@ -1909,10 +1944,36 @@ async def _execute_project_agent_job(
         "- Si completaste de verdad la tarea, incluye en una línea separada exacta: `Tarea completada`."
     )
 
-    # ── Dev tasks (code execution via OpenAI agentic loop) ──
-    if agent.get("tier") == "claude_code":
-        from api.services.projects.openai_code_executor import execute_openai_code_task, build_dev_task_prompt
-        from api.config import settings
+    # ── Pre-flight checks (fail fast instead of wasting iterations) ──
+    if execution_target and (board.get("is_development") or task.get("is_dev_task")):
+        preflight_issues = await run_pre_flight_checks(board, execution_target)
+        if has_blocking_issues(preflight_issues):
+            preflight_msg = format_issues_for_comment(preflight_issues)
+            await _append_agent_activity_comment(
+                supabase,
+                issue_id=issue_id,
+                comment_user_id=comment_user_id,
+                agent=agent,
+                content=f"🛑 **Pre-flight check falló**\n\n{preflight_msg}\n\nLa tarea se bloquea hasta resolver estos problemas.",
+                workspace_id=task.get("workspace_id"),
+                workspace_app_id=task.get("workspace_app_id"),
+            )
+            return {
+                "task_completed": False,
+                "queue_recommendation": "blocked",
+                "queue_block_reason": f"Pre-flight failed: {preflight_issues[0].code}",
+            }
+
+    # ── Determine execution path ──
+    is_dev_task = bool(
+        (board.get("is_development") or task.get("is_dev_task"))
+        and execution_target
+        and (agent.get("tier") in ("claude_code", "core") or task.get("is_dev_task"))
+    )
+
+    if is_dev_task:
+        # ── UNIFIED DEV EXECUTION (replaces old dual claude_code/core tiers) ──
+        from api.config import settings as _settings
 
         # ── PAPER-02: Atomic Checkout — prevent two agents on the same repo ──
         try:
@@ -1940,29 +2001,59 @@ async def _execute_project_agent_job(
         except Exception as e:
             logger.warning("PAPER-02: lock check failed, proceeding anyway: %s", e)
 
-        repo_url = board.get("repository_url") or ""
-        if not repo_url and board.get("repository_full_name"):
-            repo_url = f"https://github.com/{board['repository_full_name']}"
+        # Ensure repo is ready via RepoManager
+        repo_mgr = RepoManager()
+        try:
+            repo_context = await repo_mgr.ensure_repo(execution_target, _settings.pulse_github_token)
+            logger.info("RepoManager: repo ready at %s (remote=%s)", repo_context.work_dir, repo_context.is_remote)
+        except Exception as e:
+            logger.error("RepoManager failed: %s", e)
+            await _append_agent_activity_comment(
+                supabase,
+                issue_id=issue_id,
+                comment_user_id=comment_user_id,
+                agent=agent,
+                content=f"🛑 **Error preparando repositorio**\n\n`{str(e)[:500]}`\n\nVerifica la configuracion del repositorio y servidor.",
+                workspace_id=task.get("workspace_id"),
+                workspace_app_id=task.get("workspace_app_id"),
+            )
+            return {
+                "task_completed": False,
+                "queue_recommendation": "blocked",
+                "queue_block_reason": f"Repo setup failed: {str(e)[:200]}",
+            }
 
+        # Build prompt with execution target context
         previous_session_id = previous_payload.get("claude_code_session_id") if isinstance(previous_payload, dict) else None
-        # Pass recently completed task titles for Goal Ancestry (PAPER-01)
         _recent_titles = [rd.get("title", "???") for rd in recent_done] if recent_done else []
-        dev_prompt = build_dev_task_prompt(
+        dev_prompt = build_unified_dev_prompt(
             task, board,
             recent_done_titles=_recent_titles,
             previous_context=previous_payload if isinstance(previous_payload, dict) and previous_payload.get("iteration_count") else None,
+            target=execution_target,
         )
 
-        cc_result = await execute_openai_code_task(
+        # Build agent-specific system prompt
+        agent_system = None
+        if agent.get("soul_md") or agent.get("identity_md"):
+            agent_system = (
+                f"Eres {agent.get('name', 'Pulse Agent')}.\n\n"
+                f"{agent.get('soul_md', '')}\n\n"
+                f"{agent.get('identity_md', '')}\n\n"
+            )
+            # Append the standard dev system prompt from openai_code_executor
+            from api.services.projects.openai_code_executor import SYSTEM_PROMPT as DEV_SYSTEM_PROMPT
+            agent_system += "\n\n" + DEV_SYSTEM_PROMPT
+
+        # Execute via unified agentic loop
+        cc_result = await execute_unified_code_task(
             prompt=dev_prompt,
-            repo_url=repo_url,
-            github_token=settings.pulse_github_token,
+            repo_context=repo_context,
+            target=execution_target,
             session_id=previous_session_id,
-            max_budget_usd="10",  # safety limit — subscription covers cost, this prevents infinite loops
-            callback_url="http://127.0.0.1:3010/api/projects/internal/agent-progress",
-            issue_id=issue_id,
-            agent_id=agent.get("id", ""),
             job_id=job.get("id", ""),
+            agent_id=agent.get("id", ""),
+            agent_system_prompt=agent_system,
         )
 
         agent_response = cc_result.get("result") or "Sin respuesta del agente."
@@ -1974,10 +2065,11 @@ async def _execute_project_agent_job(
         if cc_status == "completed" and not cc_result.get("is_error"):
             duration_s = (cc_result.get("duration_ms") or 0) / 1000
             num_turns = cc_result.get("num_turns", 0)
+            target_info = f" | Modo: {execution_target.mode} ({execution_target.work_dir})"
             completion_content = (
                 f"✅ **Tarea completada**\n\n"
                 f"{agent_response}\n\n"
-                f"📊 Duración: {duration_s:.0f}s | Turnos: {num_turns}"
+                f"📊 Duracion: {duration_s:.0f}s | Turnos: {num_turns}{target_info}"
             )
         else:
             completion_content = agent_response
@@ -1993,7 +2085,7 @@ async def _execute_project_agent_job(
 
         # Post git result if there are commits
         if cc_git_log:
-            git_comment = f"🔧 **Pulse Agent — Resultado**\n\n```\n{cc_git_log}\n```"
+            git_comment = f"🔧 **Pulse Agent — Resultado Git**\n\n```\n{cc_git_log}\n```"
             if cc_result.get("git_diff"):
                 git_comment += f"\n\n<details><summary>Diff</summary>\n\n```diff\n{cc_result['git_diff'][:3000]}\n```\n</details>"
             await _append_agent_activity_comment(
@@ -2006,43 +2098,14 @@ async def _execute_project_agent_job(
                 workspace_app_id=task.get("workspace_app_id"),
             )
 
-        # Post rebuild status if triggered
-        cc_rebuild = cc_result.get("rebuild", {})
-        if cc_rebuild.get("triggered"):
-            if cc_rebuild.get("success"):
-                rebuild_comment = (
-                    f"🚀 **Rebuild automático completado**\n\n"
-                    f"Método: {cc_rebuild.get('method', 'desconocido')}\n"
-                    f"Los cambios ya están visibles en producción."
-                )
-                if board.get("project_url"):
-                    rebuild_comment += f"\n\n🔗 Ver en: {board['project_url']}"
-            else:
-                rebuild_comment = (
-                    f"⚠️ **Rebuild falló**\n\n"
-                    f"Método: {cc_rebuild.get('method', 'desconocido')}\n"
-                    f"```\n{cc_rebuild.get('output', 'Sin detalles')[-500:]}\n```"
-                )
-            await _append_agent_activity_comment(
-                supabase,
-                issue_id=issue_id,
-                comment_user_id=comment_user_id,
-                agent=agent,
-                content=rebuild_comment,
-                workspace_id=task.get("workspace_id"),
-                workspace_app_id=task.get("workspace_app_id"),
-            )
-
         # Determine queue recommendation
         if cc_status == "completed" and not cc_result.get("is_error"):
-            # Move to QA (agent's "done") — always set completed_at to unblock dependencies
             target_state = qa_id or done_id
             if target_state:
                 await supabase.table("project_issues").update({
                     "state_id": target_state,
                     "completed_at": datetime.utcnow().isoformat(),
                 }).eq("id", issue_id).execute()
-                # Mark checklist done
                 if checklist_items:
                     done_items = [{**item, "done": True} for item in checklist_items if isinstance(item, dict)]
                     await supabase.table("project_issues").update({"checklist_items": done_items}).eq("id", issue_id).execute()
@@ -2057,16 +2120,18 @@ async def _execute_project_agent_job(
                     "result_summary": cc_result.get("result", "")[:1000],
                     "total_turns": cc_result.get("num_turns", 0),
                     "duration_ms": cc_result.get("duration_ms", 0),
+                    "execution_mode": execution_target.mode,
+                    "work_dir": execution_target.work_dir,
+                    "pushed": cc_result.get("pushed", False),
                 },
             }
         elif cc_status == "needs_continuation" or cc_status == "timeout":
-            # Timeout or incomplete → re-enqueue to continue, NOT block
             await _append_agent_activity_comment(
                 supabase,
                 issue_id=issue_id,
                 comment_user_id=comment_user_id,
                 agent=agent,
-                content="⏳ La tarea necesita más tiempo. Se re-encola automáticamente para continuar donde lo dejó.",
+                content="⏳ La tarea necesita mas tiempo. Se re-encola automaticamente.",
                 workspace_id=task.get("workspace_id"),
                 workspace_app_id=task.get("workspace_app_id"),
             )
@@ -2082,42 +2147,27 @@ async def _execute_project_agent_job(
                 },
             }
         else:
-            # Real error → block
             return {
                 "task_completed": False,
                 "queue_recommendation": "blocked",
-                "queue_block_reason": cc_result.get("result", "Error en Claude Code"),
+                "queue_block_reason": cc_result.get("result", "Error en ejecucion"),
                 "payload": {"claude_code_session_id": cc_session_id},
             }
 
-    # ── Core agents (text-only via OpenAI SDK) ──
+    # ── Non-dev tasks: core agents (simple chat) or OpenClaw bridge ──
     if agent.get("tier") == "core":
-        from lib.openai_client import get_async_openai_client
-
         system_prompt = (
             f"Eres {agent['name']}.\n\n"
             f"{agent.get('soul_md', '')}\n\n"
             f"{agent.get('identity_md', '')}\n\n"
             "Te han asignado una tarea en un tablero Kanban.\n"
             "Respeta el formato de salida obligatorio indicado por el usuario.\n"
-            "Responde en español."
+            "Responde en espanol."
         )
-
-        try:
-            oai = get_async_openai_client()
-            oai_resp = await oai.chat.completions.create(
-                model=settings.openai_core_model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Tarea asignada:\n\n{task_context}\n\nTrabaja en esta tarea."},
-                ],
-                max_tokens=4096,
-                temperature=0.3,
-            )
-            agent_response = oai_resp.choices[0].message.content or "Sin respuesta del agente."
-        except Exception as e:
-            logger.error("Core agent OpenAI error: %s", e)
-            agent_response = f"Error al contactar OpenAI: {str(e)[:200]}"
+        agent_response = await execute_simple_chat_task(
+            system_prompt=system_prompt,
+            user_prompt=f"Tarea asignada:\n\n{task_context}\n\nTrabaja en esta tarea.",
+        )
     # ── OpenClaw advance agents (bridge 4200) ──
     else:
         async with httpx.AsyncClient(timeout=420.0) as http_client:
@@ -2613,155 +2663,49 @@ async def _create_deploy_fix_issue(
 
 
 async def _auto_deploy_board(supabase: Any, board_id: str, agent_id: str) -> None:
-    """All tasks complete — SSH to project server, pull code, rebuild, check errors."""
+    """All tasks complete — use DeployPipeline for intelligent deploy with health checks."""
     try:
         board_res = await supabase.table("project_boards")\
-            .select("id, name, server_ip, server_user, server_port, repository_url, repository_full_name, workspace_id, workspace_app_id")\
+            .select("id, name, server_ip, server_user, server_password, server_port, repository_url, repository_full_name, workspace_id, workspace_app_id, deploy_mode, deploy_server_id, deploy_subdomain, deploy_url, project_url, specs_enabled")\
             .eq("id", board_id)\
             .maybe_single()\
             .execute()
         board = board_res.data if board_res else None
-        if not board or not board.get("server_ip"):
-            logger.info("Auto-deploy: no server configured for board %s, skipping", board_id)
+        if not board:
+            logger.info("Auto-deploy: board %s not found, skipping", board_id)
             return
 
-        server_ip = board["server_ip"]
-        server_user = board.get("server_user") or "root"
-        server_port = board.get("server_port") or 22
-        repo_name = (board.get("repository_full_name") or "").split("/")[-1] or "repo"
+        # Check if there's a server or deploy config
+        has_server = board.get("server_ip") or board.get("deploy_server_id")
+        deploy_mode = board.get("deploy_mode") or "local"
+        if not has_server and deploy_mode == "local":
+            logger.info("Auto-deploy: no server configured for board %s (mode=%s), skipping", board_id, deploy_mode)
+            return
 
-        repo_full = board.get("repository_full_name") or ""
         from api.config import settings as _settings
-        github_token = getattr(_settings, 'pulse_github_token', '') or ""
 
-        logger.info("Auto-deploy: starting deploy on %s@%s for board '%s'", server_user, server_ip, board.get("name"))
+        # Resolve execution target using ServerResolver
+        try:
+            resolver = ServerResolver()
+            target = await resolver.resolve(board)
+        except Exception as e:
+            logger.error("Auto-deploy: ServerResolver failed for board %s: %s", board_id, e)
+            return
 
-        # Strategy: download repo tarball from GitHub, extract addon dirs
-        # into the existing addons directory on the server (no git clone needed).
-        deploy_script = f"""
-set -e
-echo "=== PULSE AUTO-DEPLOY ==="
-echo "Board: {board.get('name', '?')}"
-echo "Server: {server_ip}"
-date
-
-# Download latest code from GitHub as tarball
-echo "=== DOWNLOADING FROM GITHUB ==="
-TMPDIR=$(mktemp -d)
-curl -sL -H "Authorization: token {github_token}" \\
-    "https://api.github.com/repos/{repo_full}/tarball/main" \\
-    -o "$TMPDIR/repo.tar.gz"
-mkdir -p "$TMPDIR/extract"
-tar xzf "$TMPDIR/repo.tar.gz" -C "$TMPDIR/extract" --strip-components=1
-echo "Downloaded and extracted"
-ls "$TMPDIR/extract/"
-
-# Find the addons directory on the server (where Docker mounts from)
-ADDONS_DIR=""
-for d in /root/{repo_name}/{repo_name} /root/{repo_name} /opt/{repo_name}/{repo_name} /opt/{repo_name}; do
-    if [ -d "$d" ] && [ -f "$d/docker-compose.yml" ] || [ -f "$d/__manifest__.py" ] || ls "$d"/*/__manifest__.py >/dev/null 2>&1; then
-        ADDONS_DIR="$d"
-        break
-    fi
-done
-
-if [ -z "$ADDONS_DIR" ]; then
-    echo "ERROR: Could not find addons directory on server"
-    rm -rf "$TMPDIR"
-    exit 1
-fi
-
-echo "Addons dir: $ADDONS_DIR"
-
-# Sync only addon directories (folders with __manifest__.py) from downloaded repo
-echo "=== SYNCING ADDONS ==="
-for addon_dir in "$TMPDIR/extract"/*/; do
-    addon_name=$(basename "$addon_dir")
-    if [ -f "$addon_dir/__manifest__.py" ]; then
-        echo "Syncing addon: $addon_name"
-        rm -rf "$ADDONS_DIR/$addon_name"
-        cp -r "$addon_dir" "$ADDONS_DIR/$addon_name"
-    fi
-done
-
-# Also sync specs if present
-if [ -d "$TMPDIR/extract/specs" ]; then
-    cp -r "$TMPDIR/extract/specs" "$ADDONS_DIR/specs" 2>/dev/null || true
-fi
-
-rm -rf "$TMPDIR"
-echo "Sync complete"
-ls "$ADDONS_DIR"/
-
-# Find and restart Odoo container
-echo "=== FINDING ODOO CONTAINER ==="
-ODOO_CONTAINER=$(docker ps --format '{{{{.Names}}}}' | grep -i odoo | grep -v postgres | head -1)
-if [ -z "$ODOO_CONTAINER" ]; then
-    echo "WARN: No running Odoo container found"
-    echo "=== DONE ==="
-    exit 0
-fi
-
-echo "Container: $ODOO_CONTAINER"
-
-# Find DB name from odoo.conf
-DB_NAME=$(docker exec "$ODOO_CONTAINER" grep -E "^db_name" /etc/odoo/odoo.conf 2>/dev/null | cut -d= -f2 | tr -d ' ' || echo "odoo")
-echo "Database: $DB_NAME"
-
-# Find which addons changed (have __manifest__.py)
-ADDONS_TO_UPDATE=""
-for addon_dir in "$ADDONS_DIR"/*/; do
-    addon_name=$(basename "$addon_dir")
-    if [ -f "$addon_dir/__manifest__.py" ]; then
-        if [ -n "$ADDONS_TO_UPDATE" ]; then
-            ADDONS_TO_UPDATE="$ADDONS_TO_UPDATE,$addon_name"
-        else
-            ADDONS_TO_UPDATE="$addon_name"
-        fi
-    fi
-done
-
-echo "Addons to update: $ADDONS_TO_UPDATE"
-
-# Stop, update, start
-echo "=== STOPPING ODOO ==="
-docker stop "$ODOO_CONTAINER" 2>&1
-
-echo "=== UPDATING MODULES ==="
-docker start "$ODOO_CONTAINER" 2>&1
-sleep 5
-docker exec "$ODOO_CONTAINER" odoo -u "$ADDONS_TO_UPDATE" -d "$DB_NAME" --stop-after-init 2>&1 | tail -40 || echo "WARN: module update finished with warnings"
-
-echo "=== STARTING ODOO ==="
-docker start "$ODOO_CONTAINER" 2>&1
-sleep 8
-
-echo "=== CHECKING LOGS ==="
-docker logs "$ODOO_CONTAINER" --tail 30 2>&1 | grep -i -E "error|traceback|exception" | grep -v "Warn:" || echo "No critical errors in logs"
-
-echo "=== DEPLOY COMPLETE ==="
-docker logs "$ODOO_CONTAINER" --tail 5 2>&1
-"""
-
-        ssh_cmd = [
-            "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=30",
-            "-p", str(server_port),
-            f"{server_user}@{server_ip}",
-            "bash", "-s",
-        ]
-
-        result = await asyncio.to_thread(
-            subprocess.run,
-            ssh_cmd,
-            input=deploy_script,
-            capture_output=True,
-            text=True,
-            timeout=300,
+        logger.info(
+            "Auto-deploy: starting for board '%s' (mode=%s, dir=%s, type=%s)",
+            board.get("name"), target.mode, target.work_dir, target.project_type,
         )
 
-        output = (result.stdout + result.stderr)[:5000]
-        exit_code = result.returncode
-        logger.info("Auto-deploy finished (exit=%s): %s", exit_code, output[:500])
+        # Run deploy pipeline
+        pipeline = DeployPipeline()
+        deploy_result = await pipeline.execute(board, target, _settings.pulse_github_token)
+
+        output = deploy_result.output
+        logger.info(
+            "Auto-deploy finished (success=%s, rolled_back=%s, duration=%dms): %s",
+            deploy_result.success, deploy_result.rolled_back, deploy_result.duration_ms, output[:500],
+        )
 
         # Post deploy result as a comment on the board's most recently completed issue
         recent_issue_res = await supabase.table("project_issues")\
@@ -2777,16 +2721,39 @@ docker logs "$ODOO_CONTAINER" --tail 5 2>&1
             agent_res = await supabase.table("openclaw_agents").select("id, name, avatar_url").eq("id", agent_id).maybe_single().execute()
             agent_data = agent_res.data if agent_res and agent_res.data else {"id": agent_id, "name": "Agent"}
 
-            # Truncate output for comment
+            # Build deploy comment using DeployResult
             output_preview = output[:2000]
-            has_errors = any(kw in output.lower() for kw in ["error", "traceback", "exception", "failed"])
+            target_label = f"{target.mode}"
+            if isinstance(target, (RemoteTarget, DedicatedTarget)):
+                target_label += f" ({target.host})"
+            elif isinstance(target, LocalTarget):
+                target_label += f" ({target.work_dir})"
 
-            deploy_status = "con errores" if has_errors else "exitoso"
+            if deploy_result.rolled_back:
+                deploy_status = "fallido (rollback ejecutado)"
+                icon = "🔄"
+            elif not deploy_result.success:
+                deploy_status = "con errores"
+                icon = "⚠️"
+            else:
+                hc_info = ""
+                if deploy_result.health_check_passed is True:
+                    hc_info = " | Health check: OK"
+                elif deploy_result.health_check_passed is False:
+                    hc_info = " | Health check: FAILED"
+                deploy_status = f"exitoso{hc_info}"
+                icon = "🚀"
+
             comment = (
-                f"{'⚠️' if has_errors else '🚀'} **Auto-deploy {deploy_status}** en `{server_ip}`\n\n"
-                f"Todas las tareas completadas. Deploy automático ejecutado.\n\n"
+                f"{icon} **Auto-deploy {deploy_status}** en `{target_label}`\n\n"
+                f"Tipo: {deploy_result.project_type or 'auto'} | "
+                f"Duracion: {deploy_result.duration_ms / 1000:.1f}s\n\n"
                 f"```\n{output_preview}\n```"
             )
+            if deploy_result.error:
+                comment += f"\n\n**Error:** {deploy_result.error}"
+            if board.get("project_url") and deploy_result.success:
+                comment += f"\n\n🔗 Ver en: {board['project_url']}"
 
             await _append_agent_activity_comment(
                 supabase,
@@ -2798,7 +2765,8 @@ docker logs "$ODOO_CONTAINER" --tail 5 2>&1
                 workspace_app_id=recent_issue.get("workspace_app_id"),
             )
 
-            # If there are errors, create a fix issue and re-trigger deploy after fix
+            # If deploy failed, create a fix issue and re-trigger deploy after fix
+            has_errors = not deploy_result.success
             if has_errors:
                 error_lines = [l for l in output.split("\n") if any(kw in l.lower() for kw in ["error", "traceback", "exception", "parseerror", "field", "does not exist"])]
                 error_summary = "\n".join(error_lines[:20])
