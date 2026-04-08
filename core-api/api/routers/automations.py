@@ -435,7 +435,7 @@ class AIAction(BaseModel):
     workspace_id: str
     prompt: str
     context: Optional[str] = None
-    model: Optional[str] = "gpt-4o-mini"
+    model: Optional[str] = "gpt-5.4-mini"
     max_tokens: Optional[int] = 2000
 
 
@@ -474,7 +474,7 @@ If a field is not found, set it to null.
 Text:
 {body.text}"""
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5.4-mini",
         messages=[{"role": "user", "content": prompt}],
         response_format={"type": "json_object"},
         max_tokens=1000,
@@ -506,7 +506,7 @@ Return JSON with keys: category, confidence, summary.
 Subject: {body.subject}
 Body: {body.body_text[:2000]}"""
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5.4-mini",
         messages=[{"role": "user", "content": prompt}],
         response_format={"type": "json_object"},
         max_tokens=200,
