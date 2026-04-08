@@ -442,8 +442,8 @@ class AIAction(BaseModel):
 @router.post("/ai/generate", dependencies=[__import__("fastapi").Depends(_verify_automation_key)])
 async def ai_generate_auto(body: AIAction):
     """Run AI generation with custom prompt + context."""
-    from openai import OpenAI
-    client = OpenAI()
+    from lib.openai_client import get_openai_client
+    client = get_openai_client()
     messages = []
     if body.context:
         messages.append({"role": "system", "content": body.context})
