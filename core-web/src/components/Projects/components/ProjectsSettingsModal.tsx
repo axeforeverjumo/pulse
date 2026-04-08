@@ -105,7 +105,7 @@ export default function ProjectsSettingsModal({
         server_user: isDevelopment ? (serverUser.trim() || undefined) : undefined,
         server_password: isDevelopment ? (serverPassword.trim() || undefined) : undefined,
         server_port: isDevelopment && serverPort.trim() ? Number(serverPort.trim()) : undefined,
-        deploy_mode: isDevelopment ? deployMode : undefined,
+        deploy_mode: isDevelopment ? (deployServerId.trim() ? 'dedicated' : 'local') : undefined,
         deploy_server_id: isDevelopment && deployServerId.trim() ? deployServerId.trim() : undefined,
         deploy_subdomain: isDevelopment && deploySubdomain.trim() ? deploySubdomain.trim() : undefined,
         deploy_url: isDevelopment && deployUrl.trim() ? deployUrl.trim() : undefined,
@@ -353,76 +353,15 @@ export default function ProjectsSettingsModal({
                       Estos datos se usan como contexto de ejecución para agentes.
                     </p>
 
-                    {/* Deploy Mode */}
+                    {/* Deploy info — auto-detected from server selection */}
                     <div className="border-t border-border-light pt-3 mt-3">
-                      <label className="block text-xs font-medium text-text-secondary mb-2">Modo de despliegue</label>
-                      <div className="space-y-1.5">
-                        <label className="flex items-center gap-2 text-[13px] text-gray-700 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="deployMode"
-                            value="local"
-                            checked={deployMode === 'local'}
-                            onChange={() => setDeployMode('local')}
-                            className="text-gray-900 focus:ring-gray-300"
-                          />
-                          Servidor local
-                        </label>
-                        <label className="flex items-center gap-2 text-[13px] text-gray-700 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="deployMode"
-                            value="external"
-                            checked={deployMode === 'external'}
-                            onChange={() => setDeployMode('external')}
-                            className="text-gray-900 focus:ring-gray-300"
-                          />
-                          Servidor externo
-                        </label>
-                        <label className="flex items-center gap-2 text-[13px] text-gray-700 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="deployMode"
-                            value="dedicated"
-                            checked={deployMode === 'dedicated'}
-                            onChange={() => setDeployMode('dedicated')}
-                            className="text-gray-900 focus:ring-gray-300"
-                          />
-                          Servidor dedicado
-                        </label>
-                      </div>
+                      <p className="text-[11px] text-text-tertiary">
+                        {deployServerId
+                          ? `Despliegue en servidor seleccionado (${serverHost || 'servidor'})`
+                          : 'Sin servidor asignado — desarrollo local'}
+                      </p>
 
-                      {(deployMode === 'external' || deployMode === 'dedicated') && (
-                        <div className="mt-3 space-y-2">
-                          <div>
-                            <label className="block text-xs text-text-secondary mb-1">ID del servidor</label>
-                            <input
-                              type="text"
-                              value={deployServerId}
-                              onChange={(e) => setDeployServerId(e.target.value)}
-                              placeholder="UUID del servidor en workspace_servers"
-                              className="w-full px-3 py-2 text-[13px] border border-border-gray rounded-lg bg-white outline-none focus:border-text-tertiary"
-                            />
-                          </div>
-                          {deployMode === 'external' && (
-                            <div>
-                              <label className="block text-xs text-text-secondary mb-1">Subdominio</label>
-                              <input
-                                type="text"
-                                value={deploySubdomain}
-                                onChange={(e) => setDeploySubdomain(e.target.value)}
-                                placeholder="miproyecto"
-                                className="w-full px-3 py-2 text-[13px] border border-border-gray rounded-lg bg-white outline-none focus:border-text-tertiary"
-                              />
-                              <p className="text-[11px] text-text-tertiary mt-1">
-                                Se creará como subdominio.dominio-del-servidor.com
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {deployMode === 'external' && deployServerId && deploySubdomain && (
+                      {deployServerId && deploySubdomain && (
                         <div className="mt-3">
                           <button
                             type="button"
@@ -432,7 +371,7 @@ export default function ProjectsSettingsModal({
                               setDeployError(null);
                               try {
                                 await updateDeployConfig(board.id, {
-                                  deploy_mode: deployMode,
+                                  deploy_mode: 'dedicated',
                                   deploy_server_id: deployServerId,
                                   deploy_subdomain: deploySubdomain,
                                 });
