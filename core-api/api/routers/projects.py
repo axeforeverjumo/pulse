@@ -2496,7 +2496,8 @@ async def _auto_enqueue_next_task(supabase: Any, completed_job: Dict[str, Any]) 
 
         candidates = [c for c in candidates if c.get("state_id") in todo_state_ids]
         if not candidates:
-            logger.info("Auto-enqueue: no more To Do tasks for agent %s on board %s", agent_id, board_id)
+            logger.info("Auto-enqueue: no more To Do tasks for agent %s on board %s — triggering auto-deploy", agent_id, board_id)
+            asyncio.create_task(_auto_deploy_board(supabase, board_id, agent_id))
             return
 
         # Check which already have active jobs
@@ -2533,6 +2534,194 @@ async def _auto_enqueue_next_task(supabase: Any, completed_job: Dict[str, Any]) 
         )
     except Exception as e:
         logger.warning("Auto-enqueue failed for agent %s: %s", agent_id, e)
+
+
+async def _auto_deploy_board(supabase: Any, board_id: str, agent_id: str) -> None:
+    """All tasks complete — SSH to project server, pull code, rebuild, check errors."""
+    try:
+        board_res = await supabase.table("project_boards")\
+            .select("id, name, server_ip, server_user, server_port, repository_url, repository_full_name, workspace_id, workspace_app_id")\
+            .eq("id", board_id)\
+            .maybe_single()\
+            .execute()
+        board = board_res.data if board_res else None
+        if not board or not board.get("server_ip"):
+            logger.info("Auto-deploy: no server configured for board %s, skipping", board_id)
+            return
+
+        server_ip = board["server_ip"]
+        server_user = board.get("server_user") or "root"
+        server_port = board.get("server_port") or 22
+        repo_name = (board.get("repository_full_name") or "").split("/")[-1] or "repo"
+
+        logger.info("Auto-deploy: starting deploy on %s@%s for board '%s'", server_user, server_ip, board.get("name"))
+
+        # Build deploy script
+        deploy_script = f"""
+set -e
+echo "=== PULSE AUTO-DEPLOY ==="
+echo "Board: {board.get('name', '?')}"
+echo "Server: {server_ip}"
+date
+
+# Find repo directory
+REPO_DIR=""
+for d in /root/{repo_name}/{repo_name} /root/{repo_name} /opt/{repo_name}; do
+    if [ -d "$d/.git" ]; then
+        REPO_DIR="$d"
+        break
+    fi
+done
+
+if [ -z "$REPO_DIR" ]; then
+    echo "ERROR: No git repo found for {repo_name}"
+    exit 1
+fi
+
+echo "Repo: $REPO_DIR"
+cd "$REPO_DIR"
+
+# Pull latest
+echo "=== GIT PULL ==="
+git pull origin main 2>&1 || git pull origin master 2>&1 || echo "WARN: git pull failed"
+git log --oneline -3
+
+# Find and restart Odoo container
+echo "=== RESTART ODOO ==="
+ODOO_CONTAINER=$(docker ps --format '{{{{.Names}}}}' | grep -i odoo | grep -v postgres | head -1)
+if [ -n "$ODOO_CONTAINER" ]; then
+    echo "Restarting container: $ODOO_CONTAINER"
+    docker restart "$ODOO_CONTAINER" 2>&1
+    sleep 10
+
+    # Update modules
+    echo "=== UPDATE MODULES ==="
+    docker exec "$ODOO_CONTAINER" odoo -u {repo_name}_native_flow,{repo_name}_jobeiax -d odoo --stop-after-init 2>&1 | tail -30 || echo "WARN: module update returned non-zero"
+
+    # Restart again after update
+    docker restart "$ODOO_CONTAINER" 2>&1
+    sleep 5
+
+    # Check logs for errors
+    echo "=== CHECKING LOGS ==="
+    docker logs "$ODOO_CONTAINER" --tail 50 2>&1 | grep -i -E "error|traceback|exception|failed" || echo "No errors found in recent logs"
+
+    echo "=== DEPLOY COMPLETE ==="
+    docker logs "$ODOO_CONTAINER" --tail 5 2>&1
+else
+    echo "WARN: No Odoo container found, trying docker-compose..."
+    if [ -f docker-compose.yml ]; then
+        docker compose restart 2>&1 || docker-compose restart 2>&1
+        sleep 10
+        docker compose logs --tail 20 2>&1 | grep -i -E "error|traceback" || echo "No errors"
+    fi
+fi
+echo "=== DONE ==="
+"""
+
+        ssh_cmd = [
+            "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=30",
+            "-p", str(server_port),
+            f"{server_user}@{server_ip}",
+            "bash", "-s",
+        ]
+
+        result = await asyncio.to_thread(
+            subprocess.run,
+            ssh_cmd,
+            input=deploy_script,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+
+        output = (result.stdout + result.stderr)[:5000]
+        exit_code = result.returncode
+        logger.info("Auto-deploy finished (exit=%s): %s", exit_code, output[:500])
+
+        # Post deploy result as a comment on the board's most recently completed issue
+        recent_issue_res = await supabase.table("project_issues")\
+            .select("id, workspace_id, workspace_app_id, created_by")\
+            .eq("board_id", board_id)\
+            .not_.is_("completed_at", "null")\
+            .order("completed_at", desc=True)\
+            .limit(1)\
+            .execute()
+        recent_issue = (recent_issue_res.data or [None])[0] if recent_issue_res else None
+
+        if recent_issue:
+            agent_res = await supabase.table("openclaw_agents").select("id, name, avatar_url").eq("id", agent_id).maybe_single().execute()
+            agent_data = agent_res.data if agent_res and agent_res.data else {"id": agent_id, "name": "Agent"}
+
+            # Truncate output for comment
+            output_preview = output[:2000]
+            has_errors = any(kw in output.lower() for kw in ["error", "traceback", "exception", "failed"])
+
+            deploy_status = "con errores" if has_errors else "exitoso"
+            comment = (
+                f"{'⚠️' if has_errors else '🚀'} **Auto-deploy {deploy_status}** en `{server_ip}`\n\n"
+                f"Todas las tareas completadas. Deploy automático ejecutado.\n\n"
+                f"```\n{output_preview}\n```"
+            )
+
+            await _append_agent_activity_comment(
+                supabase,
+                issue_id=recent_issue["id"],
+                comment_user_id=recent_issue.get("created_by"),
+                agent=agent_data,
+                content=comment,
+                workspace_id=recent_issue.get("workspace_id"),
+                workspace_app_id=recent_issue.get("workspace_app_id"),
+            )
+
+            # If there are errors, create a new issue to fix them
+            if has_errors:
+                error_lines = [l for l in output.split("\n") if any(kw in l.lower() for kw in ["error", "traceback", "exception"])]
+                error_summary = "\n".join(error_lines[:20])
+
+                # Find a To Do state
+                states_res = await supabase.table("project_states")\
+                    .select("id, name")\
+                    .eq("board_id", board_id)\
+                    .execute()
+                todo_state_id = None
+                for s in (states_res.data or []):
+                    if s.get("name", "").lower().strip() in ("to do", "todo", "backlog"):
+                        todo_state_id = s["id"]
+                        break
+
+                if todo_state_id:
+                    new_issue_res = await supabase.table("project_issues").insert({
+                        "board_id": board_id,
+                        "workspace_id": board.get("workspace_id"),
+                        "workspace_app_id": board.get("workspace_app_id"),
+                        "title": "Corregir errores de deploy automático",
+                        "description": f"El deploy automático detectó errores que deben corregirse:\n\n```\n{error_summary[:1500]}\n```",
+                        "state_id": todo_state_id,
+                        "priority": 1,
+                        "created_by": recent_issue.get("created_by"),
+                        "is_dev_task": True,
+                    }).execute()
+
+                    new_issue = (new_issue_res.data or [None])[0] if new_issue_res else None
+                    if new_issue:
+                        # Assign same agent
+                        await supabase.table("project_issue_assignees").insert({
+                            "issue_id": new_issue["id"],
+                            "agent_id": agent_id,
+                            "assignee_type": "agent",
+                        }).execute()
+                        # Enqueue
+                        await enqueue_project_agent_job(
+                            supabase, new_issue, agent_id,
+                            requested_by=recent_issue.get("created_by"),
+                            source="auto_deploy_fix",
+                            max_attempts=4,
+                        )
+                        logger.info("Auto-deploy: created fix issue for errors on board %s", board_id)
+
+    except Exception as e:
+        logger.error("Auto-deploy failed for board %s: %s", board_id, e)
 
 
 async def _process_project_agent_queue_background(
