@@ -5,15 +5,18 @@ import {
   ShieldCheckIcon,
   BoltIcon,
   PresentationChartLineIcon,
+  ClipboardDocumentListIcon,
 } from "@heroicons/react/24/outline";
 import OverviewTab from "./tabs/OverviewTab";
 import AnalyticsTab from "./tabs/AnalyticsTab";
 import SearchConsoleTab from "./tabs/SearchConsoleTab";
 import AuditTab from "./tabs/AuditTab";
 import PageSpeedTab from "./tabs/PageSpeedTab";
+import TasksTab from "./tabs/TasksTab";
 
 const tabs = [
   { id: "overview" as const, label: "Resumen", icon: PresentationChartLineIcon },
+  { id: "tasks" as const, label: "Tareas", icon: ClipboardDocumentListIcon },
   { id: "analytics" as const, label: "Analytics", icon: ChartBarIcon },
   { id: "search" as const, label: "Search Console", icon: MagnifyingGlassCircleIcon },
   { id: "audit" as const, label: "SEO Audit", icon: ShieldCheckIcon },
@@ -88,6 +91,9 @@ export default function SiteDetail({
       <div className="flex-1 overflow-y-auto p-6">
         {activeTab === "overview" && (
           <OverviewTab site={site} workspaceId={workspaceId} onSiteUpdated={onUpdated} />
+        )}
+        {activeTab === "tasks" && (
+          <TasksTab site={site} workspaceId={workspaceId} />
         )}
         {activeTab === "analytics" && (
           <AnalyticsTab site={site} workspaceId={workspaceId} />

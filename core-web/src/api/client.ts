@@ -4397,6 +4397,48 @@ export async function getMarketingPageSpeed(siteId: string, strategy: 'mobile' |
   return api<any>(`/marketing/sites/${siteId}/pagespeed?${params}`);
 }
 
+// Marketing Tasks
+export async function getMarketingTasks(siteId: string, filters?: { task_type?: string; status?: string; category?: string }) {
+  const params = new URLSearchParams();
+  if (filters?.task_type) params.set('task_type', filters.task_type);
+  if (filters?.status) params.set('status', filters.status);
+  if (filters?.category) params.set('category', filters.category);
+  return api<{ tasks: any[]; count: number }>(`/marketing/sites/${siteId}/tasks?${params}`);
+}
+
+export async function createMarketingTask(siteId: string, workspaceId: string, data: any) {
+  return api<any>(`/marketing/sites/${siteId}/tasks`, {
+    method: 'POST',
+    body: JSON.stringify({ site_id: siteId, workspace_id: workspaceId, ...data }),
+  });
+}
+
+export async function updateMarketingTask(taskId: string, data: Record<string, any>) {
+  return api<any>(`/marketing/tasks/${taskId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteMarketingTask(taskId: string) {
+  return api<void>(`/marketing/tasks/${taskId}`, { method: 'DELETE' });
+}
+
+export async function completeMarketingRoutine(taskId: string) {
+  return api<any>(`/marketing/tasks/${taskId}/complete-routine`, { method: 'POST' });
+}
+
+export async function getMarketingTaskComments(taskId: string) {
+  return api<any[]>(`/marketing/tasks/${taskId}/comments`);
+}
+
+export async function createMarketingTaskComment(taskId: string, content: string, agentSlug?: string) {
+  return api<any>(`/marketing/tasks/${taskId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ content, agent_slug: agentSlug }),
+  });
+}
+
 // Google OAuth
 export async function getMarketingAuthUrl() {
   return api<{ url: string; state: string }>('/marketing/auth/url');

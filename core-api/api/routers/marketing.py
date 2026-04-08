@@ -390,6 +390,185 @@ async def api_get_audit(
 
 
 # ============================================================================
+# Marketing Tasks (routine + concrete)
+# ============================================================================
+
+class CreateTaskRequest(BaseModel):
+    site_id: str
+    workspace_id: str
+    title: str = Field(..., min_length=1, max_length=300)
+    description: Optional[str] = None
+    task_type: str = "concrete"
+    category: Optional[str] = None
+    priority: int = Field(1, ge=0, le=4)
+    status: str = "todo"
+    cron_expression: Optional[str] = None
+    routine_label: Optional[str] = None
+    next_due_at: Optional[str] = None
+    assigned_to: Optional[str] = None
+    assigned_agent: Optional[str] = None
+    due_at: Optional[str] = None
+    checklist: List[Dict[str, Any]] = Field(default_factory=list)
+    tags: List[str] = Field(default_factory=list)
+    config: Dict[str, Any] = Field(default_factory=dict)
+
+
+class UpdateTaskRequest(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    task_type: Optional[str] = None
+    category: Optional[str] = None
+    priority: Optional[int] = None
+    status: Optional[str] = None
+    cron_expression: Optional[str] = None
+    routine_label: Optional[str] = None
+    next_due_at: Optional[str] = None
+    assigned_to: Optional[str] = None
+    assigned_agent: Optional[str] = None
+    due_at: Optional[str] = None
+    checklist: Optional[List[Dict[str, Any]]] = None
+    tags: Optional[List[str]] = None
+    config: Optional[Dict[str, Any]] = None
+
+
+class CreateCommentRequest(BaseModel):
+    content: str = Field(..., min_length=1)
+    agent_slug: Optional[str] = None
+
+
+@router.get("/sites/{site_id}/tasks")
+async def api_list_tasks(
+    site_id: str,
+    task_type: Optional[str] = None,
+    status: Optional[str] = None,
+    category: Optional[str] = None,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    try:
+        from api.services.marketing.tasks import list_tasks
+        return await list_tasks(site_id, user_jwt, task_type, status, category, limit, offset)
+    except Exception as e:
+        raise handle_api_exception(e)
+
+
+@router.post("/sites/{site_id}/tasks", status_code=status.HTTP_201_CREATED)
+async def api_create_task(
+    site_id: str,
+    body: CreateTaskRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    try:
+        from api.services.marketing.tasks import create_task
+        return await create_task(site_id, body.workspace_id, user_id, body.model_dump(), user_jwt)
+    except Exception as e:
+        raise handle_api_exception(e)
+
+
+@router.get("/tasks/{task_id}")
+async def api_get_task(
+    task_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    try:
+        from api.services.marketing.tasks import get_task
+        task = await get_task(task_id, user_jwt)
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return task
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise handle_api_exception(e)
+
+
+@router.patch("/tasks/{task_id}")
+async def api_update_task(
+    task_id: str,
+    body: UpdateTaskRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    try:
+        from api.services.marketing.tasks import update_task
+        data = body.model_dump(exclude_none=True)
+        if not data:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        result = await update_task(task_id, data, user_jwt)
+        if not result:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise handle_api_exception(e)
+
+
+@router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def api_delete_task(
+    task_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    try:
+        from api.services.marketing.tasks import delete_task
+        await delete_task(task_id, user_jwt)
+    except Exception as e:
+        raise handle_api_exception(e)
+
+
+@router.post("/tasks/{task_id}/complete-routine")
+async def api_complete_routine(
+    task_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Mark a routine task as done and reschedule it."""
+    try:
+        from api.services.marketing.tasks import complete_routine
+        result = await complete_routine(task_id, user_jwt)
+        if not result:
+            raise HTTPException(status_code=404, detail="Task not found or not a routine")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise handle_api_exception(e)
+
+
+@router.get("/tasks/{task_id}/comments")
+async def api_list_comments(
+    task_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    try:
+        from api.services.marketing.tasks import list_comments
+        return await list_comments(task_id, user_jwt)
+    except Exception as e:
+        raise handle_api_exception(e)
+
+
+@router.post("/tasks/{task_id}/comments", status_code=status.HTTP_201_CREATED)
+async def api_create_comment(
+    task_id: str,
+    body: CreateCommentRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    try:
+        from api.services.marketing.tasks import get_task, create_comment
+        task = await get_task(task_id, user_jwt)
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return await create_comment(
+            task_id, task["workspace_id"], user_id, body.agent_slug, body.content, user_jwt
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise handle_api_exception(e)
+
+
+# ============================================================================
 # PageSpeed Insights
 # ============================================================================
 
