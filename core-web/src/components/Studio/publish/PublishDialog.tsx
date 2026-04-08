@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Upload, Globe, Link2, Check } from 'lucide-react';
 import { api } from '../../../api/client';
-import { useStudioStore } from '../../../stores/studioStore';
 
 interface Props {
   appId: string;

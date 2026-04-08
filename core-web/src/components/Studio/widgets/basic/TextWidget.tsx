@@ -19,7 +19,7 @@ function TextRenderer({ node, resolvedProps }: RendererProps) {
     case 'h4':
       return <h4 style={{ fontSize: '1.1rem', lineHeight: 1.4, margin: 0, ...baseStyle }}>{content}</h4>;
     case 'caption':
-      return <span style={{ fontSize: '11px', color: color || '#6B7280', margin: 0, ...baseStyle }}>{content}</span>;
+      return <span style={{ fontSize: '11px', margin: 0, ...baseStyle, color: color || '#6B7280' }}>{content}</span>;
     default:
       return <p style={{ fontSize: '1rem', lineHeight: 1.6, margin: 0, ...baseStyle }}>{content}</p>;
   }
