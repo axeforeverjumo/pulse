@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Zap, Maximize2, Minimize2 } from "lucide-react";
 import { useAuthStore } from "../../stores/authStore";
-import { API_BASE } from "../../lib/apiBase";
+import { api } from "../../api/client";
 
 const AUTOMATIONS_BASE_URL = import.meta.env.VITE_AUTOMATIONS_URL || "https://automations.pulse.factoriaia.com";
 
@@ -17,7 +17,7 @@ export default function AutomationsView() {
   const session = useAuthStore((s) => s.session);
 
   useEffect(() => {
-    const pulseToken = session?.access_token?.trim();
+    const pulseToken = session?.access_token?.trim() || null;
 
     setLoading(true);
     setError(null);
@@ -34,15 +34,7 @@ export default function AutomationsView() {
 
     const init = async () => {
       try {
-        const resp = await fetch(`${API_BASE}/automations/token`, {
-          headers: { Authorization: `Bearer ${pulseToken}` },
-        });
-
-        if (!resp.ok) {
-          throw new Error(`Token fetch failed (${resp.status})`);
-        }
-
-        const data = await resp.json();
+        const data = await api<{ token?: string; projectId?: string }>("/automations/token");
         const token = typeof data?.token === "string" ? data.token.trim() : "";
         const projectId = typeof data?.projectId === "string" ? data.projectId.trim() : "";
 
@@ -50,7 +42,8 @@ export default function AutomationsView() {
           throw new Error("Token or projectId missing");
         }
 
-        const url = `${AUTOMATIONS_BASE_URL}/embed-login.html?token=${encodeURIComponent(token)}&projectId=${encodeURIComponent(projectId)}&redirect=${encodeURIComponent("/flows")}`;
+        const redirectPath = `/projects/${projectId}/flows`;
+        const url = `${AUTOMATIONS_BASE_URL}/embed-login.html?token=${encodeURIComponent(token)}&projectId=${encodeURIComponent(projectId)}&redirect=${encodeURIComponent(redirectPath)}`;
 
         if (cancelled) return;
         setEmbedMode("sso");
@@ -61,10 +54,16 @@ export default function AutomationsView() {
 
         if (cancelled) return;
 
-        const fallbackUrl = `${AUTOMATIONS_BASE_URL}/flows?pulseToken=${encodeURIComponent(pulseToken)}`;
-        setEmbedMode("pulse-token");
-        setEmbedUrl(fallbackUrl);
-        setError("Automatizaciones cargadas en modo compatibilidad");
+        if (pulseToken) {
+          const fallbackUrl = `${AUTOMATIONS_BASE_URL}/flows?pulseToken=${encodeURIComponent(pulseToken)}`;
+          setEmbedMode("pulse-token");
+          setEmbedUrl(fallbackUrl);
+          setError("Automatizaciones cargadas en modo compatibilidad");
+          return;
+        }
+
+        setError("No se pudo abrir Automations");
+        setLoading(false);
       }
     };
 
