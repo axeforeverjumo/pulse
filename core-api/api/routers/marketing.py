@@ -90,7 +90,7 @@ async def api_list_sites(
     try:
         return await list_sites(workspace_id, user_jwt, search, limit, offset)
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.post("/sites", status_code=status.HTTP_201_CREATED)
@@ -102,7 +102,7 @@ async def api_create_site(
     try:
         return await create_site(body.workspace_id, user_id, body.model_dump(), user_jwt)
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.get("/sites/{site_id}")
@@ -118,7 +118,7 @@ async def api_get_site(
     except HTTPException:
         raise
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.patch("/sites/{site_id}")
@@ -138,7 +138,7 @@ async def api_update_site(
     except HTTPException:
         raise
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.delete("/sites/{site_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -149,7 +149,7 @@ async def api_delete_site(
     try:
         await delete_site(site_id, user_jwt)
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.post("/sites/from-board/{board_id}", status_code=status.HTTP_201_CREATED)
@@ -164,7 +164,7 @@ async def api_create_site_from_board(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 # ============================================================================
@@ -189,7 +189,7 @@ async def api_ga4_overview(
     except HTTPException:
         raise
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.get("/sites/{site_id}/analytics/realtime")
@@ -208,7 +208,7 @@ async def api_ga4_realtime(
     except HTTPException:
         raise
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.get("/sites/{site_id}/analytics/pages")
@@ -228,7 +228,7 @@ async def api_ga4_pages(
     except HTTPException:
         raise
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.get("/sites/{site_id}/analytics/sources")
@@ -247,7 +247,7 @@ async def api_ga4_sources(
     except HTTPException:
         raise
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 # ============================================================================
@@ -272,7 +272,7 @@ async def api_gsc_performance(
     except HTTPException:
         raise
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.get("/sites/{site_id}/search/keywords")
@@ -293,7 +293,7 @@ async def api_gsc_keywords(
     except HTTPException:
         raise
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.get("/sites/{site_id}/search/pages")
@@ -313,7 +313,7 @@ async def api_gsc_pages(
     except HTTPException:
         raise
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.get("/sites/{site_id}/search/indexing")
@@ -330,7 +330,7 @@ async def api_gsc_indexing(
     except HTTPException:
         raise
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 # ============================================================================
@@ -357,7 +357,7 @@ async def api_run_audit(
     except HTTPException:
         raise
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.get("/sites/{site_id}/audits")
@@ -369,7 +369,7 @@ async def api_list_audits(
     try:
         return await list_audits(site_id, user_jwt, limit)
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.get("/sites/{site_id}/audits/{audit_id}")
@@ -386,7 +386,7 @@ async def api_get_audit(
     except HTTPException:
         raise
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 # ============================================================================
@@ -450,7 +450,7 @@ async def api_list_tasks(
         from api.services.marketing.tasks import list_tasks
         return await list_tasks(site_id, user_jwt, task_type, status, category, limit, offset)
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.post("/sites/{site_id}/tasks", status_code=status.HTTP_201_CREATED)
@@ -464,7 +464,7 @@ async def api_create_task(
         from api.services.marketing.tasks import create_task
         return await create_task(site_id, body.workspace_id, user_id, body.model_dump(), user_jwt)
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.get("/tasks/{task_id}")
@@ -481,7 +481,7 @@ async def api_get_task(
     except HTTPException:
         raise
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.patch("/tasks/{task_id}")
@@ -502,7 +502,7 @@ async def api_update_task(
     except HTTPException:
         raise
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -514,7 +514,7 @@ async def api_delete_task(
         from api.services.marketing.tasks import delete_task
         await delete_task(task_id, user_jwt)
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.post("/tasks/{task_id}/complete-routine")
@@ -532,7 +532,7 @@ async def api_complete_routine(
     except HTTPException:
         raise
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.get("/tasks/{task_id}/comments")
@@ -544,7 +544,7 @@ async def api_list_comments(
         from api.services.marketing.tasks import list_comments
         return await list_comments(task_id, user_jwt)
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.post("/tasks/{task_id}/comments", status_code=status.HTTP_201_CREATED)
@@ -565,7 +565,7 @@ async def api_create_comment(
     except HTTPException:
         raise
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 # ============================================================================
@@ -588,7 +588,7 @@ async def api_pagespeed(
     except HTTPException:
         raise
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 # ============================================================================
@@ -603,7 +603,7 @@ async def api_gtm_accounts(
         from api.services.marketing.tag_manager import list_accounts
         return await list_accounts(user_id)
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.get("/gtm/accounts/{account_id}/containers")
@@ -615,7 +615,7 @@ async def api_gtm_containers(
         from api.services.marketing.tag_manager import list_containers
         return await list_containers(user_id, account_id)
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.get("/gtm/accounts/{account_id}/containers/{container_id}/tags")
@@ -629,7 +629,7 @@ async def api_gtm_tags(
         from api.services.marketing.tag_manager import list_tags
         return await list_tags(user_id, account_id, container_id, workspace_id)
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.post("/gtm/accounts/{account_id}/containers/{container_id}/tags")
@@ -644,7 +644,7 @@ async def api_gtm_create_tag(
         from api.services.marketing.tag_manager import create_tag
         return await create_tag(user_id, account_id, container_id, body, workspace_id)
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.get("/gtm/accounts/{account_id}/containers/{container_id}/triggers")
@@ -658,7 +658,7 @@ async def api_gtm_triggers(
         from api.services.marketing.tag_manager import list_triggers
         return await list_triggers(user_id, account_id, container_id, workspace_id)
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.post("/gtm/accounts/{account_id}/containers/{container_id}/triggers")
@@ -673,7 +673,7 @@ async def api_gtm_create_trigger(
         from api.services.marketing.tag_manager import create_trigger
         return await create_trigger(user_id, account_id, container_id, body, workspace_id)
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.get("/gtm/accounts/{account_id}/containers/{container_id}/variables")
@@ -687,7 +687,7 @@ async def api_gtm_variables(
         from api.services.marketing.tag_manager import list_variables
         return await list_variables(user_id, account_id, container_id, workspace_id)
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.post("/gtm/accounts/{account_id}/containers/{container_id}/publish")
@@ -701,7 +701,7 @@ async def api_gtm_publish(
         from api.services.marketing.tag_manager import publish_version
         return await publish_version(user_id, account_id, container_id, workspace_id)
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 # ============================================================================
@@ -740,7 +740,7 @@ async def api_gsc_submit_url(
     except HTTPException:
         raise
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.post("/sites/{site_id}/search/sitemaps")
@@ -775,7 +775,7 @@ async def api_gsc_submit_sitemap(
     except HTTPException:
         raise
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.delete("/sites/{site_id}/search/sitemaps")
@@ -806,7 +806,7 @@ async def api_gsc_delete_sitemap(
     except HTTPException:
         raise
     except Exception as e:
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 # ============================================================================
@@ -1028,7 +1028,7 @@ async def api_list_ga4_properties(
         return properties
     except Exception as e:
         logger.error(f"Failed to list GA4 properties: {e}")
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
 
 
 @router.get("/auth/gsc-sites")
@@ -1053,4 +1053,4 @@ async def api_list_gsc_sites(
         return sites
     except Exception as e:
         logger.error(f"Failed to list GSC sites: {e}")
-        raise handle_api_exception(e)
+        handle_api_exception(e, "Marketing API error", logger)
