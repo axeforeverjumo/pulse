@@ -45,8 +45,14 @@ async def get_pagespeed(
     if api_key:
         params["key"] = api_key
 
+    # Also try using the Google client ID as API key if no specific one
+    if not params.get("key") and settings.google_client_id:
+        params["key"] = getattr(settings, "google_api_key", "") or ""
+
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.get(PAGESPEED_API_URL, params=params)
+        if resp.status_code == 429:
+            raise Exception("Google PageSpeed API rate limit exceeded. Intenta de nuevo en unos minutos.")
         resp.raise_for_status()
         data = resp.json()
 

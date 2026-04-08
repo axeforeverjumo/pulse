@@ -6,6 +6,7 @@ import {
   BoltIcon,
   PresentationChartLineIcon,
   ClipboardDocumentListIcon,
+  Cog6ToothIcon,
 } from "@heroicons/react/24/outline";
 import OverviewTab from "./tabs/OverviewTab";
 import AnalyticsTab from "./tabs/AnalyticsTab";
@@ -13,6 +14,7 @@ import SearchConsoleTab from "./tabs/SearchConsoleTab";
 import AuditTab from "./tabs/AuditTab";
 import PageSpeedTab from "./tabs/PageSpeedTab";
 import TasksTab from "./tabs/TasksTab";
+import SettingsTab from "./tabs/SettingsTab";
 
 const tabs = [
   { id: "overview" as const, label: "Resumen", icon: PresentationChartLineIcon },
@@ -21,6 +23,7 @@ const tabs = [
   { id: "search" as const, label: "Search Console", icon: MagnifyingGlassCircleIcon },
   { id: "audit" as const, label: "SEO Audit", icon: ShieldCheckIcon },
   { id: "pagespeed" as const, label: "PageSpeed", icon: BoltIcon },
+  { id: "settings" as const, label: "Ajustes", icon: Cog6ToothIcon },
 ];
 
 type TabId = (typeof tabs)[number]["id"];
@@ -110,6 +113,9 @@ export default function SiteDetail({
         )}
         {activeTab === "pagespeed" && (
           <PageSpeedTab site={site} workspaceId={workspaceId} />
+        )}
+        {activeTab === "settings" && (
+          <SettingsTab site={site} workspaceId={workspaceId} onSiteUpdated={onUpdated} />
         )}
       </div>
     </div>

@@ -68,6 +68,13 @@ class UpdateSiteRequest(BaseModel):
     ga4_property_id: Optional[str] = None
     gsc_site_url: Optional[str] = None
     board_id: Optional[str] = None
+    repository_url: Optional[str] = None
+    repository_full_name: Optional[str] = None
+    server_id: Optional[str] = None
+    server_host: Optional[str] = None
+    server_ip: Optional[str] = None
+    server_user: Optional[str] = None
+    server_port: Optional[int] = None
     config: Optional[Dict[str, Any]] = None
 
 
