@@ -413,12 +413,240 @@ async def api_pagespeed(
 
 
 # ============================================================================
-# Google OAuth for Marketing (Analytics + Search Console)
+# Tag Manager
+# ============================================================================
+
+@router.get("/gtm/accounts")
+async def api_gtm_accounts(
+    user_id: str = Depends(get_current_user_id),
+):
+    try:
+        from api.services.marketing.tag_manager import list_accounts
+        return await list_accounts(user_id)
+    except Exception as e:
+        raise handle_api_exception(e)
+
+
+@router.get("/gtm/accounts/{account_id}/containers")
+async def api_gtm_containers(
+    account_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    try:
+        from api.services.marketing.tag_manager import list_containers
+        return await list_containers(user_id, account_id)
+    except Exception as e:
+        raise handle_api_exception(e)
+
+
+@router.get("/gtm/accounts/{account_id}/containers/{container_id}/tags")
+async def api_gtm_tags(
+    account_id: str,
+    container_id: str,
+    workspace_id: str = Query("0"),
+    user_id: str = Depends(get_current_user_id),
+):
+    try:
+        from api.services.marketing.tag_manager import list_tags
+        return await list_tags(user_id, account_id, container_id, workspace_id)
+    except Exception as e:
+        raise handle_api_exception(e)
+
+
+@router.post("/gtm/accounts/{account_id}/containers/{container_id}/tags")
+async def api_gtm_create_tag(
+    account_id: str,
+    container_id: str,
+    body: Dict[str, Any],
+    workspace_id: str = Query("0"),
+    user_id: str = Depends(get_current_user_id),
+):
+    try:
+        from api.services.marketing.tag_manager import create_tag
+        return await create_tag(user_id, account_id, container_id, body, workspace_id)
+    except Exception as e:
+        raise handle_api_exception(e)
+
+
+@router.get("/gtm/accounts/{account_id}/containers/{container_id}/triggers")
+async def api_gtm_triggers(
+    account_id: str,
+    container_id: str,
+    workspace_id: str = Query("0"),
+    user_id: str = Depends(get_current_user_id),
+):
+    try:
+        from api.services.marketing.tag_manager import list_triggers
+        return await list_triggers(user_id, account_id, container_id, workspace_id)
+    except Exception as e:
+        raise handle_api_exception(e)
+
+
+@router.post("/gtm/accounts/{account_id}/containers/{container_id}/triggers")
+async def api_gtm_create_trigger(
+    account_id: str,
+    container_id: str,
+    body: Dict[str, Any],
+    workspace_id: str = Query("0"),
+    user_id: str = Depends(get_current_user_id),
+):
+    try:
+        from api.services.marketing.tag_manager import create_trigger
+        return await create_trigger(user_id, account_id, container_id, body, workspace_id)
+    except Exception as e:
+        raise handle_api_exception(e)
+
+
+@router.get("/gtm/accounts/{account_id}/containers/{container_id}/variables")
+async def api_gtm_variables(
+    account_id: str,
+    container_id: str,
+    workspace_id: str = Query("0"),
+    user_id: str = Depends(get_current_user_id),
+):
+    try:
+        from api.services.marketing.tag_manager import list_variables
+        return await list_variables(user_id, account_id, container_id, workspace_id)
+    except Exception as e:
+        raise handle_api_exception(e)
+
+
+@router.post("/gtm/accounts/{account_id}/containers/{container_id}/publish")
+async def api_gtm_publish(
+    account_id: str,
+    container_id: str,
+    workspace_id: str = Query("0"),
+    user_id: str = Depends(get_current_user_id),
+):
+    try:
+        from api.services.marketing.tag_manager import publish_version
+        return await publish_version(user_id, account_id, container_id, workspace_id)
+    except Exception as e:
+        raise handle_api_exception(e)
+
+
+# ============================================================================
+# Search Console — Write operations (submit URLs, manage sitemaps)
+# ============================================================================
+
+@router.post("/sites/{site_id}/search/submit-url")
+async def api_gsc_submit_url(
+    site_id: str,
+    body: Dict[str, Any],
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Request Google to index a URL via Search Console URL Inspection API."""
+    try:
+        site = await get_site(site_id, user_jwt)
+        if not site or not site.get("gsc_site_url"):
+            raise HTTPException(status_code=400, detail="Search Console not configured")
+
+        from api.services.google_auth import get_credentials_for_user
+        from googleapiclient.discovery import build
+
+        credentials, _ = get_credentials_for_user(user_id, provider="google_marketing")
+        service = build("searchconsole", "v1", credentials=credentials)
+
+        url_to_inspect = body.get("url", "")
+        if not url_to_inspect:
+            raise HTTPException(status_code=400, detail="URL required")
+
+        result = service.urlInspection().index().inspect(body={
+            "inspectionUrl": url_to_inspect,
+            "siteUrl": site["gsc_site_url"],
+        }).execute()
+
+        return result.get("inspectionResult", {})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise handle_api_exception(e)
+
+
+@router.post("/sites/{site_id}/search/sitemaps")
+async def api_gsc_submit_sitemap(
+    site_id: str,
+    body: Dict[str, Any],
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Submit a sitemap to Search Console."""
+    try:
+        site = await get_site(site_id, user_jwt)
+        if not site or not site.get("gsc_site_url"):
+            raise HTTPException(status_code=400, detail="Search Console not configured")
+
+        from api.services.google_auth import get_credentials_for_user
+        from googleapiclient.discovery import build
+
+        credentials, _ = get_credentials_for_user(user_id, provider="google_marketing")
+        service = build("webmasters", "v3", credentials=credentials)
+
+        sitemap_url = body.get("sitemap_url", "")
+        if not sitemap_url:
+            raise HTTPException(status_code=400, detail="sitemap_url required")
+
+        service.sitemaps().submit(
+            siteUrl=site["gsc_site_url"],
+            feedpath=sitemap_url,
+        ).execute()
+
+        return {"submitted": True, "sitemap_url": sitemap_url}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise handle_api_exception(e)
+
+
+@router.delete("/sites/{site_id}/search/sitemaps")
+async def api_gsc_delete_sitemap(
+    site_id: str,
+    sitemap_url: str = Query(...),
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Delete a sitemap from Search Console."""
+    try:
+        site = await get_site(site_id, user_jwt)
+        if not site or not site.get("gsc_site_url"):
+            raise HTTPException(status_code=400, detail="Search Console not configured")
+
+        from api.services.google_auth import get_credentials_for_user
+        from googleapiclient.discovery import build
+
+        credentials, _ = get_credentials_for_user(user_id, provider="google_marketing")
+        service = build("webmasters", "v3", credentials=credentials)
+
+        service.sitemaps().delete(
+            siteUrl=site["gsc_site_url"],
+            feedpath=sitemap_url,
+        ).execute()
+
+        return {"deleted": True, "sitemap_url": sitemap_url}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise handle_api_exception(e)
+
+
+# ============================================================================
+# Google OAuth for Marketing (Full access: Analytics, Search Console, Tag Manager, Ads)
 # ============================================================================
 
 MARKETING_SCOPES = [
-    "https://www.googleapis.com/auth/analytics.readonly",
-    "https://www.googleapis.com/auth/webmasters.readonly",
+    # Google Analytics 4 — full read/write (manage properties, custom dimensions, audiences)
+    "https://www.googleapis.com/auth/analytics",
+    "https://www.googleapis.com/auth/analytics.edit",
+    # Google Search Console — full access (submit URLs, manage sitemaps, inspect URLs)
+    "https://www.googleapis.com/auth/webmasters",
+    # Google Tag Manager — full access (manage containers, tags, triggers, variables)
+    "https://www.googleapis.com/auth/tagmanager.manage.accounts",
+    "https://www.googleapis.com/auth/tagmanager.edit.containers",
+    "https://www.googleapis.com/auth/tagmanager.publish",
+    # Google Ads — read campaigns, manage ads
+    "https://www.googleapis.com/auth/adwords",
+    # Identity
     "openid",
     "email",
     "profile",
