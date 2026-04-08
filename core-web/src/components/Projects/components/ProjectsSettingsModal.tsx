@@ -367,7 +367,6 @@ export default function ProjectsSettingsModal({
                           }
                         }}
                       />
-                    </div>
 
                     {/* Show resolved server details (read-only) */}
                     {serverIp && (
