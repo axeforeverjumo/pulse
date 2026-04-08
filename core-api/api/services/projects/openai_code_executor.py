@@ -276,10 +276,81 @@ def _collect_git_state(repo_dir: str, env: Dict[str, str]) -> Dict[str, str]:
     }
 
 
+def _validate_odoo_manifests(repo_dir: str) -> None:
+    """Pre-commit check: ensure all files referenced in __manifest__.py data[] exist."""
+    import ast
+    import glob as glob_mod
+
+    manifest_files = glob_mod.glob(os.path.join(repo_dir, "**", "__manifest__.py"), recursive=True)
+    for manifest_path in manifest_files:
+        module_dir = os.path.dirname(manifest_path)
+        module_name = os.path.basename(module_dir)
+        try:
+            with open(manifest_path, "r") as f:
+                content = f.read()
+            manifest = ast.literal_eval(content)
+        except Exception:
+            continue
+
+        data_files = manifest.get("data", [])
+        fixed = False
+        valid_files = []
+        for data_file in data_files:
+            full_path = os.path.join(module_dir, data_file)
+            if os.path.isfile(full_path):
+                valid_files.append(data_file)
+            else:
+                logger.warning(
+                    "Odoo pre-commit: removing missing file '%s' from %s/__manifest__.py",
+                    data_file, module_name,
+                )
+                fixed = True
+
+        if fixed:
+            manifest["data"] = valid_files
+            # Rewrite manifest
+            with open(manifest_path, "w") as f:
+                f.write("# -*- coding: utf-8 -*-\n")
+                f.write(repr(manifest))
+                f.write("\n")
+
+        # Also validate models/__init__.py imports
+        init_path = os.path.join(module_dir, "models", "__init__.py")
+        if os.path.isfile(init_path):
+            with open(init_path, "r") as f:
+                init_content = f.read()
+            new_lines = []
+            changed = False
+            for line in init_content.splitlines():
+                if line.strip().startswith("from . import ") or line.strip().startswith("from ."):
+                    # Extract module name
+                    parts = line.strip().split("import")
+                    if len(parts) == 2:
+                        mod_name = parts[1].strip().split(",")
+                        valid_mods = []
+                        for m in mod_name:
+                            m = m.strip()
+                            if m and os.path.isfile(os.path.join(module_dir, "models", f"{m}.py")):
+                                valid_mods.append(m)
+                            elif m:
+                                logger.warning("Odoo pre-commit: removing missing model import '%s' from %s", m, module_name)
+                                changed = True
+                        if valid_mods:
+                            new_lines.append(f"from . import {', '.join(valid_mods)}")
+                        continue
+                new_lines.append(line)
+            if changed:
+                with open(init_path, "w") as f:
+                    f.write("\n".join(new_lines) + "\n")
+
+
 def _commit_and_push(repo_dir: str, env: Dict[str, str], commit_message: str) -> Dict[str, Any]:
     """Stage all changes, commit, and push. Returns result dict."""
     def _git(args: List[str], check: bool = True) -> subprocess.CompletedProcess:
         return subprocess.run(["git"] + args, cwd=repo_dir, env=env, capture_output=True, text=True, timeout=60, check=check)
+
+    # Pre-commit validation: check Odoo manifest consistency
+    _validate_odoo_manifests(repo_dir)
 
     _git(["add", "-A"])
     status = _git(["status", "--porcelain"]).stdout.strip()
@@ -343,6 +414,7 @@ CAMBIOS CRÍTICOS ODOO 18 vs versiones anteriores:
 | group_operator= | aggregator= |
 | Override unlink() para validar | @api.ondelete(at_uninstall=False) |
 | cr.execute() | SQL class con execute_query_dict() |
+| post_init_hook(cr, registry) | post_init_hook(env) |
 | create(vals) | create([vals]) (lista) |
 
 VISTAS XML — SINTAXIS CORRECTA:

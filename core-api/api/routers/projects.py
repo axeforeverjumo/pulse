@@ -2536,6 +2536,82 @@ async def _auto_enqueue_next_task(supabase: Any, completed_job: Dict[str, Any]) 
         logger.warning("Auto-enqueue failed for agent %s: %s", agent_id, e)
 
 
+async def _create_deploy_fix_issue(
+    supabase: Any, board_id: str, board: Dict[str, Any],
+    agent_id: str, created_by: Optional[str], error_summary: str,
+) -> None:
+    """Create a fix issue when auto-deploy fails, assign agent, enqueue."""
+    try:
+        # Get next issue number
+        num_res = await supabase.rpc("", {}).execute()  # fallback below
+    except Exception:
+        pass
+
+    try:
+        max_num_res = await supabase.table("project_issues")\
+            .select("number")\
+            .eq("board_id", board_id)\
+            .order("number", desc=True)\
+            .limit(1)\
+            .execute()
+        next_number = ((max_num_res.data or [{}])[0].get("number") or 0) + 1
+
+        states_res = await supabase.table("project_states")\
+            .select("id, name")\
+            .eq("board_id", board_id)\
+            .execute()
+        todo_state_id = None
+        for s in (states_res.data or []):
+            if s.get("name", "").lower().strip() in ("to do", "todo", "backlog"):
+                todo_state_id = s["id"]
+                break
+
+        if not todo_state_id:
+            logger.warning("Auto-deploy fix: no To Do state found for board %s", board_id)
+            return
+
+        workspace_id = board.get("workspace_id")
+        workspace_app_id = board.get("workspace_app_id")
+
+        new_issue_res = await supabase.table("project_issues").insert({
+            "board_id": board_id,
+            "workspace_id": workspace_id,
+            "workspace_app_id": workspace_app_id,
+            "title": "Fix: Corregir errores de deploy automatico",
+            "description": (
+                f"El deploy automatico detecto errores. Corrige estos errores en el codigo:\n\n"
+                f"```\n{error_summary[:1500]}\n```\n\n"
+                "REGLAS: Verifica que todos los archivos del manifest existen. "
+                "Verifica que los campos en vistas XML existen en modelos Python. "
+                "Usa <list> no <tree>. Usa invisible='expr' no attrs."
+            ),
+            "state_id": todo_state_id,
+            "priority": 1,
+            "created_by": created_by,
+            "is_dev_task": True,
+            "number": next_number,
+        }).execute()
+
+        new_issue = (new_issue_res.data or [None])[0] if new_issue_res else None
+        if new_issue:
+            await supabase.table("project_issue_assignees").insert({
+                "issue_id": new_issue["id"],
+                "agent_id": agent_id,
+                "assignee_type": "agent",
+                "workspace_id": workspace_id,
+                "workspace_app_id": workspace_app_id,
+            }).execute()
+            await enqueue_project_agent_job(
+                supabase, new_issue, agent_id,
+                requested_by=created_by,
+                source="auto_deploy_fix",
+                max_attempts=4,
+            )
+            logger.info("Auto-deploy: created fix issue #%s for board %s", next_number, board_id)
+    except Exception as e:
+        logger.error("Auto-deploy: failed to create fix issue: %s", e)
+
+
 async def _auto_deploy_board(supabase: Any, board_id: str, agent_id: str) -> None:
     """All tasks complete — SSH to project server, pull code, rebuild, check errors."""
     try:
@@ -2722,51 +2798,16 @@ docker logs "$ODOO_CONTAINER" --tail 5 2>&1
                 workspace_app_id=recent_issue.get("workspace_app_id"),
             )
 
-            # If there are errors, create a new issue to fix them
+            # If there are errors, create a fix issue and re-trigger deploy after fix
             if has_errors:
-                error_lines = [l for l in output.split("\n") if any(kw in l.lower() for kw in ["error", "traceback", "exception"])]
+                error_lines = [l for l in output.split("\n") if any(kw in l.lower() for kw in ["error", "traceback", "exception", "parseerror", "field", "does not exist"])]
                 error_summary = "\n".join(error_lines[:20])
 
-                # Find a To Do state
-                states_res = await supabase.table("project_states")\
-                    .select("id, name")\
-                    .eq("board_id", board_id)\
-                    .execute()
-                todo_state_id = None
-                for s in (states_res.data or []):
-                    if s.get("name", "").lower().strip() in ("to do", "todo", "backlog"):
-                        todo_state_id = s["id"]
-                        break
-
-                if todo_state_id:
-                    new_issue_res = await supabase.table("project_issues").insert({
-                        "board_id": board_id,
-                        "workspace_id": board.get("workspace_id"),
-                        "workspace_app_id": board.get("workspace_app_id"),
-                        "title": "Corregir errores de deploy automático",
-                        "description": f"El deploy automático detectó errores que deben corregirse:\n\n```\n{error_summary[:1500]}\n```",
-                        "state_id": todo_state_id,
-                        "priority": 1,
-                        "created_by": recent_issue.get("created_by"),
-                        "is_dev_task": True,
-                    }).execute()
-
-                    new_issue = (new_issue_res.data or [None])[0] if new_issue_res else None
-                    if new_issue:
-                        # Assign same agent
-                        await supabase.table("project_issue_assignees").insert({
-                            "issue_id": new_issue["id"],
-                            "agent_id": agent_id,
-                            "assignee_type": "agent",
-                        }).execute()
-                        # Enqueue
-                        await enqueue_project_agent_job(
-                            supabase, new_issue, agent_id,
-                            requested_by=recent_issue.get("created_by"),
-                            source="auto_deploy_fix",
-                            max_attempts=4,
-                        )
-                        logger.info("Auto-deploy: created fix issue for errors on board %s", board_id)
+                await _create_deploy_fix_issue(
+                    supabase, board_id, board, agent_id,
+                    recent_issue.get("created_by"),
+                    error_summary,
+                )
 
     except Exception as e:
         logger.error("Auto-deploy failed for board %s: %s", board_id, e)
