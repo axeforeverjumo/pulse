@@ -87,7 +87,7 @@ export default function SiteDetail({
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto p-6">
         {activeTab === "overview" && (
-          <OverviewTab site={site} workspaceId={workspaceId} />
+          <OverviewTab site={site} workspaceId={workspaceId} onSiteUpdated={onUpdated} />
         )}
         {activeTab === "analytics" && (
           <AnalyticsTab site={site} workspaceId={workspaceId} />
