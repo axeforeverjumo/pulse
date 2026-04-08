@@ -239,11 +239,55 @@ async def execute_unified_code_task(
             _log_line(job_id, "[validacion] Odoo manifest check...")
             await asyncio.to_thread(_validate_odoo_manifests, repo_dir)
 
-        # Collect git state
+        # Collect git state (pre-commit diff for quality gate)
         _log_line(job_id, "[git] Recopilando estado...")
         git_state = await asyncio.to_thread(collect_git_state, repo_context)
 
-        # Auto-commit and push
+        # ── QUALITY GATE: lint + test + review BEFORE commit ──
+        pre_diff = git_state.get("diff", "")
+        has_changes = bool(pre_diff.strip())
+
+        quality_report = None
+        if has_changes:
+            from api.services.projects.quality_gate import run_quality_gate, format_quality_report_for_comment
+            _log_line(job_id, "[quality] Running quality gate...")
+            quality_report = await run_quality_gate(
+                repo_dir,
+                target.project_type,
+                lint_enabled=True,
+                test_enabled=True,
+                review_enabled=True,
+                diff_text=pre_diff,
+                job_id=job_id,
+            )
+
+            if not quality_report.all_passed:
+                # Quality gate blocked — do NOT push, return for re-try
+                _log_line(job_id, f"[quality] BLOCKED by {quality_report.blocking_stage}")
+                elapsed_ms = int((time.time() - start_time) * 1000)
+                return {
+                    "status": "needs_continuation",
+                    "session_id": new_session_id,
+                    "result": (
+                        f"Quality gate bloqueado por {quality_report.blocking_stage}.\n\n"
+                        f"{quality_report.summary}\n\n"
+                        f"Corrige los errores y vuelve a intentar."
+                    ),
+                    "git_log": git_state.get("log", ""),
+                    "git_diff": pre_diff[:5000],
+                    "git_status": git_state.get("status", ""),
+                    "is_error": False,
+                    "duration_ms": elapsed_ms,
+                    "total_cost_usd": 0,
+                    "num_turns": num_turns,
+                    "pushed": False,
+                    "commit_sha": None,
+                    "quality_report": format_quality_report_for_comment(quality_report),
+                    "quality_blocked": True,
+                    "quality_stage": quality_report.blocking_stage,
+                }
+
+        # Auto-commit and push (quality gate passed or no changes)
         commit_msg = f"feat: {prompt.split(chr(10))[0][:80]}" if prompt else "feat: agent task"
         for line in prompt.split("\n"):
             if line.strip().startswith("Titulo:"):
@@ -268,7 +312,7 @@ async def execute_unified_code_task(
         _log_line(job_id, f"[fin] {num_turns} turnos, {elapsed_ms}ms, pushed={push_result.get('pushed', False)}")
         _log_line(job_id, "[DONE]")
 
-        return {
+        result_dict = {
             "status": "needs_continuation" if hit_max else "completed",
             "session_id": new_session_id,
             "result": final_text or "(agente termino sin respuesta)",
@@ -282,6 +326,14 @@ async def execute_unified_code_task(
             "pushed": push_result.get("pushed", False),
             "commit_sha": push_result.get("commit_sha"),
         }
+
+        # Attach quality report if available
+        if quality_report:
+            from api.services.projects.quality_gate import format_quality_report_for_comment
+            result_dict["quality_report"] = format_quality_report_for_comment(quality_report)
+            result_dict["quality_passed"] = quality_report.all_passed
+
+        return result_dict
 
     except Exception as exc:
         logger.exception("Unexpected error in unified code executor")

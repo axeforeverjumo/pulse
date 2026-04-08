@@ -2105,6 +2105,35 @@ async def _execute_project_agent_job(
                 workspace_app_id=task.get("workspace_app_id"),
             )
 
+        # Post quality gate report
+        if cc_result.get("quality_report"):
+            quality_icon = "✅" if cc_result.get("quality_passed") else "🛑"
+            await _append_agent_activity_comment(
+                supabase,
+                issue_id=issue_id,
+                comment_user_id=comment_user_id,
+                agent=agent,
+                content=f"{quality_icon} **Quality Gate**\n\n{cc_result['quality_report']}",
+                workspace_id=task.get("workspace_id"),
+                workspace_app_id=task.get("workspace_app_id"),
+            )
+
+        # If quality gate blocked, re-enqueue with error context
+        if cc_result.get("quality_blocked"):
+            return {
+                "task_completed": False,
+                "queue_recommendation": "queued",
+                "payload": {
+                    "claude_code_session_id": cc_session_id,
+                    "previous_result": cc_result.get("result", "")[:1000],
+                    "previous_git_log": cc_git_log,
+                    "quality_blocked_by": cc_result.get("quality_stage"),
+                    "quality_report": cc_result.get("quality_report", "")[:2000],
+                    "iteration_count": (previous_payload.get("iteration_count", 0) + 1) if isinstance(previous_payload, dict) else 1,
+                    "no_progress_count": 0,
+                },
+            }
+
         # Determine queue recommendation
         if cc_status == "completed" and not cc_result.get("is_error"):
             target_state = qa_id or done_id
