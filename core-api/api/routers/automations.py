@@ -281,6 +281,20 @@ async def send_email_auto(body: EmailSend):
 # WhatsApp
 # ============================================================================
 
+class WhatsAppInstanceRequest(BaseModel):
+    workspace_id: str
+
+
+@router.post("/whatsapp/instance", dependencies=[__import__("fastapi").Depends(_verify_automation_key)])
+async def get_whatsapp_instance(body: WhatsAppInstanceRequest):
+    """Auto-detect the WhatsApp instance for a workspace."""
+    sb = get_service_role_client()
+    instance = sb.table("external_accounts").select("instance_name").eq("workspace_id", body.workspace_id).eq("provider", "whatsapp").limit(1).execute()
+    if not instance.data:
+        raise HTTPException(404, "No WhatsApp instance found for this workspace")
+    return {"instance_name": instance.data[0]["instance_name"]}
+
+
 class WhatsAppSend(BaseModel):
     workspace_id: str
     instance_name: str
@@ -293,9 +307,8 @@ class WhatsAppSend(BaseModel):
 async def send_whatsapp_auto(body: WhatsAppSend):
     """Send WhatsApp message via Evolution API."""
     evolution_url = os.getenv("EVOLUTION_API_URL", "http://127.0.0.1:8080")
-    # Get instance API key
     sb = get_service_role_client()
-    instance = sb.table("messaging_instance").select("api_key").eq("instance_name", body.instance_name).eq("workspace_id", body.workspace_id).limit(1).execute()
+    instance = sb.table("external_accounts").select("api_key").eq("instance_name", body.instance_name).eq("workspace_id", body.workspace_id).limit(1).execute()
     if not instance.data:
         raise HTTPException(404, "WhatsApp instance not found")
     api_key = instance.data[0]["api_key"]
