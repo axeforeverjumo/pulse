@@ -4,8 +4,15 @@ import {
   EyeIcon,
   CursorArrowRaysIcon,
   ArrowTrendingUpIcon,
+  ArrowTrendingDownIcon,
   LinkIcon,
   CheckCircleIcon,
+  BoltIcon,
+  ShieldCheckIcon,
+  GlobeAltIcon,
+  DocumentMagnifyingGlassIcon,
+  RocketLaunchIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import {
   updateMarketingSite,
@@ -14,6 +21,10 @@ import {
   getMarketingGa4Properties,
   getMarketingGscSites,
   getMarketingSearchPerformance,
+  getMarketingSearchKeywords,
+  getMarketingPageSpeed,
+  runMarketingSeoAudit,
+  getMarketingSeoAudits,
 } from "../../../api/client";
 import { toast } from "sonner";
 
@@ -29,21 +40,19 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
   const [ga4Properties, setGa4Properties] = useState<any[]>([]);
   const [gscSites, setGscSites] = useState<any[]>([]);
   const [loadingProperties, setLoadingProperties] = useState(false);
-  const [liveKpis, setLiveKpis] = useState<{ clicks?: number; impressions?: number; ctr?: number; position?: number } | null>(null);
+
+  // Dashboard data
+  const [searchPerf, setSearchPerf] = useState<any>(null);
+  const [topKeywords, setTopKeywords] = useState<any[]>([]);
+  const [pagespeed, setPagespeed] = useState<any>(null);
+  const [lastAudit, setLastAudit] = useState<any>(null);
+  const [loadingDashboard, setLoadingDashboard] = useState(false);
+
   const autoSavedRef = useRef(false);
 
-  useEffect(() => {
-    checkGoogleAuth();
-  }, []);
-
-  useEffect(() => {
-    if (googleAuth?.connected) loadProperties();
-  }, [googleAuth?.connected]);
-
-  // Load live KPIs if GSC is configured
-  useEffect(() => {
-    if (site.gsc_site_url) loadLiveKpis();
-  }, [site.gsc_site_url]);
+  useEffect(() => { checkGoogleAuth(); }, []);
+  useEffect(() => { if (googleAuth?.connected) loadProperties(); }, [googleAuth?.connected]);
+  useEffect(() => { loadDashboardData(); }, [site.gsc_site_url, site.ga4_property_id]);
 
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
@@ -57,24 +66,39 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
   }, []);
 
   async function checkGoogleAuth() {
-    try {
-      const status = await getMarketingAuthStatus();
-      setGoogleAuth(status);
-    } catch {}
+    try { setGoogleAuth(await getMarketingAuthStatus()); } catch {}
   }
 
-  async function loadLiveKpis() {
+  async function loadDashboardData() {
+    if (!site.gsc_site_url && !site.id) return;
+    setLoadingDashboard(true);
     try {
-      const perf = await getMarketingSearchPerformance(site.id);
-      if (perf?.totals) {
-        setLiveKpis({
-          clicks: perf.totals.clicks,
-          impressions: perf.totals.impressions,
-          ctr: perf.totals.avg_ctr,
-          position: perf.totals.avg_position,
-        });
+      const promises: Promise<any>[] = [];
+
+      // Search Console data
+      if (site.gsc_site_url) {
+        promises.push(
+          getMarketingSearchPerformance(site.id).then(setSearchPerf).catch(() => null),
+          getMarketingSearchKeywords(site.id).then((kw) => setTopKeywords(kw.slice(0, 8))).catch(() => null),
+        );
       }
-    } catch {}
+
+      // PageSpeed (cached or fresh)
+      promises.push(
+        getMarketingPageSpeed(site.id, "mobile").then(setPagespeed).catch(() => null),
+      );
+
+      // Last audit
+      promises.push(
+        getMarketingSeoAudits(site.id).then((audits) => {
+          if (audits.length > 0) setLastAudit(audits[0]);
+        }).catch(() => null),
+      );
+
+      await Promise.allSettled(promises);
+    } finally {
+      setLoadingDashboard(false);
+    }
   }
 
   async function loadProperties() {
@@ -87,55 +111,36 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
       setGa4Properties(props);
       setGscSites(sites);
 
-      // Auto-save if not yet configured
       if (!autoSavedRef.current) {
         let autoGa4 = site.ga4_property_id || "";
         let autoGsc = site.gsc_site_url || "";
         let needsSave = false;
-
-        if (!autoGa4 && props.length >= 1) {
-          autoGa4 = props[0].property_id;
-          needsSave = true;
-        }
+        if (!autoGa4 && props.length >= 1) { autoGa4 = props[0].property_id; needsSave = true; }
         if (!autoGsc && sites.length > 0) {
           const match = sites.find((s: any) => s.site_url.includes(site.domain));
           autoGsc = match ? match.site_url : sites[0].site_url;
           needsSave = true;
         }
-
         if (needsSave) {
           autoSavedRef.current = true;
           await saveProperties(autoGa4, autoGsc);
         }
       }
-    } catch (e) {
-      console.error("Failed to load properties", e);
-    } finally {
-      setLoadingProperties(false);
-    }
+    } catch {} finally { setLoadingProperties(false); }
   }
 
   async function saveProperties(ga4: string, gsc: string) {
     try {
-      const updated = await updateMarketingSite(site.id, {
-        ga4_property_id: ga4 || null,
-        gsc_site_url: gsc || null,
-      });
+      const updated = await updateMarketingSite(site.id, { ga4_property_id: ga4 || null, gsc_site_url: gsc || null });
       onSiteUpdated?.(updated);
-      // Load KPIs immediately after saving GSC
-      if (gsc) {
-        setTimeout(() => loadLiveKpis(), 500);
-      }
-    } catch (e: any) {
-      console.error("Auto-save failed", e);
-    }
+      setTimeout(() => loadDashboardData(), 500);
+    } catch {}
   }
 
   async function handleGa4Change(value: string) {
     await saveProperties(value, site.gsc_site_url || "");
     toast.success("Analytics configurado");
   }
-
   async function handleGscChange(value: string) {
     await saveProperties(site.ga4_property_id || "", value);
     toast.success("Search Console configurado");
@@ -145,119 +150,254 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
     setConnecting(true);
     try {
       const { url } = await getMarketingAuthUrl();
-      const w = 500, h = 600;
-      const left = window.screenX + (window.outerWidth - w) / 2;
-      const top = window.screenY + (window.outerHeight - h) / 2;
+      const w = 500, h = 600, left = window.screenX + (window.outerWidth - w) / 2, top = window.screenY + (window.outerHeight - h) / 2;
       window.open(url, "google_marketing_oauth", `width=${w},height=${h},left=${left},top=${top}`);
-    } catch (e: any) {
-      toast.error("Error: " + (e.message || ""));
-    } finally {
-      setConnecting(false);
-    }
+    } catch (e: any) { toast.error("Error: " + (e.message || "")); } finally { setConnecting(false); }
   }
 
-  // Use live KPIs or cached site values
-  const clicks = liveKpis?.clicks ?? site.organic_clicks_7d;
-  const impressions = liveKpis?.impressions ?? site.organic_impressions_7d;
-  const position = liveKpis?.position ?? site.avg_position;
+  // Derived data
+  const clicks = searchPerf?.totals?.clicks;
+  const impressions = searchPerf?.totals?.impressions;
+  const avgCtr = searchPerf?.totals?.avg_ctr;
+  const avgPosition = searchPerf?.totals?.avg_position;
+  const perfScore = pagespeed?.scores?.performance;
+  const seoScore = pagespeed?.scores?.seo;
+  const auditScore = lastAudit?.seo_score ?? site.last_audit_score;
+  const auditIssues = lastAudit?.diagnostics?.issue_summary;
+  const isConfigured = googleAuth?.connected && (site.ga4_property_id || site.gsc_site_url);
 
   return (
-    <div className="space-y-6">
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard label="SEO Score" value={site.last_audit_score != null ? `${site.last_audit_score}/100` : "--"} icon={<ChartBarIcon className="w-5 h-5" />} color={site.last_audit_score >= 80 ? "green" : site.last_audit_score >= 50 ? "yellow" : "red"} />
-        <KpiCard label="Clicks (28d)" value={clicks != null ? clicks.toLocaleString() : "--"} icon={<CursorArrowRaysIcon className="w-5 h-5" />} color="blue" />
-        <KpiCard label="Impresiones (28d)" value={impressions != null ? impressions.toLocaleString() : "--"} icon={<EyeIcon className="w-5 h-5" />} color="purple" />
-        <KpiCard label="Posicion media" value={position != null ? Number(position).toFixed(1) : "--"} icon={<ArrowTrendingUpIcon className="w-5 h-5" />} color="orange" />
+    <div className="space-y-5">
+      {/* Connect Google banner — only if not connected */}
+      {!googleAuth?.connected && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-5 border border-blue-200 flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-slate-800 mb-1">Conecta Google para activar el dashboard</h3>
+            <p className="text-sm text-slate-500">Analytics, Search Console, Tag Manager y Ads en un solo click.</p>
+          </div>
+          <button onClick={handleConnectGoogle} disabled={connecting}
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm transition-all disabled:opacity-50">
+            <GoogleIcon />
+            {connecting ? "Conectando..." : "Conectar Google"}
+          </button>
+        </div>
+      )}
+
+      {/* Connected + property selectors (compact) */}
+      {googleAuth?.connected && (!site.ga4_property_id || !site.gsc_site_url) && (
+        <div className="bg-white rounded-2xl p-4 border border-slate-200">
+          <div className="flex items-center gap-2 mb-3">
+            <CheckCircleIcon className="w-4 h-4 text-green-500" />
+            <span className="text-sm text-green-700 font-medium">{googleAuth.email}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {!site.ga4_property_id && ga4Properties.length > 0 && (
+              <select value="" onChange={(e) => handleGa4Change(e.target.value)}
+                className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-200">
+                <option value="">Seleccionar GA4...</option>
+                {ga4Properties.map((p) => <option key={p.property_id} value={p.property_id}>{p.display_name}</option>)}
+              </select>
+            )}
+            {!site.gsc_site_url && gscSites.length > 0 && (
+              <select value="" onChange={(e) => handleGscChange(e.target.value)}
+                className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-200">
+                <option value="">Seleccionar Search Console...</option>
+                {gscSites.map((s) => <option key={s.site_url} value={s.site_url}>{s.site_url}</option>)}
+              </select>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* === MAIN DASHBOARD === */}
+
+      {/* Row 1: Big KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <KpiCard label="SEO Score" value={auditScore != null ? auditScore : "--"} suffix={auditScore != null ? "/100" : ""} color={auditScore >= 80 ? "green" : auditScore >= 50 ? "yellow" : "red"} icon={<ShieldCheckIcon className="w-5 h-5" />} />
+        <KpiCard label="Clicks (28d)" value={clicks != null ? clicks.toLocaleString() : "--"} color="blue" icon={<CursorArrowRaysIcon className="w-5 h-5" />} />
+        <KpiCard label="Impresiones" value={impressions != null ? (impressions > 1000 ? `${(impressions/1000).toFixed(1)}K` : impressions) : "--"} color="purple" icon={<EyeIcon className="w-5 h-5" />} />
+        <KpiCard label="CTR" value={avgCtr != null ? `${(avgCtr * 100).toFixed(1)}%` : "--"} color="blue" icon={<ArrowTrendingUpIcon className="w-5 h-5" />} />
+        <KpiCard label="Posicion" value={avgPosition != null ? Number(avgPosition).toFixed(1) : "--"} color={avgPosition && avgPosition <= 10 ? "green" : "orange"} icon={<GlobeAltIcon className="w-5 h-5" />} />
       </div>
 
-      {/* Google Connection + Property Selection */}
-      <div className="bg-white rounded-2xl p-5 border border-slate-200">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <LinkIcon className="w-4 h-4 text-slate-500" />
-            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Google</h3>
+      {/* Row 2: Performance + SEO Health side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* PageSpeed Scores */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-slate-600 flex items-center gap-2">
+              <BoltIcon className="w-4 h-4" /> PageSpeed
+            </h3>
+            {pagespeed && <span className="text-xs text-slate-400">Mobile</span>}
           </div>
-          {googleAuth?.connected ? (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg">
-              <CheckCircleIcon className="w-4 h-4 text-green-500" />
-              <span className="text-sm text-green-700">{googleAuth.email}</span>
+          {pagespeed?.scores ? (
+            <div className="grid grid-cols-4 gap-3">
+              {Object.entries(pagespeed.scores).map(([key, score]: [string, any]) => (
+                <div key={key} className="text-center">
+                  <div className={`w-14 h-14 mx-auto rounded-full flex items-center justify-center text-lg font-bold border-[3px] ${
+                    score >= 90 ? "border-green-400 text-green-600" :
+                    score >= 50 ? "border-yellow-400 text-yellow-600" :
+                    "border-red-400 text-red-600"
+                  }`}>
+                    {score}
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1.5 leading-tight">{formatScoreLabel(key)}</p>
+                </div>
+              ))}
             </div>
           ) : (
-            <button onClick={handleConnectGoogle} disabled={connecting}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors disabled:opacity-50">
-              <GoogleIcon />
-              {connecting ? "Conectando..." : "Conectar Google"}
-            </button>
+            <p className="text-sm text-slate-300 text-center py-6">Ejecuta un analisis en el tab PageSpeed</p>
           )}
         </div>
 
-        {!googleAuth?.connected && (
-          <p className="text-sm text-slate-400">Conecta tu cuenta de Google para acceder a Analytics, Search Console, Tag Manager y Ads.</p>
-        )}
-
-        {googleAuth?.connected && (
-          <div className="space-y-4 mt-4">
-            {loadingProperties ? (
-              <div className="flex items-center gap-2 text-sm text-slate-400">
-                <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                Detectando propiedades...
-              </div>
-            ) : (
-              <>
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
-                    <AnalyticsIcon />
-                    Google Analytics 4
-                    {site.ga4_property_id && <CheckCircleIcon className="w-4 h-4 text-green-500" />}
-                  </label>
-                  {ga4Properties.length > 0 ? (
-                    <select value={site.ga4_property_id || ""} onChange={(e) => handleGa4Change(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 bg-white">
-                      <option value="">Seleccionar propiedad...</option>
-                      {ga4Properties.map((p) => (
-                        <option key={p.property_id} value={p.property_id}>{p.display_name} — {p.account} ({p.property_id})</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <p className="text-sm text-slate-400">No se encontraron propiedades GA4 en esta cuenta.</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
-                    <GoogleIcon />
-                    Google Search Console
-                    {site.gsc_site_url && <CheckCircleIcon className="w-4 h-4 text-green-500" />}
-                  </label>
-                  {gscSites.length > 0 ? (
-                    <select value={site.gsc_site_url || ""} onChange={(e) => handleGscChange(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 bg-white">
-                      <option value="">Seleccionar sitio...</option>
-                      {gscSites.map((s) => (
-                        <option key={s.site_url} value={s.site_url}>{s.site_url} ({s.permission_level})</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <p className="text-sm text-slate-400">No se encontraron sitios en Search Console.</p>
-                  )}
-                </div>
-              </>
-            )}
+        {/* SEO Health */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-slate-600 flex items-center gap-2">
+              <ShieldCheckIcon className="w-4 h-4" /> SEO Health
+            </h3>
+            {lastAudit && <span className="text-xs text-slate-400">{new Date(lastAudit.created_at).toLocaleDateString("es-ES")}</span>}
           </div>
-        )}
-      </div>
-
-      {/* Site Info */}
-      <div className="bg-white rounded-2xl p-5 border border-slate-200">
-        <h3 className="text-sm font-semibold text-slate-500 mb-3 uppercase tracking-wide">Informacion del sitio</h3>
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <InfoRow label="Dominio" value={site.domain} />
-          <InfoRow label="URL" value={site.url} isLink />
-          <InfoRow label="Tipo" value={site.site_type || "custom"} />
-          <InfoRow label="Ultimo audit" value={site.last_audit_at ? new Date(site.last_audit_at).toLocaleDateString("es-ES") : "Nunca"} />
+          {auditIssues ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-4">
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold border-[3px] ${
+                  auditScore >= 80 ? "border-green-400 text-green-600" :
+                  auditScore >= 50 ? "border-yellow-400 text-yellow-600" :
+                  "border-red-400 text-red-600"
+                }`}>
+                  {auditScore}
+                </div>
+                <div className="flex-1 space-y-1.5">
+                  <IssueBar label="Criticos" count={auditIssues.critical} color="bg-red-400" max={auditIssues.critical + auditIssues.warning + auditIssues.info} />
+                  <IssueBar label="Avisos" count={auditIssues.warning} color="bg-yellow-400" max={auditIssues.critical + auditIssues.warning + auditIssues.info} />
+                  <IssueBar label="Info" count={auditIssues.info} color="bg-blue-300" max={auditIssues.critical + auditIssues.warning + auditIssues.info} />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-300 text-center py-6">Ejecuta una auditoria en el tab SEO Audit</p>
+          )}
         </div>
       </div>
+
+      {/* Row 3: Top Keywords + Daily Traffic */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Top Keywords */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200">
+          <h3 className="text-sm font-semibold text-slate-600 mb-3 flex items-center gap-2">
+            <DocumentMagnifyingGlassIcon className="w-4 h-4" /> Top Keywords
+          </h3>
+          {topKeywords.length > 0 ? (
+            <div className="space-y-1.5">
+              {topKeywords.map((kw, i) => (
+                <div key={i} className="flex items-center justify-between py-1.5 text-sm">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="text-xs text-slate-300 w-4 text-right">{i + 1}</span>
+                    <span className="text-slate-700 truncate">{kw.query}</span>
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <span className="text-xs text-slate-400 font-mono">{kw.clicks} clicks</span>
+                    <span className={`text-xs font-bold font-mono px-1.5 py-0.5 rounded ${
+                      kw.position <= 3 ? "bg-green-50 text-green-600" :
+                      kw.position <= 10 ? "bg-blue-50 text-blue-600" :
+                      kw.position <= 20 ? "bg-yellow-50 text-yellow-600" :
+                      "bg-slate-50 text-slate-400"
+                    }`}>
+                      #{kw.position.toFixed(0)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-300 text-center py-6">{site.gsc_site_url ? "Cargando keywords..." : "Conecta Search Console"}</p>
+          )}
+        </div>
+
+        {/* Daily Traffic Chart */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200">
+          <h3 className="text-sm font-semibold text-slate-600 mb-3 flex items-center gap-2">
+            <ChartBarIcon className="w-4 h-4" /> Trafico organico (28d)
+          </h3>
+          {searchPerf?.daily && searchPerf.daily.length > 0 ? (
+            <div className="flex items-end gap-[2px] h-28">
+              {searchPerf.daily.map((day: any, i: number) => {
+                const maxClicks = Math.max(...searchPerf.daily.map((d: any) => d.clicks));
+                const height = maxClicks > 0 ? (day.clicks / maxClicks) * 100 : 0;
+                return (
+                  <div key={i} className="flex-1 group relative">
+                    <div
+                      className="bg-blue-200 hover:bg-blue-400 rounded-t transition-colors w-full"
+                      style={{ height: `${Math.max(height, 2)}%` }}
+                    />
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block bg-slate-800 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap z-10">
+                      {day.date}: {day.clicks} clicks
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-300 text-center py-6">{site.gsc_site_url ? "Cargando trafico..." : "Conecta Search Console"}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Row 4: Quick status bar */}
+      <div className="bg-white rounded-2xl p-4 border border-slate-200">
+        <div className="flex items-center gap-6 text-sm">
+          <StatusDot label="Google" active={!!googleAuth?.connected} detail={googleAuth?.email} />
+          <StatusDot label="Analytics" active={!!site.ga4_property_id} />
+          <StatusDot label="Search Console" active={!!site.gsc_site_url} />
+          <StatusDot label="Repositorio" active={!!site.repository_url} detail={site.repository_full_name} />
+          <StatusDot label="Servidor" active={!!site.server_ip} detail={site.server_host} />
+          <StatusDot label="PulseMark" active={!!site.repository_url && !!site.server_ip} detail={site.repository_url && site.server_ip ? "Listo" : "Necesita repo + servidor"} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Sub-components
+// ============================================================================
+
+function KpiCard({ label, value, suffix, color, icon }: { label: string; value: any; suffix?: string; color: string; icon: React.ReactNode }) {
+  const c: Record<string, string> = {
+    green: "bg-green-50 text-green-700 border-green-200",
+    yellow: "bg-yellow-50 text-yellow-700 border-yellow-200",
+    red: "bg-red-50 text-red-700 border-red-200",
+    blue: "bg-blue-50 text-blue-700 border-blue-200",
+    purple: "bg-purple-50 text-purple-700 border-purple-200",
+    orange: "bg-orange-50 text-orange-700 border-orange-200",
+  };
+  return (
+    <div className={`rounded-2xl p-3.5 border ${c[color] || c.blue}`}>
+      <div className="flex items-center gap-1.5 mb-1.5 opacity-50">{icon}<span className="text-[10px] font-medium uppercase tracking-wide">{label}</span></div>
+      <p className="text-2xl font-bold leading-none">{value}<span className="text-sm font-normal opacity-50">{suffix}</span></p>
+    </div>
+  );
+}
+
+function IssueBar({ label, count, color, max }: { label: string; count: number; color: string; max: number }) {
+  const pct = max > 0 ? (count / max) * 100 : 0;
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] text-slate-400 w-12">{label}</span>
+      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-xs font-bold text-slate-600 w-6 text-right">{count}</span>
+    </div>
+  );
+}
+
+function StatusDot({ label, active, detail }: { label: string; active: boolean; detail?: string }) {
+  return (
+    <div className="flex items-center gap-1.5" title={detail || ""}>
+      <span className={`w-2 h-2 rounded-full ${active ? "bg-green-400" : "bg-slate-200"}`} />
+      <span className={`text-xs ${active ? "text-slate-600" : "text-slate-300"}`}>{label}</span>
     </div>
   );
 }
@@ -273,40 +413,7 @@ function GoogleIcon() {
   );
 }
 
-function AnalyticsIcon() {
-  return (
-    <svg className="w-4 h-4" viewBox="0 0 24 24">
-      <path fill="#E37400" d="M22.84 2.998V21c0 1.1-.9 2-2 2h-4.5c-1.1 0-2-.9-2-2V2.998c0-1.657 1.343-3 3-3h2.5c1.1.002 2 .9 2 2.002z"/>
-      <path fill="#F9AB00" d="M14.34 11.2v9.8c0 1.1-.9 2-2 2h-4.5c-1.1 0-2-.9-2-2v-9.8c0-1.1.9-2 2-2h4.5c1.1 0 2 .9 2 2z"/>
-      <path fill="#E37400" d="M5.84 17.6v3.4c0 1.1-.9 2-2 2h-1.5c-1.1 0-2-.9-2-2v-3.4c0-1.1.9-2 2-2h1.5c1.1 0 2 .9 2 2z"/>
-    </svg>
-  );
-}
-
-function KpiCard({ label, value, icon, color }: { label: string; value: string; icon: React.ReactNode; color: string }) {
-  const c: Record<string, string> = {
-    green: "bg-green-50 text-green-700 border-green-200",
-    yellow: "bg-yellow-50 text-yellow-700 border-yellow-200",
-    red: "bg-red-50 text-red-700 border-red-200",
-    blue: "bg-blue-50 text-blue-700 border-blue-200",
-    purple: "bg-purple-50 text-purple-700 border-purple-200",
-    orange: "bg-orange-50 text-orange-700 border-orange-200",
-  };
-  return (
-    <div className={`rounded-2xl p-4 border ${c[color] || c.blue}`}>
-      <div className="flex items-center gap-2 mb-2 opacity-60">{icon}</div>
-      <p className="text-2xl font-bold">{value}</p>
-      <p className="text-xs opacity-60 mt-1">{label}</p>
-    </div>
-  );
-}
-
-function InfoRow({ label, value, isLink }: { label: string; value: string; isLink?: boolean }) {
-  return (
-    <div>
-      <p className="text-slate-400 text-xs mb-0.5">{label}</p>
-      {isLink ? <a href={value} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm">{value}</a>
-        : <p className="text-slate-800 text-sm">{value}</p>}
-    </div>
-  );
+function formatScoreLabel(key: string): string {
+  const m: Record<string, string> = { performance: "Rendimiento", seo: "SEO", accessibility: "Accesibilidad", "best-practices": "Buenas practicas" };
+  return m[key] || key;
 }
