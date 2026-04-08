@@ -2554,9 +2554,14 @@ async def _auto_deploy_board(supabase: Any, board_id: str, agent_id: str) -> Non
         server_port = board.get("server_port") or 22
         repo_name = (board.get("repository_full_name") or "").split("/")[-1] or "repo"
 
+        repo_full = board.get("repository_full_name") or ""
+        from api.config import settings as _settings
+        github_token = getattr(_settings, 'pulse_github_token', '') or ""
+
         logger.info("Auto-deploy: starting deploy on %s@%s for board '%s'", server_user, server_ip, board.get("name"))
 
-        # Build deploy script
+        # Strategy: download repo tarball from GitHub, extract addon dirs
+        # into the existing addons directory on the server (no git clone needed).
         deploy_script = f"""
 set -e
 echo "=== PULSE AUTO-DEPLOY ==="
@@ -2564,59 +2569,102 @@ echo "Board: {board.get('name', '?')}"
 echo "Server: {server_ip}"
 date
 
-# Find repo directory
-REPO_DIR=""
-for d in /root/{repo_name}/{repo_name} /root/{repo_name} /opt/{repo_name}; do
-    if [ -d "$d/.git" ]; then
-        REPO_DIR="$d"
+# Download latest code from GitHub as tarball
+echo "=== DOWNLOADING FROM GITHUB ==="
+TMPDIR=$(mktemp -d)
+curl -sL -H "Authorization: token {github_token}" \\
+    "https://api.github.com/repos/{repo_full}/tarball/main" \\
+    -o "$TMPDIR/repo.tar.gz"
+mkdir -p "$TMPDIR/extract"
+tar xzf "$TMPDIR/repo.tar.gz" -C "$TMPDIR/extract" --strip-components=1
+echo "Downloaded and extracted"
+ls "$TMPDIR/extract/"
+
+# Find the addons directory on the server (where Docker mounts from)
+ADDONS_DIR=""
+for d in /root/{repo_name}/{repo_name} /root/{repo_name} /opt/{repo_name}/{repo_name} /opt/{repo_name}; do
+    if [ -d "$d" ] && [ -f "$d/docker-compose.yml" ] || [ -f "$d/__manifest__.py" ] || ls "$d"/*/__manifest__.py >/dev/null 2>&1; then
+        ADDONS_DIR="$d"
         break
     fi
 done
 
-if [ -z "$REPO_DIR" ]; then
-    echo "ERROR: No git repo found for {repo_name}"
+if [ -z "$ADDONS_DIR" ]; then
+    echo "ERROR: Could not find addons directory on server"
+    rm -rf "$TMPDIR"
     exit 1
 fi
 
-echo "Repo: $REPO_DIR"
-cd "$REPO_DIR"
+echo "Addons dir: $ADDONS_DIR"
 
-# Pull latest
-echo "=== GIT PULL ==="
-git pull origin main 2>&1 || git pull origin master 2>&1 || echo "WARN: git pull failed"
-git log --oneline -3
+# Sync only addon directories (folders with __manifest__.py) from downloaded repo
+echo "=== SYNCING ADDONS ==="
+for addon_dir in "$TMPDIR/extract"/*/; do
+    addon_name=$(basename "$addon_dir")
+    if [ -f "$addon_dir/__manifest__.py" ]; then
+        echo "Syncing addon: $addon_name"
+        rm -rf "$ADDONS_DIR/$addon_name"
+        cp -r "$addon_dir" "$ADDONS_DIR/$addon_name"
+    fi
+done
+
+# Also sync specs if present
+if [ -d "$TMPDIR/extract/specs" ]; then
+    cp -r "$TMPDIR/extract/specs" "$ADDONS_DIR/specs" 2>/dev/null || true
+fi
+
+rm -rf "$TMPDIR"
+echo "Sync complete"
+ls "$ADDONS_DIR"/
 
 # Find and restart Odoo container
-echo "=== RESTART ODOO ==="
+echo "=== FINDING ODOO CONTAINER ==="
 ODOO_CONTAINER=$(docker ps --format '{{{{.Names}}}}' | grep -i odoo | grep -v postgres | head -1)
-if [ -n "$ODOO_CONTAINER" ]; then
-    echo "Restarting container: $ODOO_CONTAINER"
-    docker restart "$ODOO_CONTAINER" 2>&1
-    sleep 10
-
-    # Update modules
-    echo "=== UPDATE MODULES ==="
-    docker exec "$ODOO_CONTAINER" odoo -u {repo_name}_native_flow,{repo_name}_jobeiax -d odoo --stop-after-init 2>&1 | tail -30 || echo "WARN: module update returned non-zero"
-
-    # Restart again after update
-    docker restart "$ODOO_CONTAINER" 2>&1
-    sleep 5
-
-    # Check logs for errors
-    echo "=== CHECKING LOGS ==="
-    docker logs "$ODOO_CONTAINER" --tail 50 2>&1 | grep -i -E "error|traceback|exception|failed" || echo "No errors found in recent logs"
-
-    echo "=== DEPLOY COMPLETE ==="
-    docker logs "$ODOO_CONTAINER" --tail 5 2>&1
-else
-    echo "WARN: No Odoo container found, trying docker-compose..."
-    if [ -f docker-compose.yml ]; then
-        docker compose restart 2>&1 || docker-compose restart 2>&1
-        sleep 10
-        docker compose logs --tail 20 2>&1 | grep -i -E "error|traceback" || echo "No errors"
-    fi
+if [ -z "$ODOO_CONTAINER" ]; then
+    echo "WARN: No running Odoo container found"
+    echo "=== DONE ==="
+    exit 0
 fi
-echo "=== DONE ==="
+
+echo "Container: $ODOO_CONTAINER"
+
+# Find DB name from odoo.conf
+DB_NAME=$(docker exec "$ODOO_CONTAINER" grep -E "^db_name" /etc/odoo/odoo.conf 2>/dev/null | cut -d= -f2 | tr -d ' ' || echo "odoo")
+echo "Database: $DB_NAME"
+
+# Find which addons changed (have __manifest__.py)
+ADDONS_TO_UPDATE=""
+for addon_dir in "$ADDONS_DIR"/*/; do
+    addon_name=$(basename "$addon_dir")
+    if [ -f "$addon_dir/__manifest__.py" ]; then
+        if [ -n "$ADDONS_TO_UPDATE" ]; then
+            ADDONS_TO_UPDATE="$ADDONS_TO_UPDATE,$addon_name"
+        else
+            ADDONS_TO_UPDATE="$addon_name"
+        fi
+    fi
+done
+
+echo "Addons to update: $ADDONS_TO_UPDATE"
+
+# Stop, update, start
+echo "=== STOPPING ODOO ==="
+docker stop "$ODOO_CONTAINER" 2>&1
+
+echo "=== UPDATING MODULES ==="
+docker start "$ODOO_CONTAINER" 2>&1
+sleep 5
+docker exec "$ODOO_CONTAINER" odoo -u "$ADDONS_TO_UPDATE" -d "$DB_NAME" --stop-after-init 2>&1 | tail -40 || echo "WARN: module update finished with warnings"
+
+echo "=== STARTING ODOO ==="
+docker start "$ODOO_CONTAINER" 2>&1
+sleep 8
+
+echo "=== CHECKING LOGS ==="
+docker logs "$ODOO_CONTAINER" --tail 30 2>&1 | grep -i -E "error|traceback|exception" | grep -v "Warn:" || echo "No critical errors in logs"
+
+echo "=== DEPLOY COMPLETE ==="
+docker logs "$ODOO_CONTAINER" --tail 5 2>&1
 """
 
         ssh_cmd = [
