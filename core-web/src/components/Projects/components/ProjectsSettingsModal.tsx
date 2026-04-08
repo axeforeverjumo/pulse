@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import { XMarkIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
-import type { ProjectBoard } from "../../../api/client";
-import { updateDeployConfig, triggerDeploy } from "../../../api/client";
+import type { ProjectBoard, WorkspaceServer } from "../../../api/client";
+import { updateDeployConfig, triggerDeploy, getWorkspaceServers } from "../../../api/client";
 import AgentStatsPanel from "./AgentStatsPanel";
 import RoutinesPanel from "./RoutinesPanel";
 import OrgChartPanel from "./OrgChartPanel";
@@ -315,60 +315,39 @@ export default function ProjectsSettingsModal({
                       El commit automático del agente usa credenciales seguras del servidor; aquí solo defines el repo objetivo.
                     </p>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-xs text-text-secondary mb-1">Servidor</label>
-                        <input
-                          type="text"
-                          value={serverHost}
-                          onChange={(e) => setServerHost(e.target.value)}
-                          placeholder="Producción / Staging"
-                          className="w-full px-3 py-2 text-[13px] border border-border-gray rounded-lg bg-white outline-none focus:border-text-tertiary"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-text-secondary mb-1">IP del servidor</label>
-                        <input
-                          type="text"
-                          value={serverIp}
-                          onChange={(e) => setServerIp(e.target.value)}
-                          placeholder="85.215.105.45"
-                          className="w-full px-3 py-2 text-[13px] border border-border-gray rounded-lg bg-white outline-none focus:border-text-tertiary"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-text-secondary mb-1">Usuario servidor</label>
-                        <input
-                          type="text"
-                          value={serverUser}
-                          onChange={(e) => setServerUser(e.target.value)}
-                          placeholder="root"
-                          className="w-full px-3 py-2 text-[13px] border border-border-gray rounded-lg bg-white outline-none focus:border-text-tertiary"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-text-secondary mb-1">Puerto</label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={65535}
-                          value={serverPort}
-                          onChange={(e) => setServerPort(e.target.value)}
-                          placeholder="22"
-                          className="w-full px-3 py-2 text-[13px] border border-border-gray rounded-lg bg-white outline-none focus:border-text-tertiary"
-                        />
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label className="block text-xs text-text-secondary mb-1">Contraseña servidor (opcional)</label>
-                        <input
-                          type="text"
-                          value={serverPassword}
-                          onChange={(e) => setServerPassword(e.target.value)}
-                          placeholder="Solo si la necesitas para ejecución automatizada"
-                          className="w-full px-3 py-2 text-[13px] border border-border-gray rounded-lg bg-white outline-none focus:border-text-tertiary"
-                        />
-                      </div>
+                    {/* Server selector from DevOps */}
+                    <div>
+                      <label className="block text-xs text-text-secondary mb-1">Servidor</label>
+                      <ServerSelector
+                        workspaceId={board?.workspace_id}
+                        selectedServerId={deployServerId}
+                        serverHost={serverHost}
+                        onSelect={(server) => {
+                          if (server) {
+                            setDeployServerId(server.id);
+                            setServerHost(server.name);
+                            setServerIp(server.host);
+                            setServerUser(server.username);
+                            setServerPort(String(server.port || 22));
+                          } else {
+                            setDeployServerId('');
+                            setServerHost('');
+                            setServerIp('');
+                            setServerUser('');
+                            setServerPort('22');
+                          }
+                        }}
+                      />
                     </div>
+
+                    {/* Show resolved server details (read-only) */}
+                    {serverIp && (
+                      <div className="grid grid-cols-3 gap-2 text-[11px] text-text-tertiary bg-gray-50 rounded-lg px-3 py-2">
+                        <div><span className="font-medium">IP:</span> {serverIp}</div>
+                        <div><span className="font-medium">User:</span> {serverUser || 'root'}</div>
+                        <div><span className="font-medium">Puerto:</span> {serverPort || '22'}</div>
+                      </div>
+                    )}
 
                     <p className="text-[11px] text-text-tertiary">
                       Estos datos se usan como contexto de ejecución para agentes.
@@ -674,5 +653,94 @@ export default function ProjectsSettingsModal({
       </motion.div>
     </motion.div>,
     document.body
+  );
+}
+
+// ============================================================================
+// Server Selector — picks from DevOps servers
+// ============================================================================
+
+function ServerSelector({
+  workspaceId,
+  selectedServerId,
+  serverHost,
+  onSelect,
+}: {
+  workspaceId?: string;
+  selectedServerId: string;
+  serverHost: string;
+  onSelect: (server: WorkspaceServer | null) => void;
+}) {
+  const [servers, setServers] = useState<WorkspaceServer[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    setLoading(true);
+    getWorkspaceServers(workspaceId)
+      .then((res) => setServers(res.servers || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [workspaceId]);
+
+  const selected = servers.find((s) => s.id === selectedServerId);
+  const displayName = selected?.name || serverHost || '';
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-3 py-2 text-[13px] border border-border-gray rounded-lg bg-white outline-none focus:border-text-tertiary text-left"
+      >
+        <span className={displayName ? 'text-gray-900' : 'text-gray-400'}>
+          {loading ? 'Cargando servidores...' : displayName || 'Seleccionar servidor...'}
+        </span>
+        <ChevronDownIcon className="w-4 h-4 text-gray-400 shrink-0" />
+      </button>
+
+      {open && (
+        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          {/* None option */}
+          <button
+            type="button"
+            onClick={() => { onSelect(null); setOpen(false); }}
+            className="w-full px-3 py-2 text-[12px] text-gray-400 hover:bg-gray-50 text-left"
+          >
+            Sin servidor
+          </button>
+
+          {servers.length === 0 && !loading && (
+            <div className="px-3 py-3 text-[11px] text-gray-400 text-center">
+              No hay servidores en DevOps.
+              <br />
+              Anade uno desde la app DevOps primero.
+            </div>
+          )}
+
+          {servers.map((server) => (
+            <button
+              key={server.id}
+              type="button"
+              onClick={() => { onSelect(server); setOpen(false); }}
+              className={`w-full flex items-center gap-2 px-3 py-2 text-[12px] hover:bg-gray-50 text-left ${
+                server.id === selectedServerId ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full shrink-0 ${
+                server.status === 'verified' ? 'bg-green-500' :
+                server.status === 'failed' ? 'bg-red-500' :
+                'bg-gray-300'
+              }`} />
+              <div className="min-w-0 flex-1">
+                <div className="font-medium truncate">{server.name}</div>
+                <div className="text-[10px] text-gray-400">{server.host} &middot; {server.username}@:{server.port || 22}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
