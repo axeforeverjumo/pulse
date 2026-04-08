@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import { XMarkIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import type { ProjectBoard, WorkspaceServer } from "../../../api/client";
-import { updateDeployConfig, triggerDeploy, getWorkspaceServers } from "../../../api/client";
+import { updateDeployConfig, triggerDeploy, listServers } from "../../../api/client";
 import AgentStatsPanel from "./AgentStatsPanel";
 import RoutinesPanel from "./RoutinesPanel";
 import OrgChartPanel from "./OrgChartPanel";
@@ -678,7 +678,7 @@ function ServerSelector({
   useEffect(() => {
     if (!workspaceId) return;
     setLoading(true);
-    getWorkspaceServers(workspaceId)
+    listServers(workspaceId)
       .then((res) => setServers(res.servers || []))
       .catch(() => {})
       .finally(() => setLoading(false));
