@@ -13,6 +13,7 @@ import SiteDetail from "./SiteDetail";
 import { getMarketingSites, createMarketingSite } from "../../api/client";
 import { toast } from "sonner";
 import Modal from "../Modal/Modal";
+import { useViewContextStore } from "../../stores/viewContextStore";
 
 export default function MarketingView() {
   const { workspaceId, siteId: urlSiteId } = useParams<{
@@ -34,6 +35,34 @@ export default function MarketingView() {
   const [creating, setCreating] = useState(false);
 
   const selectedSite = sites.find((s) => s.id === selectedSiteId);
+
+  // Set view context for PulseMark chat
+  useEffect(() => {
+    const store = useViewContextStore.getState();
+    store.setCurrentView("marketing");
+    if (selectedSite) {
+      store.setMarketingSite({
+        id: selectedSite.id,
+        name: selectedSite.name,
+        domain: selectedSite.domain,
+        url: selectedSite.url,
+        ga4_property_id: selectedSite.ga4_property_id,
+        gsc_site_url: selectedSite.gsc_site_url,
+        repository_url: selectedSite.repository_url,
+        last_audit_score: selectedSite.last_audit_score,
+      });
+    } else {
+      store.setMarketingSite(null);
+    }
+    return () => {
+      // Clear when leaving marketing
+      const current = useViewContextStore.getState();
+      if (current.currentView === "marketing") {
+        current.setCurrentView(null);
+        current.setMarketingSite(null);
+      }
+    };
+  }, [selectedSite?.id]);
 
   useEffect(() => {
     if (effectiveWorkspaceId) fetchSites();

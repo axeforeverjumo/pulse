@@ -6,7 +6,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { motion, AnimatePresence } from "motion/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { streamMessage, createConversation, api } from "../../api/client";
+import { streamMessage, createConversation, api, streamPulseMarkChat } from "../../api/client";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useUIStore } from "../../stores/uiStore";
 import { useSidebarChatStore } from "../../stores/sidebarChatStore";
@@ -89,6 +89,36 @@ export default function SidebarChat() {
   const currentEmailContext = useViewContextStore((s) => s.currentEmail);
   const currentProjectContext = useViewContextStore((s) => s.currentProject);
   const currentTaskContext = useViewContextStore((s) => s.currentTask);
+  const currentMarketingSite = useViewContextStore((s) => s.currentMarketingSite);
+
+  // Load PulseMark chat history when entering marketing view / switching sites
+  const lastLoadedSiteIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (currentView !== "marketing" || !workspaceId) return;
+    const siteKey = currentMarketingSite?.id || "__global__";
+    if (lastLoadedSiteIdRef.current === siteKey) return;
+    lastLoadedSiteIdRef.current = siteKey;
+
+    (async () => {
+      try {
+        const { getPulseMarkHistory } = await import("../../api/client");
+        const { messages: hist } = await getPulseMarkHistory(workspaceId, currentMarketingSite?.id || null);
+        const display = (hist || [])
+          .filter((m: any) => m.role === "user" || m.role === "assistant")
+          .filter((m: any) => m.content && m.content.trim().length > 0)
+          .map((m: any) => ({
+            id: m.id,
+            role: m.role === "user" ? ("user" as const) : ("assistant" as const),
+            content: m.content || "",
+            agentName: m.role === "assistant" ? "PulseMark" : undefined,
+            agentAvatar: m.role === "assistant" ? "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=pulsemark" : undefined,
+          }));
+        useSidebarChatStore.getState().setMessages(display);
+      } catch (e) {
+        console.warn("Could not load PulseMark history:", e);
+      }
+    })();
+  }, [currentView, currentMarketingSite?.id, workspaceId]);
 
   const hasStreamingContent =
     streamingContent.length > 0 || isWaitingForResponse;
@@ -230,6 +260,50 @@ export default function SidebarChat() {
     // Add user message immediately (display text only, no hint metadata)
     const tempUserId = `temp-${Date.now()}`;
     addMessage({ id: tempUserId, role: "user", content: displayText || "📎 Image" });
+
+    // PulseMark intercept: when in marketing view, use the dedicated streaming endpoint
+    const mkCtx = useViewContextStore.getState();
+    if (mkCtx.currentView === "marketing" && workspaceId) {
+      try {
+        let streamed = "";
+        const siteId = mkCtx.currentMarketingSite?.id || null;
+        await streamPulseMarkChat(workspaceId, siteId, displayText, (event) => {
+          if (event.type === "content") {
+            streamed += event.data.delta || "";
+            setStreamingContent(streamed);
+            setIsWaitingForResponse(false);
+          } else if (event.type === "tool_start") {
+            streamed += `\n\n_PulseMark ejecutando: ${event.data.tool}..._\n`;
+            setStreamingContent(streamed);
+          } else if (event.type === "tool_result") {
+            // Tool finished — keep the note inline for visibility
+          } else if (event.type === "error") {
+            streamed += `\n\n[Error: ${event.data.error}]`;
+            setStreamingContent(streamed);
+          }
+        });
+        // Finalize
+        addMessage({
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+          content: streamed || "(sin respuesta)",
+          agentName: "PulseMark",
+          agentAvatar: "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=pulsemark",
+        });
+        setStreamingContent("");
+      } catch (e: any) {
+        console.error("PulseMark chat error:", e);
+        addMessage({
+          id: `error-${Date.now()}`,
+          role: "assistant",
+          content: `Error: ${e.message || "No se pudo contactar con PulseMark"}`,
+        });
+      } finally {
+        setLoading(false);
+        setIsWaitingForResponse(false);
+      }
+      return;
+    }
 
     // Dispatch to mentioned agents FIRST (before Haiku)
     let agentResponses: Array<{agent_id:string;agent_name:string;avatar_url:string;tier:string;content:string}> = [];

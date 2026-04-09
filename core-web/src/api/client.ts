@@ -4455,3 +4455,82 @@ export async function getMarketingGa4Properties() {
 export async function getMarketingGscSites() {
   return api<{ site_url: string; permission_level: string }[]>('/marketing/auth/gsc-sites');
 }
+
+// PulseMark chat
+export async function getPulseMarkHistory(workspaceId: string, siteId?: string | null) {
+  const params = new URLSearchParams({ workspace_id: workspaceId });
+  if (siteId) params.set('site_id', siteId);
+  return api<{ conversation: any; messages: any[] }>(`/marketing/chat/history?${params}`);
+}
+
+export async function clearPulseMarkHistory(workspaceId: string, siteId?: string | null) {
+  const params = new URLSearchParams({ workspace_id: workspaceId });
+  if (siteId) params.set('site_id', siteId);
+  return api<void>(`/marketing/chat/history?${params}`, { method: 'DELETE' });
+}
+
+export interface PulseMarkStreamEvent {
+  type: 'content' | 'tool_start' | 'tool_result' | 'done' | 'error' | 'user_saved';
+  data: any;
+}
+
+export async function streamPulseMarkChat(
+  workspaceId: string,
+  siteId: string | null,
+  message: string,
+  onEvent: (event: PulseMarkStreamEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const token = useAuthStore.getState().getAccessToken();
+  if (!token) throw new AuthExpiredError();
+
+  const response = await fetch(`${API_BASE}/api/marketing/chat/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      workspace_id: workspaceId,
+      site_id: siteId,
+      message,
+    }),
+    signal,
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`PulseMark chat failed: ${response.status} ${text}`);
+  }
+
+  if (!response.body) return;
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    // Parse SSE events: "event: NAME\ndata: JSON\n\n"
+    let parts = buffer.split('\n\n');
+    buffer = parts.pop() || '';
+    for (const part of parts) {
+      if (!part.trim()) continue;
+      let eventName = 'message';
+      let data = '';
+      for (const line of part.split('\n')) {
+        if (line.startsWith('event:')) eventName = line.slice(6).trim();
+        else if (line.startsWith('data:')) data = line.slice(5).trim();
+      }
+      if (data) {
+        try {
+          const parsed = JSON.parse(data);
+          onEvent({ type: eventName as any, data: parsed });
+        } catch {}
+      }
+    }
+  }
+}

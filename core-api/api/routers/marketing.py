@@ -34,8 +34,9 @@ from api.services.marketing.pagespeed import get_pagespeed
 from api.dependencies import get_current_user_jwt, get_current_user_id
 from api.exceptions import handle_api_exception
 from api.config import settings
+from lib.supabase_client import get_authenticated_async_client
 
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 import logging
 import urllib.parse
 import secrets
@@ -1061,3 +1062,88 @@ async def api_list_gsc_sites(
     except Exception as e:
         logger.error(f"Failed to list GSC sites: {e}")
         handle_api_exception(e, "Marketing API error", logger)
+
+
+# ============================================================================
+# PulseMark Chat (streaming + tools)
+# ============================================================================
+
+class PulseMarkChatRequest(BaseModel):
+    workspace_id: str
+    site_id: Optional[str] = None
+    message: str = Field(..., min_length=1)
+
+
+@router.post("/chat/stream")
+async def api_pulsemark_chat(
+    body: PulseMarkChatRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Stream a PulseMark chat response with SSE."""
+    from api.services.marketing.pulsemark_chat import chat_stream
+
+    async def event_generator():
+        try:
+            async for event in chat_stream(
+                workspace_id=body.workspace_id,
+                site_id=body.site_id,
+                user_id=user_id,
+                user_jwt=user_jwt,
+                user_message=body.message,
+            ):
+                yield event
+        except Exception as e:
+            logger.exception(f"PulseMark chat error: {e}")
+            yield f"event: error\ndata: {{\"error\": \"{str(e)}\"}}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get("/chat/history")
+async def api_pulsemark_chat_history(
+    workspace_id: str = Query(...),
+    site_id: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Get chat history for a site (or global if site_id is None)."""
+    from api.services.marketing.pulsemark_chat import get_or_create_conversation, get_conversation_history
+    try:
+        conv = await get_or_create_conversation(workspace_id, site_id, user_id, user_jwt)
+        messages = await get_conversation_history(conv["id"], user_jwt, limit=limit)
+        return {"conversation": conv, "messages": messages}
+    except Exception as e:
+        handle_api_exception(e, "Failed to load chat history", logger)
+
+
+@router.delete("/chat/history", status_code=status.HTTP_204_NO_CONTENT)
+async def api_pulsemark_chat_clear(
+    workspace_id: str = Query(...),
+    site_id: Optional[str] = Query(None),
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Clear chat history for a site."""
+    try:
+        supabase = await get_authenticated_async_client(user_jwt)
+        query = supabase.table("marketing_conversations")\
+            .delete()\
+            .eq("workspace_id", workspace_id)\
+            .eq("user_id", user_id)
+        if site_id:
+            query = query.eq("site_id", site_id)
+        else:
+            query = query.is_("site_id", "null")
+        await query.execute()
+    except Exception as e:
+        handle_api_exception(e, "Failed to clear chat", logger)

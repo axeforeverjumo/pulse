@@ -44,7 +44,18 @@ export interface CrmOpportunityContext {
   company?: string;
 }
 
-export type ViewType = "email" | "projects" | "crm" | "files" | "messages" | "calendar" | "agents" | "dashboard" | null;
+export interface MarketingSiteContext {
+  id: string;
+  name: string;
+  domain: string;
+  url: string;
+  ga4_property_id?: string;
+  gsc_site_url?: string;
+  repository_url?: string;
+  last_audit_score?: number;
+}
+
+export type ViewType = "email" | "projects" | "crm" | "files" | "messages" | "calendar" | "agents" | "dashboard" | "marketing" | null;
 
 interface ViewContextState {
   currentView: ViewType;
@@ -55,6 +66,7 @@ interface ViewContextState {
   currentCrmCompany: CrmCompanyContext | null;
   currentCrmOpportunity: CrmOpportunityContext | null;
   crmSubView: 'pipeline' | 'contacts' | 'companies' | 'notes' | null;
+  currentMarketingSite: MarketingSiteContext | null;
   setCurrentView: (view: ViewType) => void;
   setCurrentEmail: (email: EmailContext | null) => void;
   setCurrentProject: (project: ProjectContext | null) => void;
@@ -65,6 +77,7 @@ interface ViewContextState {
     company?: CrmCompanyContext | null;
     opportunity?: CrmOpportunityContext | null;
   }) => void;
+  setMarketingSite: (site: MarketingSiteContext | null) => void;
   clearContext: () => void;
 }
 
@@ -77,6 +90,7 @@ export const useViewContextStore = create<ViewContextState>()((set) => ({
   currentCrmCompany: null,
   currentCrmOpportunity: null,
   crmSubView: null,
+  currentMarketingSite: null,
   setCurrentView: (view) => set({ currentView: view }),
   setCurrentEmail: (email) => set({ currentEmail: email }),
   setCurrentProject: (project) => set({ currentProject: project }),
@@ -87,6 +101,7 @@ export const useViewContextStore = create<ViewContextState>()((set) => ({
     currentCrmCompany: data.company ?? null,
     currentCrmOpportunity: data.opportunity ?? null,
   }),
+  setMarketingSite: (site) => set({ currentMarketingSite: site }),
   clearContext: () =>
     set({
       currentView: null,
@@ -97,5 +112,6 @@ export const useViewContextStore = create<ViewContextState>()((set) => ({
       currentCrmCompany: null,
       currentCrmOpportunity: null,
       crmSubView: null,
+      currentMarketingSite: null,
     }),
 }));
