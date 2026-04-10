@@ -29,6 +29,9 @@ VALID_APP_TYPES = (
     "knowledge",
     "live-notes",
     "meeting-prep",
+    "office",
+    "mentors",
+    "finance",
 )
 
 

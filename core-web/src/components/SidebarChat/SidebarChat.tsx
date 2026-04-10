@@ -16,6 +16,8 @@ import type { MentionData } from "../../types/mention";
 import ChatMessage from "./SidebarChatMessage";
 import SidebarChatInput from "./SidebarChatInput";
 import { useViewContextStore } from "../../stores/viewContextStore";
+import { getAgentConfig } from "./AgentContext";
+import { parseActions, ActionCard } from "./ActionCard";
 
 export default function SidebarChat() {
   const queryClient = useQueryClient();
@@ -582,12 +584,43 @@ export default function SidebarChat() {
     }
   };
 
+  // Agent context per module
+  const agentConfig = getAgentConfig(currentView);
+
+  const handleChipClick = (chip: string) => {
+    setInput(chip);
+    // Auto-send after a tick so user sees the chip text
+    setTimeout(() => {
+      const fakeInput = chip;
+      setInput("");
+      // Manually trigger send with chip text
+      const tempUserId = `temp-${Date.now()}`;
+      addMessage({ id: tempUserId, role: "user", content: fakeInput });
+      setInput(fakeInput);
+      setTimeout(() => sendMessage(), 0);
+    }, 50);
+  };
+
   return (
     <div className="h-full flex flex-col bg-bg-white overflow-hidden min-w-[340px]">
-      {/* Header */}
-      <div className="shrink-0">
-        <div className="h-12 flex items-center justify-between pl-4 pr-2">
-          <h2 className="text-base font-semibold text-text-body">Chat</h2>
+      {/* Agent Header */}
+      <div className="shrink-0 border-b border-border-light">
+        <div className="px-3.5 py-3 flex items-center gap-2.5">
+          {/* Agent avatar */}
+          <div className={`relative w-9 h-9 rounded-[10px] bg-gradient-to-br ${agentConfig.gradient} flex items-center justify-center text-lg shrink-0`}>
+            {agentConfig.emoji}
+            <span className="absolute bottom-0.5 right-0.5 w-[9px] h-[9px] rounded-full bg-green-500 border-2 border-bg-white" />
+          </div>
+          {/* Agent info */}
+          <div className="flex-1 min-w-0">
+            <span className="font-display text-[13px] font-bold text-text-dark block truncate">{agentConfig.name}</span>
+            <span className="text-[10px] text-green-500 flex items-center gap-1">
+              <span className="w-[5px] h-[5px] rounded-full bg-green-500 inline-block" />
+              {agentConfig.status}
+            </span>
+          </div>
+          {/* Pill + actions */}
+          <span className={`text-[8px] font-display font-bold tracking-[0.04em] px-1.5 py-0.5 rounded-[10px] border ${agentConfig.pillColor}`}>IA</span>
           <div className="flex items-center gap-0.5">
             <button
               onClick={() => {
@@ -598,18 +631,16 @@ export default function SidebarChat() {
                 setIsClearing(true);
               }}
               className="p-1.5 text-text-tertiary hover:text-text-body hover:bg-bg-gray rounded-lg transition-colors"
-              title="Reset chat"
               aria-label="Reset chat"
             >
-              <ArrowPathIcon className="w-4 h-4 stroke-2" />
+              <ArrowPathIcon className="w-3.5 h-3.5 stroke-2" />
             </button>
             <button
               onClick={() => setSidebarChatOpen(false)}
               className="p-1.5 text-text-tertiary hover:text-text-body hover:bg-bg-gray rounded-lg transition-colors"
-              title="Cerrar"
-              aria-label="Close chat sidebar"
+              aria-label="Cerrar"
             >
-              <XMarkIcon className="w-4 h-4 stroke-2" />
+              <XMarkIcon className="w-3.5 h-3.5 stroke-2" />
             </button>
           </div>
         </div>
@@ -617,31 +648,31 @@ export default function SidebarChat() {
 
       {/* Context indicator (email, project, task) */}
       {(currentEmailContext || (currentView === "projects" && (currentTaskContext || currentProjectContext))) && (
-        <div className="flex items-center gap-1.5 px-4 pb-2">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-full text-xs text-blue-700 max-w-full">
+        <div className="flex items-center gap-1.5 px-3.5 py-2 border-b border-border-light">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-brand-primary/[.07] border border-brand-primary/[.18] rounded-full text-xs text-brand-primary max-w-full">
             {currentEmailContext ? (
               <>
-                <span className="shrink-0">✉️</span>
-                <span className="truncate font-medium">
-                  Viendo: {currentEmailContext.subject.length > 35
+                <span className="shrink-0 text-[10px]">✉️</span>
+                <span className="truncate font-medium text-[11px]">
+                  {currentEmailContext.subject.length > 35
                     ? currentEmailContext.subject.substring(0, 35) + "..."
                     : currentEmailContext.subject}
                 </span>
               </>
             ) : currentTaskContext ? (
               <>
-                <span className="shrink-0">📋</span>
-                <span className="truncate font-medium">
-                  Tarea: {currentTaskContext.title.length > 35
+                <span className="shrink-0 text-[10px]">📋</span>
+                <span className="truncate font-medium text-[11px]">
+                  {currentTaskContext.title.length > 35
                     ? currentTaskContext.title.substring(0, 35) + "..."
                     : currentTaskContext.title}
                 </span>
               </>
             ) : currentProjectContext ? (
               <>
-                <span className="shrink-0">📋</span>
-                <span className="truncate font-medium">
-                  Proyecto: {currentProjectContext.name.length > 30
+                <span className="shrink-0 text-[10px]">📋</span>
+                <span className="truncate font-medium text-[11px]">
+                  {currentProjectContext.name.length > 30
                     ? currentProjectContext.name.substring(0, 30) + "..."
                     : currentProjectContext.name}
                 </span>
@@ -653,8 +684,7 @@ export default function SidebarChat() {
                 useViewContextStore.getState().setCurrentProject(null);
                 useViewContextStore.getState().setCurrentTask(null);
               }}
-              className="shrink-0 text-blue-400 hover:text-blue-600 ml-0.5"
-              title="Quitar contexto"
+              className="shrink-0 text-brand-primary/50 hover:text-brand-primary ml-0.5"
             >
               <XMarkIcon className="w-3 h-3" />
             </button>
@@ -672,15 +702,33 @@ export default function SidebarChat() {
             }
           }}
         >
-          {/* Empty state */}
+          {/* Empty state with suggestion chips */}
           {isEmpty && !isClearing && (
             <motion.div
               key="empty"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex-1 flex items-center justify-center"
+              className="flex-1 flex flex-col items-center justify-center px-6 gap-5"
             >
-              <p className="text-sm text-text-tertiary">Pregunta lo que quieras</p>
+              <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${agentConfig.gradient} flex items-center justify-center text-2xl shadow-lg`}>
+                {agentConfig.emoji}
+              </div>
+              <div className="text-center">
+                <p className="font-display text-sm font-bold text-text-dark">{agentConfig.name}</p>
+                <p className="text-xs text-text-tertiary mt-1">Listo para ayudarte</p>
+              </div>
+              {/* Suggestion chips */}
+              <div className="flex flex-wrap justify-center gap-1.5">
+                {agentConfig.chips.map((chip) => (
+                  <button
+                    key={chip}
+                    onClick={() => handleChipClick(chip)}
+                    className="px-3 py-1.5 rounded-full bg-bg-gray border border-border-gray text-[11px] text-text-secondary hover:bg-brand-primary/[.08] hover:border-brand-primary/[.2] hover:text-brand-primary transition-all cursor-pointer"
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
             </motion.div>
           )}
 
@@ -692,30 +740,53 @@ export default function SidebarChat() {
               ref={scrollContainerRef}
               className="flex-1 overflow-y-auto"
             >
-              <div className="py-4">
-                {messages.map((message) => (
-                  <div key={message.id}>
-                    <ChatMessage
-                      role={message.role}
-                      content={message.content}
-                      agentName={message.agentName}
-                      agentAvatar={message.agentAvatar}
-                    />
-                  </div>
-                ))}
+              <div className="py-3">
+                {messages.map((message) => {
+                  // Parse action cards from assistant messages
+                  if (message.role === 'assistant' || message.role === 'agent') {
+                    const { text, actions } = parseActions(message.content);
+                    return (
+                      <div key={message.id}>
+                        {text && (
+                          <ChatMessage
+                            role={message.role}
+                            content={text}
+                            agentName={message.agentName}
+                            agentAvatar={message.agentAvatar}
+                          />
+                        )}
+                        {actions.map((action, i) => (
+                          <div key={`${message.id}-action-${i}`} className="px-4">
+                            <ActionCard action={action} />
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={message.id}>
+                      <ChatMessage
+                        role={message.role}
+                        content={message.content}
+                        agentName={message.agentName}
+                        agentAvatar={message.agentAvatar}
+                      />
+                    </div>
+                  );
+                })}
 
                 {/* Streaming content */}
                 {hasStreamingContent && (
                   <div>
                     {isWaitingForResponse ? (
-                      <div className="py-2 px-4">
-                        <div className="flex items-center gap-2 text-sm text-text-tertiary">
-                          <span className="flex gap-0.5 text-lg leading-none">
-                            <span className="animate-bounce inline-block" style={{ animationDelay: "0ms" }}>&middot;</span>
-                            <span className="animate-bounce inline-block" style={{ animationDelay: "150ms" }}>&middot;</span>
-                            <span className="animate-bounce inline-block" style={{ animationDelay: "300ms" }}>&middot;</span>
-                          </span>
-                          <span className="text-xs">Pensando...</span>
+                      <div className="py-2.5 px-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex gap-[3px] items-center">
+                            <span className="w-[5px] h-[5px] rounded-full bg-brand-primary animate-thinking-dot" style={{ animationDelay: "0ms" }} />
+                            <span className="w-[5px] h-[5px] rounded-full bg-brand-primary animate-thinking-dot" style={{ animationDelay: "0.2s" }} />
+                            <span className="w-[5px] h-[5px] rounded-full bg-brand-primary animate-thinking-dot" style={{ animationDelay: "0.4s" }} />
+                          </div>
+                          <span className="text-[11px] text-text-tertiary">{agentConfig.name} pensando...</span>
                         </div>
                       </div>
                     ) : (
@@ -744,7 +815,7 @@ export default function SidebarChat() {
         )}
 
         {/* Input */}
-        <div className="px-3 pb-6 pt-2">
+        <div className="px-3 pb-6 pt-2 border-t border-border-light">
           <SidebarChatInput
             value={input}
             onChange={setInput}
@@ -756,7 +827,7 @@ export default function SidebarChat() {
             isUploading={isUploading}
             disabled={loading}
             isStreaming={hasStreamingContent}
-            placeholder="Pregunta lo que quieras..."
+            placeholder={`Habla con ${agentConfig.name}...`}
             mentions={mentions}
             onMentionSelect={handleMentionSelect}
             onRemoveMention={handleRemoveMention}

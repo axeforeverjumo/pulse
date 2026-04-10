@@ -32,6 +32,9 @@ import {
   Share2,
   Clock,
   CalendarCheck,
+  Building2,
+  Compass,
+  Banknote,
 } from "lucide-react";
 import { Icon, type LucideIcon } from "../ui/Icon";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
@@ -158,6 +161,21 @@ const availableAppTypes = [
     name: "Meeting Prep",
     icon: CalendarCheck,
   },
+  {
+    type: "office",
+    name: "Oficina",
+    icon: Building2,
+  },
+  {
+    type: "mentors",
+    name: "Mentores",
+    icon: Compass,
+  },
+  {
+    type: "finance",
+    name: "Finanzas",
+    icon: Banknote,
+  },
 ];
 
 // Map app types to their icons
@@ -180,6 +198,9 @@ const appIcons: Record<string, LucideIcon> = {
   knowledge: Share2,
   "live-notes": Clock,
   "meeting-prep": CalendarCheck,
+  office: Building2,
+  mentors: Compass,
+  finance: Banknote,
 };
 
 // Generate workspace-specific path for an app
@@ -867,7 +888,7 @@ export default function Sidebar() {
 
   // Categorize apps into sections
   const toolTypes = new Set(['email', 'calendar', 'files', 'messages', 'messaging', 'live-notes', 'meeting-prep']);
-  const espacioTypes = new Set(['dashboard', 'projects', 'crm', 'marketing', 'agents', 'automations', 'devops', 'knowledge', 'studio']);
+  const espacioTypes = new Set(['dashboard', 'projects', 'crm', 'marketing', 'agents', 'automations', 'devops', 'knowledge', 'studio', 'office', 'mentors', 'finance']);
 
   const chatApp = displayMiniApps.find((a) => a.type === 'chat');
   const toolApps = displayMiniApps.filter((a) => toolTypes.has(a.type || ''));

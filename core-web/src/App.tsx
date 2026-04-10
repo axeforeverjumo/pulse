@@ -63,6 +63,9 @@ const KnowledgeView = lazy(() => import("./components/Knowledge/KnowledgeView"))
 const LiveNotesPage = lazy(() => import("./components/LiveNotes/LiveNotesView"));
 const MeetingPrepPage = lazy(() => import("./components/MeetingPrep/MeetingPrepPage"));
 const StudioRuntime = lazy(() => import("./components/Studio/runtime/StudioRuntime"));
+const OfficeView = lazy(() => import("./components/Office/OfficeView"));
+const MentorsView = lazy(() => import("./components/Mentors/MentorsView"));
+const FinanceView = lazy(() => import("./components/Finance/FinanceView"));
 const OnboardingWizard = lazy(() => import("./components/Onboarding/OnboardingWizard"));
 const PENDING_INVITE_TOKEN_KEY = "pending_invite_token";
 const PENDING_INVITE_TOKEN_SET_AT_KEY = "pending_invite_token_set_at";
@@ -655,6 +658,11 @@ function AppContent() {
         <Route path="/workspace/:workspaceId/studio" element={<StudioView />} />
         <Route path="/workspace/:workspaceId/studio/:appId" element={<StudioView />} />
         <Route path="/workspace/:workspaceId/studio/:appId/:pageId" element={<StudioView />} />
+
+        {/* New modules */}
+        <Route path="/workspace/:workspaceId/office" element={<OfficeView />} />
+        <Route path="/workspace/:workspaceId/mentors" element={<MentorsView />} />
+        <Route path="/workspace/:workspaceId/finance" element={<FinanceView />} />
 
         {/* Website / Linktree Builder */}
         <Route path="/sites" element={<WebsiteBuilderView />} />
