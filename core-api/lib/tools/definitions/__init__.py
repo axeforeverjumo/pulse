@@ -18,6 +18,9 @@ from lib.tools.definitions import semantic_search
 from lib.tools.definitions import projects
 from lib.tools.definitions import google_drive
 from lib.tools.definitions import crm
+from lib.tools.definitions import knowledge
+from lib.tools.definitions import meeting_prep
+from lib.tools.definitions import doc_generator
 
 __all__ = [
     "calendar",
@@ -32,4 +35,7 @@ __all__ = [
     "projects",
     "google_drive",
     "crm",
+    "knowledge",
+    "meeting_prep",
+    "doc_generator",
 ]

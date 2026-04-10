@@ -29,6 +29,7 @@ import {
   Zap,
   Palette,
   TrendingUp,
+  Share2,
 } from "lucide-react";
 import { Icon, type LucideIcon } from "../ui/Icon";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
@@ -140,6 +141,11 @@ const availableAppTypes = [
     name: "Marketing",
     icon: TrendingUp,
   },
+  {
+    type: "knowledge",
+    name: "Knowledge",
+    icon: Share2,
+  },
 ];
 
 // Map app types to their icons
@@ -159,6 +165,7 @@ const appIcons: Record<string, LucideIcon> = {
   automations: Zap,
   studio: Palette,
   marketing: TrendingUp,
+  knowledge: Share2,
 };
 
 // Generate workspace-specific path for an app

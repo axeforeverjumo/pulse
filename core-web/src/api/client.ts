@@ -4534,3 +4534,73 @@ export async function streamPulseMarkChat(
     }
   }
 }
+
+// ============================================================================
+// Knowledge Graph
+// ============================================================================
+
+export async function getKnowledgeEntities(workspaceId: string, type?: string, search?: string) {
+  const params = new URLSearchParams({ workspace_id: workspaceId });
+  if (type) params.set('entity_type', type);
+  if (search) params.set('search', search);
+  return api<{ entities: any[]; count: number }>(`/knowledge/entities?${params}`);
+}
+
+export async function getKnowledgeEntity(entityId: string, workspaceId: string) {
+  return api<any>(`/knowledge/entities/${entityId}?workspace_id=${workspaceId}`);
+}
+
+export async function createKnowledgeEntity(data: any) {
+  return api<any>('/knowledge/entities', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function updateKnowledgeEntity(entityId: string, workspaceId: string, data: any) {
+  return api<any>(`/knowledge/entities/${entityId}?workspace_id=${workspaceId}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export async function deleteKnowledgeEntity(entityId: string, workspaceId: string) {
+  return api<any>(`/knowledge/entities/${entityId}?workspace_id=${workspaceId}`, { method: 'DELETE' });
+}
+
+export async function getKnowledgeEntityRelationships(entityId: string, workspaceId: string) {
+  return api<any>(`/knowledge/entities/${entityId}/relationships?workspace_id=${workspaceId}`);
+}
+
+export async function getKnowledgeEntityFacts(entityId: string, workspaceId: string) {
+  return api<{ facts: any[] }>(`/knowledge/entities/${entityId}/facts?workspace_id=${workspaceId}`);
+}
+
+export async function createKnowledgeFact(data: any) {
+  return api<any>('/knowledge/facts', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function getKnowledgeGraph(workspaceId: string, type?: string) {
+  const params = new URLSearchParams({ workspace_id: workspaceId });
+  if (type) params.set('entity_type', type);
+  return api<{ nodes: any[]; links: any[] }>(`/knowledge/graph?${params}`);
+}
+
+export async function searchKnowledge(workspaceId: string, query: string, type?: string) {
+  const params = new URLSearchParams({ workspace_id: workspaceId, q: query });
+  if (type) params.set('entity_type', type);
+  return api<{ results: any[] }>(`/knowledge/search?${params}`);
+}
+
+export async function triggerKnowledgeBuild(workspaceId: string) {
+  return api<any>('/knowledge/build', { method: 'POST', body: JSON.stringify({ workspace_id: workspaceId }) });
+}
+
+export async function getKnowledgeBuildStatus(workspaceId: string) {
+  return api<{ states: any[] }>(`/knowledge/build/status?workspace_id=${workspaceId}`);
+}
+
+export async function generateMeetingPrep(workspaceId: string, eventId: string) {
+  return api<any>('/knowledge/meeting-prep', { method: 'POST', body: JSON.stringify({ workspace_id: workspaceId, event_id: eventId }) });
+}
+
+export async function getEmailContext(workspaceId: string, toAddresses: string[], ccAddresses?: string[], subject?: string) {
+  return api<{ context_text: string; recipients_found: number; has_knowledge: boolean }>('/knowledge/email-context', {
+    method: 'POST',
+    body: JSON.stringify({ workspace_id: workspaceId, to_addresses: toAddresses, cc_addresses: ccAddresses || [], subject }),
+  });
+}
