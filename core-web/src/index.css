@@ -779,8 +779,90 @@ html {
   background-color: #151820;
 }
 
-:root[data-theme="dark"] .border-\[\#d2deec\] {
+:root[data-theme="dark"] .border-\[\#d2deec\],
+:root[data-theme="dark"] .border-\[\#e4edf8\],
+:root[data-theme="dark"] .border-\[\#d7e4f2\],
+:root[data-theme="dark"] .border-\[\#d5e2f1\],
+:root[data-theme="dark"] .border-\[\#d9e6f5\],
+:root[data-theme="dark"] .border-\[\#dce8f5\] {
   border-color: rgba(255, 255, 255, 0.055);
+}
+
+/* Dark overrides for common hardcoded backgrounds */
+:root[data-theme="dark"] .bg-white\/92,
+:root[data-theme="dark"] .bg-white\/80,
+:root[data-theme="dark"] .bg-white\/75,
+:root[data-theme="dark"] .bg-white\/60 {
+  background-color: rgba(15, 17, 23, 0.92);
+}
+
+:root[data-theme="dark"] .bg-slate-100\/80,
+:root[data-theme="dark"] .bg-slate-100 {
+  background-color: #151820;
+}
+
+:root[data-theme="dark"] .bg-slate-50 {
+  background-color: #0f1117;
+}
+
+/* Dark text overrides */
+:root[data-theme="dark"] .text-slate-900 {
+  color: var(--color-text-dark);
+}
+
+:root[data-theme="dark"] .text-slate-700 {
+  color: var(--color-text-secondary);
+}
+
+:root[data-theme="dark"] .text-slate-600,
+:root[data-theme="dark"] .text-slate-500 {
+  color: var(--color-text-tertiary);
+}
+
+:root[data-theme="dark"] .text-slate-400,
+:root[data-theme="dark"] .text-slate-300 {
+  color: #424a60;
+}
+
+/* Dark gradient overrides for view backgrounds */
+:root[data-theme="dark"] .from-\[\#f6fbff\],
+:root[data-theme="dark"] .from-\[\#f7fbff\] {
+  --tw-gradient-from: #08090c;
+}
+
+:root[data-theme="dark"] .to-\[\#edf4fb\],
+:root[data-theme="dark"] .to-\[\#eaf3fd\] {
+  --tw-gradient-to: #0f1117;
+}
+
+/* Dark hover states */
+:root[data-theme="dark"] .hover\:bg-white:hover,
+:root[data-theme="dark"] .hover\:bg-white\/75:hover {
+  background-color: #1b1f2a;
+}
+
+:root[data-theme="dark"] .hover\:bg-slate-100:hover,
+:root[data-theme="dark"] .hover\:bg-slate-50:hover {
+  background-color: #1b1f2a;
+}
+
+/* Dark input styles */
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] select {
+  background-color: #151820;
+  border-color: rgba(255, 255, 255, 0.09);
+  color: var(--color-text-dark);
+}
+
+:root[data-theme="dark"] input::placeholder,
+:root[data-theme="dark"] textarea::placeholder {
+  color: #424a60;
+}
+
+:root[data-theme="dark"] input:focus,
+:root[data-theme="dark"] textarea:focus {
+  border-color: var(--color-brand-primary);
 }
 
 /* ── SIDEBAR TOOLTIP ── */

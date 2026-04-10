@@ -28,7 +28,7 @@ import DashboardView from './DashboardView';
 import CampaignBuilder from './CampaignBuilder';
 import FormBuilder from './FormBuilder';
 import TeamActivityView from './TeamActivityView';
-import { HeaderButtons } from '../MiniAppHeader';
+import ViewTopBar from '../ui/ViewTopBar';
 import { toast } from 'sonner';
 import { createCrmContact, createCrmCompany } from '../../api/client';
 
@@ -155,20 +155,11 @@ export default function CrmView() {
       <div className="relative flex-1 flex min-w-0 overflow-hidden rounded-[20px] bg-gradient-to-b from-[#f6fbff] to-[#edf4fb]">
         {/* Main Content */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white/92 md:rounded-[20px]">
-          {/* Header toolbar - matching Projects header */}
-          <div className="h-14 flex items-center justify-between gap-2 border-b border-[#e4edf8] pl-3 pr-2 sm:pl-5 sm:pr-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <ChartBarIcon className="w-[18px] h-[18px] text-slate-700 hidden sm:block" />
-              <h1 className="text-sm sm:text-base font-semibold text-slate-900 truncate">
-                CRM
-              </h1>
-            </div>
-            <div className="flex items-center gap-2">
-              <HeaderButtons
-                settingsButtonRef={settingsButtonRef}
-              />
-            </div>
-          </div>
+          <ViewTopBar
+            title="Comercial · CRM"
+            pill={{ label: 'Pipeline', color: 'amber' }}
+            settingsButtonRef={settingsButtonRef}
+          />
 
           {/* Search + Tabs bar */}
           <div className="px-4 pt-3 pb-2 space-y-3 border-b border-[#e4edf8]">

@@ -6,13 +6,13 @@ import { useUIStore } from '../../stores/uiStore';
 import { useNotificationStore } from '../../stores/notificationStore';
 import NotificationsPanel from '../NotificationsPanel/NotificationsPanel';
 
-// Icon button styles
+// Icon button styles (dark-mode ready via semantic tokens)
 const iconBtn =
-  'w-8 h-8 flex items-center justify-center rounded-xl border transition-all outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40';
+  'w-8 h-8 flex items-center justify-center rounded-lg border transition-all outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40';
 const iconBtnActive =
-  'border-transparent bg-slate-900 text-white shadow-[0_10px_24px_-16px_rgba(15,23,42,0.85)]';
+  'border-brand-primary/[.22] bg-brand-primary/[.13] text-brand-primary';
 const iconBtnInactive =
-  'border-[#d7e4f2] bg-white/75 text-slate-600 hover:bg-white hover:text-slate-900 hover:border-[#c9d9eb]';
+  'border-border-light bg-bg-white/75 text-text-tertiary hover:bg-bg-gray hover:text-text-secondary hover:border-border-gray';
 
 /**
  * HeaderButtons - Inline buttons for AI chat, notifications, and settings
