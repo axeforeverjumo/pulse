@@ -533,7 +533,7 @@ function NestedFolderContents({
   );
 }
 
-export function LocalFilesView() {
+export function LocalFilesView({ basePath = "files" }: { basePath?: string }) {
   const { workspaceId, documentId: urlDocumentId } = useParams<{ workspaceId: string; documentId?: string }>();
   const navigate = useNavigate();
   const workspaces = useWorkspaceStore((state) => state.workspaces);
@@ -1098,7 +1098,7 @@ export function LocalFilesView() {
   // Open folder as current context (used for creating items inside it)
   const handleOpenFolder = (folder: Document) => {
     navigateToFolder(folder.id, folder.title);
-    navigate(`/workspace/${workspaceId}/files/${folder.id}`);
+    navigate(`/workspace/${workspaceId}/${basePath}/${folder.id}`);
   };
 
   // Get all folders for "Mover a" menu (exclude current folder and the item itself)
@@ -1239,9 +1239,9 @@ export function LocalFilesView() {
   useEffect(() => {
     if (!urlDocumentId && workspaceId) {
       if (selectedNoteId) {
-        window.history.replaceState(null, '', `/workspace/${workspaceId}/files/${selectedNoteId}`);
+        window.history.replaceState(null, '', `/workspace/${workspaceId}/${basePath}/${selectedNoteId}`);
       } else if (currentFolderId) {
-        window.history.replaceState(null, '', `/workspace/${workspaceId}/files/${currentFolderId}`);
+        window.history.replaceState(null, '', `/workspace/${workspaceId}/${basePath}/${currentFolderId}`);
       }
     }
   }, [urlDocumentId, selectedNoteId, currentFolderId, workspaceId]);
@@ -1254,10 +1254,10 @@ export function LocalFilesView() {
     if (!workspaceId) return;
     if (selectedNoteId && selectedNoteId !== urlDocumentId) {
       hasHydratedFromUrl.current = true;
-      window.history.replaceState(null, '', `/workspace/${workspaceId}/files/${selectedNoteId}`);
+      window.history.replaceState(null, '', `/workspace/${workspaceId}/${basePath}/${selectedNoteId}`);
     } else if (!selectedNoteId && currentFolderId && currentFolderId !== urlDocumentId) {
       hasHydratedFromUrl.current = true;
-      window.history.replaceState(null, '', `/workspace/${workspaceId}/files/${currentFolderId}`);
+      window.history.replaceState(null, '', `/workspace/${workspaceId}/${basePath}/${currentFolderId}`);
     } else if (!selectedNoteId && !currentFolderId && hasHydratedFromUrl.current) {
       // Only strip the documentId from the URL after the store has hydrated at
       // least once.  Without this guard the effect fires on mount (before data
@@ -1573,7 +1573,7 @@ export function LocalFilesView() {
   const handleItemClick = async (doc: Document) => {
     // Handle folders
     if (doc.is_folder || doc.type === "folder") {
-      navigate(`/workspace/${workspaceId}/files/${doc.id}`);
+      navigate(`/workspace/${workspaceId}/${basePath}/${doc.id}`);
       return;
     }
 
@@ -1583,7 +1583,7 @@ export function LocalFilesView() {
       flushPendingSave();
       // Reset lastLoadedNoteIdRef to allow loading new note content
       lastLoadedNoteIdRef.current = null;
-      navigate(`/workspace/${workspaceId}/files/${doc.id}`);
+      navigate(`/workspace/${workspaceId}/${basePath}/${doc.id}`);
       // Content will be loaded by the effect watching selectedNote
       return;
     }
@@ -1595,7 +1595,7 @@ export function LocalFilesView() {
     if (mimeType.startsWith("image/")) {
       flushPendingSave();
       lastLoadedNoteIdRef.current = null;
-      navigate(`/workspace/${workspaceId}/files/${doc.id}`);
+      navigate(`/workspace/${workspaceId}/${basePath}/${doc.id}`);
       return;
     }
 
@@ -1878,7 +1878,7 @@ export function LocalFilesView() {
         >
           {/* Header */}
           <div className="h-12 flex items-center justify-between pl-4 pr-2 shrink-0 relative">
-            <h2 className="text-base font-semibold text-text-body">Archivos</h2>
+            <h2 className="text-base font-semibold text-text-body">{basePath === "live-notes" ? "Live Notes" : "Archivos"}</h2>
             <button
               ref={newButtonRef}
               onClick={() => setShowNewMenu(!showNewMenu)}
@@ -2495,7 +2495,7 @@ export function LocalFilesView() {
                         onClick={async () => {
                           await loadSharedDocument(item.resource_id);
                           setSelectedNote(item.resource_id);
-                          navigate(`/workspace/${workspaceId}/files/${item.resource_id}`);
+                          navigate(`/workspace/${workspaceId}/${basePath}/${item.resource_id}`);
                         }}
                         className={`w-full flex items-center gap-2 px-3 h-[40px] rounded-md text-sm transition-colors group ${
                           isActive

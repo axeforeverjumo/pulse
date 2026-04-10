@@ -1,5 +1,5 @@
 import { LocalFilesView } from '../Files/FilesView';
 
 export default function LiveNotesView() {
-  return <LocalFilesView />;
+  return <LocalFilesView basePath="live-notes" />;
 }

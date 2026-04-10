@@ -652,6 +652,7 @@ function AppContent() {
         <Route path="/workspace/:workspaceId/crm" element={<CrmView />} />
         <Route path="/workspace/:workspaceId/knowledge" element={<KnowledgeView />} />
         <Route path="/workspace/:workspaceId/live-notes" element={<LiveNotesPage />} />
+        <Route path="/workspace/:workspaceId/live-notes/:documentId" element={<LiveNotesPage />} />
         <Route path="/workspace/:workspaceId/meeting-prep" element={<MeetingPrepPage />} />
         <Route path="/workspace/:workspaceId/devops" element={<DevOpsView />} />
         <Route path="/workspace/:workspaceId/automations" element={<AutomationsView />} />
