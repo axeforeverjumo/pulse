@@ -67,8 +67,8 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
     const usableW = width - PADDING * 2;
     const usableH = height - PADDING * 2;
 
-    // Limit visible nodes for performance
-    const maxNodes = Math.min(graphData.nodes.length, 150);
+    // Limit visible nodes for performance (50 max for instant rendering)
+    const maxNodes = Math.min(graphData.nodes.length, 50);
     const topNodes = [...graphData.nodes]
       .sort((a, b) => (b.val || 1) - (a.val || 1))
       .slice(0, maxNodes);
@@ -100,10 +100,11 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
       .filter(l => l.sourceNode && l.targetNode);
 
     let iter = 0;
-    const maxIter = 80; // Fast: 80 iterations is enough
+    const maxIter = 40; // Very fast: 50 nodes × 40 iters = instant
 
     // Run simulation synchronously (much faster than per-frame)
     const runSimulation = () => {
+      try {
       const nodes = nodesRef.current;
       const links = linksRef.current;
 
@@ -164,6 +165,10 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
 
       setReady(true);
       draw();
+      } catch (e) {
+        console.error('[GraphVisualization] Simulation error:', e);
+        setReady(true);
+      }
     };
 
     setReady(false);
