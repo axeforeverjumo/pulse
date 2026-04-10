@@ -390,3 +390,118 @@ async def get_email_context_endpoint(
         user_jwt=user_jwt,
     )
     return result
+
+
+# ============================================================================
+# Document & PDF Generation
+# ============================================================================
+
+class GeneratePresentationRequest(BaseModel):
+    workspace_id: str
+    topic: str
+    style: str = "dark_professional"
+    audience: Optional[str] = None
+
+
+class GenerateDocRequest(BaseModel):
+    workspace_id: str
+    topic: str
+
+
+class ExportPdfRequest(BaseModel):
+    workspace_id: str
+    document_id: str
+
+
+@router.post("/generate/presentation")
+async def generate_presentation_endpoint(
+    request: GeneratePresentationRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Generate an HTML presentation with optional PDF."""
+    from api.services.documents.presentation import generate_presentation
+
+    result = await generate_presentation(
+        request.workspace_id, request.topic, user_jwt,
+        style=request.style, audience=request.audience,
+    )
+    return {
+        "type": result["type"],
+        "topic": result["topic"],
+        "style": result["style"],
+        "html": result["html"],
+        "slide_count": result.get("slide_count", 0),
+        "has_pdf": result.get("pdf_bytes") is not None,
+    }
+
+
+@router.post("/generate/brief")
+async def generate_brief_endpoint(
+    request: GenerateDocRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Generate a document/brief with knowledge context."""
+    from api.services.documents.presentation import generate_brief
+
+    return await generate_brief(request.workspace_id, request.topic, user_jwt)
+
+
+@router.post("/generate/pdf")
+async def generate_pdf_endpoint(
+    request: GeneratePresentationRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Generate a presentation and return as PDF download."""
+    from api.services.documents.presentation import generate_presentation
+    from fastapi.responses import Response
+
+    result = await generate_presentation(
+        request.workspace_id, request.topic, user_jwt,
+        style=request.style, audience=request.audience,
+    )
+
+    pdf_bytes = result.get("pdf_bytes")
+    if not pdf_bytes:
+        raise HTTPException(status_code=500, detail="PDF generation failed")
+
+    filename = f"{request.topic.replace(' ', '_')[:50]}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=\"{filename}\""},
+    )
+
+
+@router.post("/export/document-pdf")
+async def export_document_as_pdf(
+    request: ExportPdfRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Export any document/note as PDF."""
+    from api.services.documents.presentation import markdown_to_pdf
+    from fastapi.responses import Response
+
+    supabase = await get_authenticated_async_client(user_jwt)
+    doc = await (
+        supabase.table("documents")
+        .select("title, content")
+        .eq("id", request.document_id)
+        .eq("workspace_id", request.workspace_id)
+        .single()
+        .execute()
+    )
+
+    if not doc.data:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    title = doc.data.get("title", "Document")
+    content = doc.data.get("content", "")
+
+    pdf_bytes = await markdown_to_pdf(content, title)
+
+    filename = f"{title.replace(' ', '_')[:50]}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=\"{filename}\""},
+    )

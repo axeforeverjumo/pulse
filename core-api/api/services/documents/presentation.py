@@ -153,13 +153,114 @@ async def generate_presentation(
 
     logger.info(f"[DOC_GEN] Generated presentation: {topic} ({len(html_content)} chars)")
 
+    # Convert to PDF with Playwright
+    pdf_bytes = None
+    try:
+        pdf_bytes = await html_to_pdf(html_content)
+        logger.info(f"[DOC_GEN] PDF generated: {len(pdf_bytes)} bytes")
+    except Exception as e:
+        logger.warning(f"[DOC_GEN] PDF conversion failed: {e}")
+
     return {
         "type": "presentation",
         "topic": topic,
         "style": style,
         "html": html_content,
         "slide_count": html_content.count("class=\"slide\"") or html_content.count("page-break"),
+        "pdf_bytes": pdf_bytes,
     }
+
+
+async def html_to_pdf(
+    html_content: str,
+    width: str = "1280px",
+    height: str = "720px",
+) -> bytes:
+    """Convert HTML to PDF using Playwright (headless Chromium)."""
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        await page.set_content(html_content, wait_until="networkidle")
+        pdf_bytes = await page.pdf(
+            width=width,
+            height=height,
+            print_background=True,
+            margin={"top": "0", "right": "0", "bottom": "0", "left": "0"},
+        )
+        await browser.close()
+        return pdf_bytes
+
+
+async def markdown_to_pdf(content: str, title: str = "") -> bytes:
+    """Convert markdown content to a clean PDF document."""
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body {{ font-family: 'Inter', sans-serif; max-width: 800px; margin: 40px auto; padding: 0 40px; color: #1e293b; line-height: 1.6; font-size: 14px; }}
+  h1 {{ font-size: 28px; font-weight: 700; margin-bottom: 8px; color: #0f172a; }}
+  h2 {{ font-size: 20px; font-weight: 600; margin-top: 24px; color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }}
+  h3 {{ font-size: 16px; font-weight: 600; margin-top: 16px; color: #334155; }}
+  ul, ol {{ padding-left: 20px; }}
+  li {{ margin-bottom: 4px; }}
+  strong {{ font-weight: 600; }}
+  hr {{ border: none; border-top: 1px solid #e2e8f0; margin: 20px 0; }}
+  table {{ border-collapse: collapse; width: 100%; margin: 16px 0; }}
+  th, td {{ border: 1px solid #e2e8f0; padding: 8px 12px; text-align: left; font-size: 13px; }}
+  th {{ background: #f8fafc; font-weight: 600; }}
+  code {{ background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 13px; }}
+  blockquote {{ border-left: 3px solid #3b82f6; padding-left: 16px; color: #64748b; margin: 16px 0; }}
+</style>
+</head>
+<body>
+{_markdown_to_html(content, title)}
+</body>
+</html>"""
+
+    return await html_to_pdf(html, width="210mm", height="297mm")
+
+
+def _markdown_to_html(md: str, title: str = "") -> str:
+    """Simple markdown to HTML converter."""
+    import re
+    lines = md.split("\n")
+    html_lines = []
+    if title:
+        html_lines.append(f"<h1>{title}</h1>")
+    in_list = False
+    in_ol = False
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            if in_list: html_lines.append("</ul>"); in_list = False
+            if in_ol: html_lines.append("</ol>"); in_ol = False
+            continue
+        if stripped.startswith("### "): html_lines.append(f"<h3>{stripped[4:]}</h3>")
+        elif stripped.startswith("## "): html_lines.append(f"<h2>{stripped[3:]}</h2>")
+        elif stripped.startswith("# "): html_lines.append(f"<h1>{stripped[2:]}</h1>")
+        elif stripped.startswith("---"): html_lines.append("<hr>")
+        elif stripped.startswith("- ") or stripped.startswith("* "):
+            if not in_list: html_lines.append("<ul>"); in_list = True
+            content = stripped[2:]
+            content = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', content)
+            html_lines.append(f"<li>{content}</li>")
+        elif re.match(r'^\d+\.\s', stripped):
+            if not in_ol: html_lines.append("<ol>"); in_ol = True
+            content = re.sub(r'^\d+\.\s*', '', stripped)
+            content = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', content)
+            html_lines.append(f"<li>{content}</li>")
+        else:
+            if in_list: html_lines.append("</ul>"); in_list = False
+            if in_ol: html_lines.append("</ol>"); in_ol = False
+            stripped = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', stripped)
+            html_lines.append(f"<p>{stripped}</p>")
+    if in_list: html_lines.append("</ul>")
+    if in_ol: html_lines.append("</ol>")
+    return "\n".join(html_lines)
 
 
 async def generate_brief(
