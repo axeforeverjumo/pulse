@@ -20,7 +20,7 @@ interface KnowledgeState {
   buildStates: any[];
   isLoading: boolean;
   isBuilding: boolean;
-  activeView: 'graph' | 'people' | 'organizations' | 'projects' | 'topics' | 'search';
+  activeView: 'graph' | 'people' | 'organizations' | 'projects' | 'topics' | 'search' | 'live-notes' | 'meeting-prep';
   searchQuery: string;
 
   setActiveView: (view: KnowledgeState['activeView']) => void;

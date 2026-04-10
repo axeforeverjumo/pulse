@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   MagnifyingGlassIcon,
@@ -10,6 +10,9 @@ import {
   ArrowPathIcon,
   PlusIcon,
   XMarkIcon,
+  ClockIcon,
+  CalendarDaysIcon,
+  DocumentTextIcon,
 } from '@heroicons/react/24/outline';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useKnowledgeStore } from '../../stores/knowledgeStore';
@@ -17,6 +20,8 @@ import GraphVisualization from './GraphVisualization';
 import EntityCard from './EntityCard';
 import KnowledgeSearch from './KnowledgeSearch';
 import EntityList from './EntityList';
+import LiveNotesView from '../LiveNotes/LiveNotesView';
+import MeetingPrepView from './MeetingPrepView';
 import { HeaderButtons } from '../MiniAppHeader';
 import { toast } from 'sonner';
 
@@ -27,6 +32,8 @@ const tabs = [
   { id: 'projects' as const, label: 'Proyectos', icon: FolderIcon },
   { id: 'topics' as const, label: 'Temas', icon: LightBulbIcon },
   { id: 'search' as const, label: 'Buscar', icon: MagnifyingGlassIcon },
+  { id: 'live-notes' as const, label: 'Live Notes', icon: ClockIcon },
+  { id: 'meeting-prep' as const, label: 'Meeting Prep', icon: CalendarDaysIcon },
 ];
 
 export default function KnowledgeView() {
@@ -49,7 +56,7 @@ export default function KnowledgeView() {
     fetchBuildStatus(workspaceId);
     if (activeView === 'graph') {
       fetchGraph(workspaceId);
-    } else if (activeView !== 'search') {
+    } else if (!['search', 'live-notes', 'meeting-prep'].includes(activeView)) {
       const typeMap: Record<string, string> = {
         people: 'person',
         organizations: 'organization',
@@ -136,6 +143,12 @@ export default function KnowledgeView() {
               entityType={activeView === 'people' ? 'person' : activeView === 'organizations' ? 'organization' : activeView === 'projects' ? 'project' : 'topic'}
               onSelectEntity={(entity) => setSelectedEntity(entity)}
             />
+          )}
+          {activeView === 'live-notes' && workspaceId && (
+            <LiveNotesView />
+          )}
+          {activeView === 'meeting-prep' && workspaceId && (
+            <MeetingPrepView workspaceId={workspaceId} />
           )}
         </div>
 
