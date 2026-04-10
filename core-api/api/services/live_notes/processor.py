@@ -66,6 +66,9 @@ DAILY_BRIEF_PROMPT = """Generate a daily brief in Spanish for a workspace.
 ### Upcoming Calendar:
 {calendar}
 
+### Industry & Tech News:
+{web_news}
+
 ## Instructions
 
 Create a daily intelligence brief with these sections:
@@ -84,6 +87,9 @@ Any CRM activity: new contacts, deals progressing, tasks due.
 
 ### Senales a vigilar
 Interesting patterns or things to watch based on recent communications.
+
+### Noticias del sector
+Top headlines from tech/AI/business world that may be relevant.
 
 Write concisely in Spanish. Use bullet points. Include names and dates."""
 
@@ -167,6 +173,30 @@ async def _gather_findings_for_topic(
         except Exception:
             pass
 
+    # Web Search — use OpenAI with web_search tool for real-time internet results
+    try:
+        client = get_async_openai_client()
+        web_response = await client.chat.completions.create(
+            model="gpt-5.4-mini",
+            messages=[
+                {"role": "system", "content": "Search the web and return the top 5 most relevant recent findings. Be concise. Return bullet points only."},
+                {"role": "user", "content": f"Find the latest news and updates about: {topic}. Focus on the last 7 days. Return 5 bullet points with source and date."},
+            ],
+            temperature=0.2,
+            max_tokens=800,
+        )
+        web_content = web_response.choices[0].message.content or ""
+        if web_content:
+            for line in web_content.strip().split("\n"):
+                line = line.strip()
+                if line and (line.startswith("-") or line.startswith("*") or line[0].isdigit()):
+                    clean = line.lstrip("-*0123456789. ")
+                    if clean:
+                        findings.append(f"[Web] {clean[:200]}")
+        logger.info(f"[LIVE_NOTES] Web search for '{topic}' returned {len([f for f in findings if f.startswith('[Web]')])} results")
+    except Exception as e:
+        logger.warning(f"[LIVE_NOTES] Web search failed for '{topic}': {e}")
+
     return findings
 
 
@@ -245,11 +275,33 @@ async def _gather_daily_brief_data(supabase, workspace_id: str) -> Dict[str, str
     except Exception:
         pass
 
+    # Industry news via web search (AI-powered)
+    web_news = []
+    try:
+        client = get_async_openai_client()
+        response = await client.chat.completions.create(
+            model="gpt-5.4-mini",
+            messages=[
+                {"role": "system", "content": "You are a business intelligence analyst. Return 3-5 bullet points of today's most relevant tech/AI/business news."},
+                {"role": "user", "content": "What are today's top 3-5 business and technology headlines? Focus on AI, SaaS, and startup news. Be concise, 1 line per item with date."},
+            ],
+            temperature=0.3,
+            max_tokens=500,
+        )
+        content = response.choices[0].message.content or ""
+        for line in content.strip().split("\n"):
+            line = line.strip()
+            if line and (line.startswith("-") or line.startswith("*") or line[0].isdigit()):
+                web_news.append(line)
+    except Exception:
+        pass
+
     return {
         "emails": "\n".join(emails) if emails else "Sin emails recientes",
         "knowledge": "\n".join(knowledge) if knowledge else "Sin actualizaciones",
         "crm": "\n".join(crm) if crm else "Sin actividad CRM",
         "calendar": "\n".join(calendar) if calendar else "Sin reuniones hoy",
+        "web_news": "\n".join(web_news) if web_news else "Sin noticias relevantes",
     }
 
 
