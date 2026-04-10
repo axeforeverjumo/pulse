@@ -164,10 +164,10 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
     };
 
     setReady(false);
-    // Run synchronously then draw once
-    requestAnimationFrame(runSimulation);
+    // setTimeout lets React paint the loading overlay first, then we compute
+    const timer = setTimeout(runSimulation, 50);
 
-    return () => {};
+    return () => clearTimeout(timer);
   }, [graphData, dimensions]);
 
   const draw = useCallback(() => {
@@ -343,7 +343,7 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/80 backdrop-blur-sm">
           <div className="text-center">
             <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin mx-auto mb-2" />
-            <p className="text-xs text-slate-500">Calculando layout ({graphData.nodes.length} entidades)...</p>
+            <p className="text-xs text-slate-500">Calculando layout ({Math.min(graphData.nodes.length, 150)} de {graphData.nodes.length} entidades)...</p>
           </div>
         </div>
       )}
