@@ -21,15 +21,32 @@ from google.analytics.data_v1beta.types import (
 )
 from google.oauth2.credentials import Credentials
 
-from api.services.google_auth import get_credentials_for_user
+from api.services.google_auth import get_credentials_for_user, get_credentials_for_workspace
 from api.config import settings
 
 logger = logging.getLogger(__name__)
 
 
+def _get_marketing_credentials(user_id: str):
+    """Get marketing credentials: try user-level first, then scan workspaces."""
+    try:
+        return get_credentials_for_user(user_id, provider="google_marketing")
+    except Exception:
+        # Fallback: find any workspace connection for this user
+        from lib.supabase_client import get_service_role_client
+        supabase = get_service_role_client()
+        ws = supabase.table("workspace_members").select("workspace_id").eq("user_id", user_id).limit(5).execute()
+        for row in (ws.data or []):
+            try:
+                return get_credentials_for_workspace(row["workspace_id"])
+            except Exception:
+                continue
+        raise
+
+
 def _get_ga4_client(user_id: str) -> tuple:
-    """Get GA4 client with valid credentials for a user."""
-    credentials, conn = get_credentials_for_user(user_id, provider="google_marketing")
+    """Get GA4 client with valid marketing credentials."""
+    credentials, conn = _get_marketing_credentials(user_id)
     client = BetaAnalyticsDataClient(credentials=credentials)
     return client, conn
 

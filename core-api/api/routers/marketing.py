@@ -842,13 +842,14 @@ MARKETING_SCOPES = [
 
 @router.get("/auth/url")
 async def api_google_auth_url(
+    workspace_id: str = Query(...),
     user_id: str = Depends(get_current_user_id),
 ):
-    """Generate Google OAuth URL for marketing scopes (Analytics + Search Console)."""
+    """Generate Google OAuth URL for marketing scopes — workspace-level connection."""
     if not settings.google_client_id:
         raise HTTPException(status_code=500, detail="Google OAuth not configured")
 
-    state = f"{user_id}:{secrets.token_urlsafe(16)}"
+    state = f"{user_id}:{workspace_id}:{secrets.token_urlsafe(16)}"
     redirect_uri = f"{settings.frontend_url}/api/marketing/auth/callback"
 
     params = {
@@ -879,8 +880,10 @@ async def api_google_auth_callback(
     from lib.token_encryption import encrypt_token_fields
     from datetime import datetime, timezone, timedelta
 
-    user_id = state.split(":")[0] if ":" in state else ""
-    if not user_id:
+    parts = state.split(":")
+    user_id = parts[0] if len(parts) >= 1 else ""
+    workspace_id = parts[1] if len(parts) >= 2 else ""
+    if not user_id or not workspace_id:
         return HTMLResponse("<html><body><h2>Error: invalid state</h2></body></html>", status_code=400)
 
     redirect_uri = f"{settings.frontend_url}/api/marketing/auth/callback"
@@ -924,10 +927,10 @@ async def api_google_auth_callback(
         "refresh_token": refresh_token,
     })
 
-    # Upsert: check if marketing connection exists
+    # Upsert: check if workspace-level marketing connection exists
     existing = supabase.table("ext_connections")\
         .select("id")\
-        .eq("user_id", user_id)\
+        .eq("workspace_id", workspace_id)\
         .eq("provider", "google_marketing")\
         .eq("is_active", True)\
         .limit(1)\
@@ -935,6 +938,7 @@ async def api_google_auth_callback(
 
     connection_data = {
         "user_id": user_id,
+        "workspace_id": workspace_id,
         "provider": "google_marketing",
         "provider_user_id": userinfo.get("id", ""),
         "provider_email": userinfo.get("email", ""),
@@ -987,19 +991,31 @@ async def api_google_auth_callback(
 
 @router.get("/auth/status")
 async def api_google_auth_status(
+    workspace_id: str = Query(...),
     user_id: str = Depends(get_current_user_id),
 ):
-    """Check if the user has a google_marketing OAuth connection."""
+    """Check if the workspace has a google_marketing OAuth connection."""
     from lib.supabase_client import get_service_role_client
 
     supabase = get_service_role_client()
+    # Workspace-level first
     result = supabase.table("ext_connections")\
         .select("id, provider_email, metadata, is_active")\
-        .eq("user_id", user_id)\
+        .eq("workspace_id", workspace_id)\
         .eq("provider", "google_marketing")\
         .eq("is_active", True)\
         .limit(1)\
         .execute()
+
+    # Fallback: user-level (for existing connections before migration)
+    if not result.data:
+        result = supabase.table("ext_connections")\
+            .select("id, provider_email, metadata, is_active")\
+            .eq("user_id", user_id)\
+            .eq("provider", "google_marketing")\
+            .eq("is_active", True)\
+            .limit(1)\
+            .execute()
 
     if result.data:
         conn = result.data[0]
@@ -1015,21 +1031,22 @@ async def api_google_auth_status(
 
 @router.get("/auth/ga4-properties")
 async def api_list_ga4_properties(
+    workspace_id: str = Query(...),
     user_id: str = Depends(get_current_user_id),
 ):
     """List GA4 properties the connected Google account has access to."""
     try:
-        from api.services.google_auth import get_credentials_for_user
+        from api.services.google_auth import get_credentials_for_workspace
         from google.analytics.admin_v1beta import AnalyticsAdminServiceClient
 
-        credentials, _ = get_credentials_for_user(user_id, provider="google_marketing")
+        credentials, _ = get_credentials_for_workspace(workspace_id)
         client = AnalyticsAdminServiceClient(credentials=credentials)
 
         properties = []
         for summary in client.list_account_summaries():
             for prop in summary.property_summaries:
                 properties.append({
-                    "property_id": prop.property,  # e.g. "properties/123456789"
+                    "property_id": prop.property,
                     "display_name": prop.display_name,
                     "account": summary.display_name,
                 })
@@ -1041,14 +1058,15 @@ async def api_list_ga4_properties(
 
 @router.get("/auth/gsc-sites")
 async def api_list_gsc_sites(
+    workspace_id: str = Query(...),
     user_id: str = Depends(get_current_user_id),
 ):
     """List Search Console sites the connected Google account has access to."""
     try:
-        from api.services.google_auth import get_credentials_for_user
+        from api.services.google_auth import get_credentials_for_workspace
         from googleapiclient.discovery import build
 
-        credentials, _ = get_credentials_for_user(user_id, provider="google_marketing")
+        credentials, _ = get_credentials_for_workspace(workspace_id)
         service = build("webmasters", "v3", credentials=credentials)
 
         result = service.sites().list().execute()

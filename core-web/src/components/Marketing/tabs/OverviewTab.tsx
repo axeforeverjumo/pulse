@@ -65,7 +65,7 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
   }, []);
 
   async function checkGoogleAuth() {
-    try { setGoogleAuth(await getMarketingAuthStatus()); } catch {}
+    try { setGoogleAuth(await getMarketingAuthStatus(workspaceId)); } catch {}
   }
 
   async function loadDashboardData() {
@@ -99,8 +99,8 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
     setLoadingProperties(true);
     try {
       const [props, sites] = await Promise.all([
-        getMarketingGa4Properties().catch(() => []),
-        getMarketingGscSites().catch(() => []),
+        getMarketingGa4Properties(workspaceId).catch(() => []),
+        getMarketingGscSites(workspaceId).catch(() => []),
       ]);
       setGa4Properties(props);
       setGscSites(sites);
@@ -143,7 +143,7 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
   async function handleConnectGoogle() {
     setConnecting(true);
     try {
-      const { url } = await getMarketingAuthUrl();
+      const { url } = await getMarketingAuthUrl(workspaceId);
       const w = 500, h = 600, left = window.screenX + (window.outerWidth - w) / 2, top = window.screenY + (window.outerHeight - h) / 2;
       window.open(url, "google_marketing_oauth", `width=${w},height=${h},left=${left},top=${top}`);
     } catch (e: any) { toast.error("Error: " + (e.message || "")); } finally { setConnecting(false); }

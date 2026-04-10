@@ -9,14 +9,30 @@ from typing import Dict, Any, List, Optional
 
 from googleapiclient.discovery import build
 
-from api.services.google_auth import get_credentials_for_user
+from api.services.google_auth import get_credentials_for_user, get_credentials_for_workspace
 
 logger = logging.getLogger(__name__)
 
 
+def _get_marketing_credentials(user_id: str):
+    """Get marketing credentials: user-level first, then workspace fallback."""
+    try:
+        return get_credentials_for_user(user_id, provider="google_marketing")
+    except Exception:
+        from lib.supabase_client import get_service_role_client
+        supabase = get_service_role_client()
+        ws = supabase.table("workspace_members").select("workspace_id").eq("user_id", user_id).limit(5).execute()
+        for row in (ws.data or []):
+            try:
+                return get_credentials_for_workspace(row["workspace_id"])
+            except Exception:
+                continue
+        raise
+
+
 def _get_gtm_service(user_id: str):
-    """Get Tag Manager service with valid credentials."""
-    credentials, conn = get_credentials_for_user(user_id, provider="google_marketing")
+    """Get Tag Manager service with valid marketing credentials."""
+    credentials, conn = _get_marketing_credentials(user_id)
     service = build("tagmanager", "v2", credentials=credentials)
     return service, conn
 

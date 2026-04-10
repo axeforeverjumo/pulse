@@ -4440,20 +4440,20 @@ export async function createMarketingTaskComment(taskId: string, content: string
 }
 
 // Google OAuth
-export async function getMarketingAuthUrl() {
-  return api<{ url: string; state: string }>('/marketing/auth/url');
+export async function getMarketingAuthUrl(workspaceId: string) {
+  return api<{ url: string; state: string }>(`/marketing/auth/url?workspace_id=${encodeURIComponent(workspaceId)}`);
 }
 
-export async function getMarketingAuthStatus() {
-  return api<{ connected: boolean; email?: string; name?: string; avatar?: string }>('/marketing/auth/status');
+export async function getMarketingAuthStatus(workspaceId: string) {
+  return api<{ connected: boolean; email?: string; name?: string; avatar?: string }>(`/marketing/auth/status?workspace_id=${encodeURIComponent(workspaceId)}`);
 }
 
-export async function getMarketingGa4Properties() {
-  return api<{ property_id: string; display_name: string; account: string }[]>('/marketing/auth/ga4-properties');
+export async function getMarketingGa4Properties(workspaceId: string) {
+  return api<{ property_id: string; display_name: string; account: string }[]>(`/marketing/auth/ga4-properties?workspace_id=${encodeURIComponent(workspaceId)}`);
 }
 
-export async function getMarketingGscSites() {
-  return api<{ site_url: string; permission_level: string }[]>('/marketing/auth/gsc-sites');
+export async function getMarketingGscSites(workspaceId: string) {
+  return api<{ site_url: string; permission_level: string }[]>(`/marketing/auth/gsc-sites?workspace_id=${encodeURIComponent(workspaceId)}`);
 }
 
 // PulseMark chat

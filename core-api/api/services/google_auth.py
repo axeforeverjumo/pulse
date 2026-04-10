@@ -425,3 +425,37 @@ def get_current_gmail_history_id(gmail_service) -> Optional[str]:
     except Exception as e:
         logger.error(f"❌ Failed to get Gmail profile/historyId: {str(e)}")
         return None
+
+
+def get_credentials_for_workspace(
+    workspace_id: str,
+    provider: str = 'google_marketing',
+    supabase_client=None
+) -> Tuple[Credentials, Dict[str, Any]]:
+    """
+    Get valid credentials for a workspace-level OAuth connection.
+
+    Used for marketing integrations (GA4, GSC, GTM, Ads) that are shared
+    across the entire workspace — any member can use them.
+
+    Falls back to user-level connection if no workspace-level one exists.
+    """
+    if supabase_client is None:
+        supabase_client = get_service_role_client()
+
+    result = supabase_client.table('ext_connections')\
+        .select('id, user_id, access_token, refresh_token, token_expires_at, metadata, provider_email')\
+        .eq('workspace_id', workspace_id)\
+        .eq('provider', provider)\
+        .eq('is_active', True)\
+        .order('is_primary', desc=True)\
+        .order('created_at', desc=True)\
+        .limit(1)\
+        .execute()
+
+    if not result.data or len(result.data) == 0:
+        raise NoConnectionError(f"No active {provider} connection for workspace {workspace_id}")
+
+    connection_data = decrypt_ext_connection_tokens(result.data[0])
+    credentials = get_valid_credentials(connection_data, supabase_client)
+    return credentials, connection_data
