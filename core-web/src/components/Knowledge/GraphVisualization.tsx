@@ -19,6 +19,7 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const dimsRef = useRef({ width: 0, height: 0 });
   const [hoveredNode, setHoveredNode] = useState<any>(null);
   const nodesRef = useRef<any[]>([]);
   const linksRef = useRef<any[]>([]);
@@ -37,7 +38,9 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
     const measure = () => {
       const rect = container.getBoundingClientRect();
       if (rect.width > 10 && rect.height > 10) {
-        setDimensions({ width: Math.floor(rect.width), height: Math.floor(rect.height) });
+        const d = { width: Math.floor(rect.width), height: Math.floor(rect.height) };
+        dimsRef.current = d;
+        setDimensions(d);
       }
     };
 
@@ -176,7 +179,8 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const { width, height } = dimensions;
+    const { width, height } = dimsRef.current;
+    if (width < 10 || height < 10) return;
     const dpr = window.devicePixelRatio || 1;
     canvas.width = width * dpr;
     canvas.height = height * dpr;
@@ -272,7 +276,7 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
       ctx.fillStyle = '#334155';
       ctx.fillText(label, node.x, textY + fontSize * 0.35 - 1);
     }
-  }, [dimensions, hoveredNode]);
+  }, [hoveredNode]);
 
   // Mouse events
   const handleClick = (e: React.MouseEvent) => {
