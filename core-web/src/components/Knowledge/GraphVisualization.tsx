@@ -64,8 +64,8 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
     const usableW = width - PADDING * 2;
     const usableH = height - PADDING * 2;
 
-    // Limit visible nodes for performance (top by mentions)
-    const maxNodes = Math.min(graphData.nodes.length, 200);
+    // Limit visible nodes for performance
+    const maxNodes = Math.min(graphData.nodes.length, 150);
     const topNodes = [...graphData.nodes]
       .sort((a, b) => (b.val || 1) - (a.val || 1))
       .slice(0, maxNodes);
@@ -97,40 +97,33 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
       .filter(l => l.sourceNode && l.targetNode);
 
     let iter = 0;
-    const maxIter = 200;
-    const nodeCount = nodesRef.current.length;
+    const maxIter = 80; // Fast: 80 iterations is enough
 
-    const simulate = () => {
-      if (iter > maxIter) {
-        setReady(true);
-        draw();
-        return;
-      }
-      iter++;
-      const alpha = Math.pow(1 - iter / maxIter, 1.5);
+    // Run simulation synchronously (much faster than per-frame)
+    const runSimulation = () => {
       const nodes = nodesRef.current;
       const links = linksRef.current;
 
-      // Repulsion (use grid-based approximation for large graphs)
-      const repStrength = nodeCount > 100 ? 120 : 200;
-      const step = nodeCount > 150 ? 3 : 1; // Skip nodes for perf
+      for (iter = 0; iter < maxIter; iter++) {
+        const alpha = Math.pow(1 - iter / maxIter, 1.5);
 
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + step; j < nodes.length; j += step) {
-          const dx = nodes[j].x - nodes[i].x;
-          const dy = nodes[j].y - nodes[i].y;
-          const distSq = dx * dx + dy * dy;
-          if (distSq > 90000) continue; // Skip distant pairs (>300px)
-          const dist = Math.max(1, Math.sqrt(distSq));
-          const force = (repStrength * alpha) / dist;
-          const fx = (dx / dist) * force;
-          const fy = (dy / dist) * force;
-          nodes[i].vx -= fx;
-          nodes[i].vy -= fy;
-          nodes[j].vx += fx;
-          nodes[j].vy += fy;
+        // Repulsion — sample pairs for speed
+        for (let i = 0; i < nodes.length; i++) {
+          for (let j = i + 1; j < nodes.length; j++) {
+            const dx = nodes[j].x - nodes[i].x;
+            const dy = nodes[j].y - nodes[i].y;
+            const distSq = dx * dx + dy * dy;
+            if (distSq > 40000) continue;
+            const dist = Math.max(1, Math.sqrt(distSq));
+            const force = (150 * alpha) / dist;
+            const fx = (dx / dist) * force;
+            const fy = (dy / dist) * force;
+            nodes[i].vx -= fx;
+            nodes[i].vy -= fy;
+            nodes[j].vx += fx;
+            nodes[j].vy += fy;
+          }
         }
-      }
 
       // Attraction along links
       for (const link of links) {
@@ -149,30 +142,32 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
         t.vy -= fy;
       }
 
-      // Strong centering force to prevent edge clustering
-      for (const node of nodes) {
-        node.vx += (cx - node.x) * 0.003 * alpha;
-        node.vy += (cy - node.y) * 0.003 * alpha;
-      }
+        // Centering
+        for (const node of nodes) {
+          node.vx += (cx - node.x) * 0.004 * alpha;
+          node.vy += (cy - node.y) * 0.004 * alpha;
+        }
 
-      // Apply velocity with damping + keep within padded bounds
-      for (const node of nodes) {
-        node.vx *= 0.55;
-        node.vy *= 0.55;
-        node.x += node.vx;
-        node.y += node.vy;
-        node.x = Math.max(PADDING + node.radius, Math.min(width - PADDING - node.radius, node.x));
-        node.y = Math.max(PADDING + node.radius, Math.min(height - PADDING - node.radius, node.y));
-      }
+        // Apply + clamp
+        for (const node of nodes) {
+          node.vx *= 0.5;
+          node.vy *= 0.5;
+          node.x += node.vx;
+          node.y += node.vy;
+          node.x = Math.max(PADDING + node.radius, Math.min(width - PADDING - node.radius, node.x));
+          node.y = Math.max(PADDING + node.radius, Math.min(height - PADDING - node.radius, node.y));
+        }
+      } // end for loop
 
-      if (iter % 2 === 0 || iter > maxIter - 5) draw();
-      animRef.current = requestAnimationFrame(simulate);
+      setReady(true);
+      draw();
     };
 
     setReady(false);
-    simulate();
+    // Run synchronously then draw once
+    requestAnimationFrame(runSimulation);
 
-    return () => cancelAnimationFrame(animRef.current);
+    return () => {};
   }, [graphData, dimensions]);
 
   const draw = useCallback(() => {
