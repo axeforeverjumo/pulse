@@ -85,7 +85,7 @@ const availableAppTypes = [
   },
   {
     type: "files",
-    name: "Archivos",
+    name: "Drive",
     icon: Folder,
   },
   {

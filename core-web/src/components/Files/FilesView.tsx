@@ -533,7 +533,7 @@ function NestedFolderContents({
   );
 }
 
-function LocalFilesView() {
+export function LocalFilesView() {
   const { workspaceId, documentId: urlDocumentId } = useParams<{ workspaceId: string; documentId?: string }>();
   const navigate = useNavigate();
   const workspaces = useWorkspaceStore((state) => state.workspaces);
@@ -3057,56 +3057,17 @@ function LocalFilesView() {
 /* ------------------------------------------------------------------ */
 
 export default function FilesView() {
-  const [activeTab, setActiveTab] = useState<"archivos" | "drive">("drive");
-
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
-      {/* Tab bar */}
-      <div className="px-3 pt-2 pb-1 shrink-0 bg-white border-b border-gray-200">
-        <div className="flex gap-1 bg-black/5 rounded-lg p-0.5 w-fit">
-          <button
-            onClick={() => setActiveTab("drive")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              activeTab === "drive"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            <svg viewBox="0 0 24 24" className="w-[13px] h-[13px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 19.5h20L12 2z" />
-              <path d="M2 19.5l5-8.5h10" />
-              <path d="M22 19.5l-5-8.5H7" />
-            </svg>
-            Archivos
-          </button>
-          <button
-            onClick={() => setActiveTab("archivos")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              activeTab === "archivos"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            <Icon icon={HardDrive} size={13} />
-            Archivos locales
-          </button>
-        </div>
-      </div>
-
-      {/* Tab content */}
-      {activeTab === "drive" ? (
-        <Suspense
-          fallback={
-            <div className="flex-1 flex items-center justify-center">
-              <div className="animate-spin rounded-full h-6 w-6 border-2 border-gray-300 border-t-blue-500" />
-            </div>
-          }
-        >
-          <GoogleDriveView />
-        </Suspense>
-      ) : (
-        <LocalFilesView />
-      )}
+      <Suspense
+        fallback={
+          <div className="flex-1 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-6 w-6 border-2 border-gray-300 border-t-blue-500" />
+          </div>
+        }
+      >
+        <GoogleDriveView />
+      </Suspense>
     </div>
   );
 }
