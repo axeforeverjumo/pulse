@@ -310,11 +310,11 @@ async def ensure_daily_note(workspace_id: str):
             logger.warning(f"[LIVE_NOTES] No owner found for workspace {workspace_id[:8]}")
             return None
 
-        # Get workspace_app_id for live-notes
+        # Get workspace_app_id — use "files" app (same documents, shared)
         apps = supabase.table("workspace_apps") \
             .select("id") \
             .eq("workspace_id", workspace_id) \
-            .eq("app_type", "live-notes") \
+            .eq("app_type", "files") \
             .limit(1) \
             .execute()
         app_id = apps.data[0]["id"] if apps.data else None
@@ -351,11 +351,11 @@ async def auto_update_documents(workspace_id: str):
     supabase = get_service_role_client()
     cutoff = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()
 
-    # Get workspace app ID for live-notes
+    # Get workspace app ID — use "files" (documents are shared between files and live-notes)
     apps = supabase.table("workspace_apps") \
         .select("id") \
         .eq("workspace_id", workspace_id) \
-        .eq("app_type", "live-notes") \
+        .eq("app_type", "files") \
         .limit(1) \
         .execute()
 
