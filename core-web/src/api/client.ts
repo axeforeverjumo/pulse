@@ -4484,7 +4484,7 @@ export async function streamPulseMarkChat(
   const token = useAuthStore.getState().getAccessToken();
   if (!token) throw new AuthExpiredError();
 
-  const response = await fetch(`${API_BASE}/api/marketing/chat/stream`, {
+  const response = await fetch(`${API_BASE}/marketing/chat/stream`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
