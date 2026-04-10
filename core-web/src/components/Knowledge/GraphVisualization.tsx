@@ -18,7 +18,7 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
   const { graphData, isLoading, fetchGraph } = useKnowledgeStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [hoveredNode, setHoveredNode] = useState<any>(null);
   const nodesRef = useRef<any[]>([]);
   const linksRef = useRef<any[]>([]);
@@ -354,7 +354,7 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
       )}
       <canvas
         ref={canvasRef}
-        style={{ width: dimensions.width, height: dimensions.height }}
+        className="absolute inset-0 w-full h-full"
         onClick={handleClick}
         onMouseMove={handleMouseMove}
       />
