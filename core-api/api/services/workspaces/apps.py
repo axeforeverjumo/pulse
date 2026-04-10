@@ -24,6 +24,11 @@ VALID_APP_TYPES = (
     "messaging",
     "devops",
     "automations",
+    "studio",
+    "marketing",
+    "knowledge",
+    "live-notes",
+    "meeting-prep",
 )
 
 
