@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { deleteMarketingSite } from "../../api/client";
+import { toast } from "sonner";
 import {
   ChartBarIcon,
   MagnifyingGlassCircleIcon,
@@ -7,6 +9,7 @@ import {
   PresentationChartLineIcon,
   ClipboardDocumentListIcon,
   Cog6ToothIcon,
+  TrashIcon,
 } from "@heroicons/react/24/outline";
 import OverviewTab from "./tabs/OverviewTab";
 import AnalyticsTab from "./tabs/AnalyticsTab";
@@ -65,6 +68,22 @@ export default function SiteDetail({
                 {site.site_type}
               </span>
             )}
+            <button
+              onClick={async () => {
+                if (!confirm(`Eliminar "${site.name}"? Esta accion no se puede deshacer.`)) return;
+                try {
+                  await deleteMarketingSite(site.id);
+                  onDeleted(site.id);
+                  toast.success("Sitio eliminado");
+                } catch (e: any) {
+                  toast.error("Error: " + (e.message || ""));
+                }
+              }}
+              className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+              title="Eliminar sitio"
+            >
+              <TrashIcon className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
