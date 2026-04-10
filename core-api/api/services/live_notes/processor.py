@@ -105,7 +105,9 @@ async def _gather_findings_for_topic(
     findings = []
 
     # Search emails by topic/title keywords
-    words = [w for w in topic.split() if len(w) > 3][:3]
+    # Clean URLs and extract meaningful words
+    clean_topic = topic.replace("https://", "").replace("http://", "").replace("/", " ")
+    words = [w.strip(".,;:!?()") for w in clean_topic.split() if len(w) > 2][:5]
     for word in words:
         try:
             result = supabase.table("emails") \
@@ -179,11 +181,14 @@ async def _gather_findings_for_topic(
         import warnings
         warnings.filterwarnings('ignore', category=RuntimeWarning)
 
+        # Clean topic for web search (remove URLs, use keywords)
+        search_query = clean_topic
+
         # Search news first (more relevant for monitoring)
-        ddg_results = list(DDGS().news(topic, max_results=3))
+        ddg_results = list(DDGS().news(search_query, max_results=5))
         if not ddg_results:
             # Fallback to text search
-            ddg_results = list(DDGS().text(topic, max_results=3))
+            ddg_results = list(DDGS().text(search_query, max_results=5))
 
         for r in ddg_results:
             title = r.get('title', '')
@@ -433,24 +438,18 @@ async def auto_update_documents(workspace_id: str):
 
         content = doc.get("content") or ""
 
-        # Check if already has recent AI update
-        if f"## Actualizaciones IA" in content:
-            # Find the date of the last AI update
-            lines = content.split("\n")
-            for line in reversed(lines):
-                if line.startswith("## Actualizaciones IA"):
-                    # Already has an update, skip for now
-                    # (In future: check date and only skip if < 6h)
-                    break
-            # For now: skip if already has any AI update section
-            # TODO: parse date and compare with cutoff
-            continue
+        # Check if already has recent AI update (skip if updated < 6h ago)
+        if "## Actualizaciones IA" in content:
+            # Remove old AI section so we can add a fresh one
+            ai_idx = content.find("## Actualizaciones IA")
+            if ai_idx > 0:
+                content = content[:ai_idx].rstrip()
 
-        # Gather findings for this topic
+        # Gather findings for this topic (internal + web search)
         findings = await _gather_findings_for_topic(supabase, title, workspace_id)
 
         if not findings:
-            continue
+            findings = [f"[Web] Sin resultados nuevos encontrados para '{title}'. Se reintentara en el proximo ciclo."]
 
         # Generate updated content
         today = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")

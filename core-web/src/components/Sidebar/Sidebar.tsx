@@ -872,13 +872,32 @@ export default function Sidebar() {
         }))
     : [];
 
+  // Categorize apps into sections
+  const toolTypes = new Set(['email', 'calendar', 'files', 'messages', 'messaging', 'live-notes', 'meeting-prep']);
+  const espacioTypes = new Set(['dashboard', 'projects', 'crm', 'marketing', 'agents', 'automations', 'devops', 'knowledge', 'studio']);
+
+  const chatApp = displayMiniApps.find((a) => a.type === 'chat');
+  const toolApps = displayMiniApps.filter((a) => toolTypes.has(a.type || ''));
+  const espacioApps = displayMiniApps.filter((a) => espacioTypes.has(a.type || ''));
+  // Anything not categorized goes to espacios
+  const uncategorized = displayMiniApps.filter(
+    (a) => a.type !== 'chat' && !toolTypes.has(a.type || '') && !espacioTypes.has(a.type || '')
+  );
+
   // Icon button styles (modern sidebar)
   const iconBtn =
-    "group/icon w-10 h-10 flex items-center justify-center rounded-xl transition-all relative outline-none focus:outline-none border border-transparent backdrop-blur-md";
+    "group/icon w-[38px] h-[38px] flex items-center justify-center rounded-[9px] transition-all relative outline-none focus:outline-none border border-transparent";
   const iconBtnActive =
-    "bg-slate-900 text-white border-slate-900 shadow-[0_10px_24px_-14px_rgba(15,23,42,0.95)]";
+    "bg-brand-primary/[.13] text-brand-primary border-brand-primary/[.22]";
   const iconBtnInactive =
-    "text-slate-600 hover:text-slate-900 hover:bg-white/80 hover:border-[#cfdbeb]";
+    "text-text-tertiary hover:text-text-secondary hover:bg-bg-gray hover:border-border-light";
+
+  // Section label style
+  const sectionLabel =
+    "font-display text-[7.5px] font-bold tracking-[0.13em] uppercase text-text-tertiary mt-1 mb-0.5";
+  // Separator
+  const sectionSep =
+    "w-7 h-px bg-border-gray my-1.5";
 
   return (
     <>

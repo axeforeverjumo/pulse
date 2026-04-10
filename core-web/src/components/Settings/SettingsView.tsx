@@ -10,6 +10,38 @@ import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useThemeStore, type Theme } from '../../stores/themeStore';
 import ServersSettings from './ServersSettings';
 
+const themeOptions: { value: Theme; label: string; icon: string; preview: string }[] = [
+  { value: 'light', label: 'Claro', icon: '☀️', preview: 'bg-gradient-to-br from-[#f6fbff] to-[#edf4fb]' },
+  { value: 'dark', label: 'Oscuro', icon: '🌙', preview: 'bg-gradient-to-br from-[#08090c] to-[#0f1117]' },
+  { value: 'system', label: 'Sistema', icon: '💻', preview: 'bg-gradient-to-br from-[#f6fbff] via-[#64748b] to-[#0f1117]' },
+];
+
+function ThemeSelector() {
+  const { theme, setTheme } = useThemeStore();
+
+  return (
+    <div className="flex gap-3">
+      {themeOptions.map((opt) => (
+        <button
+          key={opt.value}
+          onClick={() => setTheme(opt.value)}
+          className={`flex-1 flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all ${
+            theme === opt.value
+              ? 'border-brand-primary ring-2 ring-brand-primary/20'
+              : 'border-border-light hover:border-border-gray'
+          }`}
+        >
+          <div className={`w-full h-14 rounded-lg ${opt.preview} border border-border-light`} />
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs">{opt.icon}</span>
+            <span className="text-xs font-medium text-text-body">{opt.label}</span>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 interface SettingsViewProps {
   isOpen: boolean;
   onClose: () => void;

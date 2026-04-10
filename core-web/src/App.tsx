@@ -126,38 +126,31 @@ function AppErrorFallback({
 function RouteLoading() {
   return (
     <div className="flex-1 flex h-full overflow-hidden">
-      {/* Skeleton for mini app content area */}
-      <div className="flex-1 flex overflow-hidden bg-[#f7fbff]">
-        {/* Skeleton sidebar */}
-        <div className="w-[212px] shrink-0 bg-[#edf4fb] border-r border-[#d9e6f5] p-3">
-          {/* Sidebar header */}
-          <div className="h-5 w-24 bg-[#d3dfef] rounded-full animate-pulse mb-4" />
-          {/* Sidebar items */}
+      <div className="flex-1 flex overflow-hidden bg-bg-light">
+        <div className="w-[212px] shrink-0 bg-bg-shell border-r border-border-light p-3">
+          <div className="h-5 w-24 bg-bg-gray-dark rounded-full animate-pulse mb-4" />
           <div className="space-y-1">
             {[...Array(8)].map((_, i) => (
               <div key={i} className="flex items-center gap-2 h-[35px] px-2">
-                <div className="w-4 h-4 bg-[#d3dfef] rounded animate-pulse" />
-                <div className="flex-1 h-3 bg-[#d3dfef] rounded-full animate-pulse" />
+                <div className="w-4 h-4 bg-bg-gray-dark rounded animate-pulse" />
+                <div className="flex-1 h-3 bg-bg-gray-dark rounded-full animate-pulse" />
               </div>
             ))}
           </div>
         </div>
-        {/* Skeleton main content */}
         <div className="flex-1 p-6">
-          {/* Header */}
-          <div className="h-6 w-48 bg-[#dde8f6] rounded-full animate-pulse mb-6" />
-          {/* Content blocks */}
+          <div className="h-6 w-48 bg-bg-gray-dark rounded-full animate-pulse mb-6" />
           <div className="space-y-6">
             {[...Array(4)].map((_, i) => (
               <div key={i} className="flex gap-3">
-                <div className="w-10 h-10 bg-[#dde8f6] rounded-xl animate-pulse shrink-0" />
+                <div className="w-10 h-10 bg-bg-gray-dark rounded-xl animate-pulse shrink-0" />
                 <div className="flex-1 space-y-2">
                   <div className="flex items-center gap-2">
-                    <div className="h-3.5 w-24 bg-[#dde8f6] rounded-full animate-pulse" />
-                    <div className="h-2.5 w-12 bg-[#eaf1fa] rounded-full animate-pulse" />
+                    <div className="h-3.5 w-24 bg-bg-gray-dark rounded-full animate-pulse" />
+                    <div className="h-2.5 w-12 bg-bg-gray rounded-full animate-pulse" />
                   </div>
-                  <div className="h-3 w-full bg-[#dde8f6] rounded-full animate-pulse" />
-                  <div className="h-3 w-3/4 bg-[#dde8f6] rounded-full animate-pulse" />
+                  <div className="h-3 w-full bg-bg-gray-dark rounded-full animate-pulse" />
+                  <div className="h-3 w-3/4 bg-bg-gray-dark rounded-full animate-pulse" />
                 </div>
               </div>
             ))}
@@ -170,17 +163,14 @@ function RouteLoading() {
 
 function SidebarSkeleton() {
   return (
-    <div className="w-16 shrink-0 bg-gradient-to-b from-[#e9f1fb] via-[#f2f8ff] to-[#edf4fd] border-r border-[#dce8f5] flex flex-col items-center py-3 gap-3">
-      {/* Logo placeholder */}
-      <div className="w-10 h-10 rounded-xl bg-[#cddcf0] animate-pulse" />
-      {/* Icon placeholders */}
+    <div className="sidebar-main w-16 shrink-0 bg-gradient-to-b from-[#e9f1fb] via-[#f2f8ff] to-[#edf4fd] border-r border-border-light flex flex-col items-center py-3 gap-3">
+      <div className="w-10 h-10 rounded-xl bg-bg-gray-dark animate-pulse" />
       <div className="flex-1 flex flex-col items-center gap-2 mt-4">
         {[...Array(6)].map((_, i) => (
-          <div key={i} className="w-10 h-10 rounded-xl bg-[#d7e5f4] animate-pulse" />
+          <div key={i} className="w-10 h-10 rounded-xl bg-bg-gray-dark animate-pulse" />
         ))}
       </div>
-      {/* Bottom icon placeholder */}
-      <div className="w-10 h-10 rounded-xl bg-[#d7e5f4] animate-pulse" />
+      <div className="w-10 h-10 rounded-xl bg-bg-gray-dark animate-pulse" />
     </div>
   );
 }

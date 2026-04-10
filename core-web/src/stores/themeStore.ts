@@ -18,7 +18,7 @@ const resolve = (theme: Theme): 'light' | 'dark' =>
 
 export const useThemeStore = create<ThemeState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       theme: 'light',
       resolvedTheme: 'light',
       setTheme: (theme) => set({ theme, resolvedTheme: resolve(theme) }),

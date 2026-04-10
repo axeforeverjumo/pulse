@@ -583,7 +583,7 @@ export default function SidebarChat() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-white overflow-hidden min-w-[340px]">
+    <div className="h-full flex flex-col bg-bg-white overflow-hidden min-w-[340px]">
       {/* Header */}
       <div className="shrink-0">
         <div className="h-12 flex items-center justify-between pl-4 pr-2">
