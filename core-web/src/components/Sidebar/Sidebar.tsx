@@ -1159,12 +1159,34 @@ export default function Sidebar() {
         </div>
 
 
-        {/* Navigation Icons - Workspace apps */}
+        {/* Navigation Icons - Organized in sections */}
         {activeProductType === 'workspace' && (
-        <div className="flex-1 flex flex-col items-center gap-2 overflow-y-auto px-1 pt-1 -mx-1 -mt-1">
-          {/* Workspace-specific mini apps - at top */}
-          {displayMiniApps.filter((app) => app.type !== 'email' && app.type !== 'calendar').map((app) => {
-            // Check both the direct path and any workspace-prefixed variant
+        <div className="flex-1 flex flex-col items-center gap-[3px] overflow-y-auto px-1 pt-0.5 -mx-1">
+
+          {/* ── Chat (top, standalone) ── */}
+          {chatApp && (() => {
+            const isItemActive = isActivePath(chatApp.path) || !!(
+              targetWorkspace && location.pathname.match(new RegExp(`/workspace/[^/]+/${chatApp.type}(/|$)`))
+            );
+            return (
+              <div className="relative mb-1.5">
+                <button
+                  onClick={() => { setActiveConversationId(null); navigate(chatApp.path); }}
+                  onMouseEnter={() => prefetchView(chatApp.type || chatApp.id, chatApp.id, targetWorkspace?.id)}
+                  className={`${iconBtn} ${isItemActive ? iconBtnActive : iconBtnInactive}`}
+                >
+                  <Icon icon={chatApp.icon} size={18} active={isItemActive} />
+                  <span className="sidebar-tooltip">{chatApp.name}</span>
+                </button>
+              </div>
+            );
+          })()}
+
+          <div className={sectionSep} />
+          <span className={sectionLabel}>Tools</span>
+
+          {/* ── Tools section ── */}
+          {toolApps.map((app) => {
             const isItemActive = isActivePath(app.path) || !!(
               targetWorkspace && location.pathname.match(new RegExp(`/workspace/[^/]+/${app.type}(/|$)`))
             );
@@ -1172,36 +1194,50 @@ export default function Sidebar() {
               ? (() => {
                   const cache = workspaceCache[app.id];
                   if (!cache) return false;
-                  const channelIds = [
-                    ...(cache.channels || []),
-                    ...(cache.dms || []),
-                  ].map((c) => c.id);
+                  const channelIds = [...(cache.channels || []), ...(cache.dms || [])].map((c) => c.id);
                   return channelIds.some((id) => unreadCounts[id] > 0);
                 })()
               : app.type === "messaging"
                 ? ((targetWorkspace && (messagingUnreadByWorkspace[targetWorkspace.id] || 0) > 0) || false)
                 : false;
-
             return (
               <div key={app.id} className="relative">
                 <button
-                  onClick={() => {
-                    if (app.type === 'chat') setActiveConversationId(null);
-                    navigate(app.path);
-                  }}
+                  onClick={() => navigate(app.path)}
                   onMouseEnter={() => prefetchView(app.type || app.id, app.id, targetWorkspace?.id)}
                   title={app.name}
                   className={`${iconBtn} ${isItemActive ? iconBtnActive : iconBtnInactive}`}
                 >
-                  <Icon icon={app.icon} size={20} active={isItemActive} />
+                  <Icon icon={app.icon} size={18} active={isItemActive} />
                 </button>
                 {hasUnread && (
-                  <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-[#e8f1fc]" />
+                  <span className="absolute top-[5px] right-[5px] w-[7px] h-[7px] rounded-full bg-red-500 border-[1.5px] border-bg-main-sidebar" />
                 )}
               </div>
             );
           })}
 
+          <div className={sectionSep} />
+          <span className={sectionLabel}>Espacios</span>
+
+          {/* ── Espacios section ── */}
+          {[...espacioApps, ...uncategorized].map((app) => {
+            const isItemActive = isActivePath(app.path) || !!(
+              targetWorkspace && location.pathname.match(new RegExp(`/workspace/[^/]+/${app.type}(/|$)`))
+            );
+            return (
+              <div key={app.id} className="relative">
+                <button
+                  onClick={() => navigate(app.path)}
+                  onMouseEnter={() => prefetchView(app.type || app.id, app.id, targetWorkspace?.id)}
+                  title={app.name}
+                  className={`${iconBtn} ${isItemActive ? iconBtnActive : iconBtnInactive}`}
+                >
+                  <Icon icon={app.icon} size={18} active={isItemActive} />
+                </button>
+              </div>
+            );
+          })}
 
         </div>
         )}
@@ -1233,40 +1269,15 @@ export default function Sidebar() {
         )}
 
         {/* Bottom section */}
-        <div className="flex flex-col items-center gap-2 mt-2">
-          {/* Pinned: Email & Calendar — always visible */}
-          {(() => {
-            const isEmailActive = isActivePath('/email') || !!location.pathname.match(/\/workspace\/[^/]+\/email(\/|$)/);
-            const isCalendarActive = isActivePath('/calendar') || !!location.pathname.match(/\/workspace\/[^/]+\/calendar(\/|$)/);
-            return (
-              <>
-                <button
-                  onClick={() => navigate(targetWorkspace && !targetWorkspace.isDefault ? `/workspace/${targetWorkspace.id}/email` : '/email')}
-                  onMouseEnter={() => prefetchView('email', 'email', targetWorkspace?.id)}
-                  title="Correo"
-                  className={`${iconBtn} ${isEmailActive ? iconBtnActive : iconBtnInactive}`}
-                >
-                  <Icon icon={Mail} size={20} active={isEmailActive} />
-                </button>
-                <button
-                  onClick={() => navigate(targetWorkspace && !targetWorkspace.isDefault ? `/workspace/${targetWorkspace.id}/calendar` : '/calendar')}
-                  onMouseEnter={() => prefetchView('calendar', 'calendar', targetWorkspace?.id)}
-                  title="Calendario"
-                  className={`${iconBtn} ${isCalendarActive ? iconBtnActive : iconBtnInactive}`}
-                >
-                  <Icon icon={Calendar} size={20} active={isCalendarActive} />
-                </button>
-              </>
-            );
-          })()}
+        <div className="flex flex-col items-center gap-2 mt-auto pt-2 border-t border-border-light w-full">
           {/* Settings - workspace only */}
           {activeProductType === 'workspace' && targetWorkspace && (
             <button
               onClick={() => openWorkspaceSettingsModal(targetWorkspace.id, "members")}
-              title="Configuración del espacio de trabajo"
+              title="Ajustes"
               className={`${iconBtn} ${iconBtnInactive}`}
             >
-              <Icon icon={Settings} size={20} />
+              <Icon icon={Settings} size={18} />
             </button>
           )}
 

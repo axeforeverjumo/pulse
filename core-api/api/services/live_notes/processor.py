@@ -178,8 +178,11 @@ async def _gather_findings_for_topic(
     # Web Search — DuckDuckGo (free, no API key needed)
     try:
         from duckduckgo_search import DDGS
-        import warnings
+        import warnings, asyncio
         warnings.filterwarnings('ignore', category=RuntimeWarning)
+
+        # Rate limit: wait 2s between DDG requests to avoid 403
+        await asyncio.sleep(2)
 
         # Clean topic for web search (remove URLs, use keywords)
         search_query = clean_topic
@@ -187,6 +190,7 @@ async def _gather_findings_for_topic(
         # Search news first (more relevant for monitoring)
         ddg_results = list(DDGS().news(search_query, max_results=5))
         if not ddg_results:
+            await asyncio.sleep(1)
             # Fallback to text search
             ddg_results = list(DDGS().text(search_query, max_results=5))
 
@@ -433,8 +437,8 @@ async def auto_update_documents(workspace_id: str):
     results = []
     for doc in docs.data:
         title = doc.get("title", "").strip()
-        if not title or title.startswith("Daily Brief"):
-            continue  # Skip untitled and daily briefs (handled separately)
+        if not title or title.startswith("Daily Brief") or title.startswith("Welcome to"):
+            continue  # Skip untitled, daily briefs, and welcome notes
 
         content = doc.get("content") or ""
 
