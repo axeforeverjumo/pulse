@@ -33,7 +33,7 @@ interface Props {
   onSiteUpdated?: (site: any) => void;
 }
 
-export default function OverviewTab({ site, onSiteUpdated }: Props) {
+export default function OverviewTab({ site, workspaceId, onSiteUpdated }: Props) {
   const [googleAuth, setGoogleAuth] = useState<{ connected: boolean; email?: string } | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [ga4Properties, setGa4Properties] = useState<any[]>([]);
