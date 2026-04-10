@@ -29,19 +29,25 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
     fetchGraph(workspaceId);
   }, [workspaceId]);
 
-  // Responsive resize
+  // Responsive resize — measure after mount + layout settle
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     const measure = () => {
       const rect = container.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        setDimensions({ width: rect.width, height: rect.height });
+      if (rect.width > 10 && rect.height > 10) {
+        setDimensions({ width: Math.floor(rect.width), height: Math.floor(rect.height) });
       }
     };
 
-    measure();
+    // Measure after a frame to ensure layout has settled
+    requestAnimationFrame(() => {
+      measure();
+      // And again after a short delay for lazy-loaded containers
+      setTimeout(measure, 100);
+    });
+
     const obs = new ResizeObserver(measure);
     obs.observe(container);
     return () => obs.disconnect();
@@ -336,7 +342,7 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
   }
 
   return (
-    <div ref={containerRef} className="relative w-full h-full">
+    <div ref={containerRef} className="relative w-full h-full min-h-[400px]">
       {/* Loading overlay during simulation */}
       {!ready && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/80 backdrop-blur-sm">

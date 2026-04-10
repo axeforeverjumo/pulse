@@ -122,7 +122,7 @@ export default function KnowledgeView() {
 
           {/* Content */}
           <div className="flex flex-1 min-h-0 overflow-hidden">
-            <div className="flex-1 overflow-auto">
+            <div className={`flex-1 ${activeView === 'graph' ? 'overflow-hidden' : 'overflow-auto'}`}>
               {activeView === 'graph' && workspaceId && (
                 <GraphVisualization
                   workspaceId={workspaceId}
