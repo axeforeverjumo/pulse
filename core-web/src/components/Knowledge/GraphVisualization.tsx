@@ -18,270 +18,183 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
   const { graphData, isLoading, fetchGraph } = useKnowledgeStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-  const dimsRef = useRef({ width: 0, height: 0 });
   const [hoveredNode, setHoveredNode] = useState<any>(null);
   const nodesRef = useRef<any[]>([]);
   const linksRef = useRef<any[]>([]);
-  const animRef = useRef<number>(0);
-  const [ready, setReady] = useState(false);
+  const drawnRef = useRef(false);
 
+  useEffect(() => { fetchGraph(workspaceId); }, [workspaceId]);
+
+  // Single effect: when graphData arrives, wait for container to have size, then compute + draw
   useEffect(() => {
-    fetchGraph(workspaceId);
-  }, [workspaceId]);
+    if (!graphData.nodes.length) return;
+    drawnRef.current = false;
 
-  // Responsive resize — measure after mount + layout settle
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+    const tryRender = () => {
+      const container = containerRef.current;
+      const canvas = canvasRef.current;
+      if (!container || !canvas || drawnRef.current) return;
 
-    const measure = () => {
       const rect = container.getBoundingClientRect();
-      if (rect.width > 10 && rect.height > 10) {
-        const d = { width: Math.floor(rect.width), height: Math.floor(rect.height) };
-        dimsRef.current = d;
-        setDimensions(d);
+      const width = Math.floor(rect.width);
+      const height = Math.floor(rect.height);
+      if (width < 100 || height < 100) {
+        // Container not ready, retry
+        requestAnimationFrame(tryRender);
+        return;
       }
-    };
 
-    // Measure after a frame to ensure layout has settled
-    requestAnimationFrame(() => {
-      measure();
-      // And again after a short delay for lazy-loaded containers
-      setTimeout(measure, 100);
-    });
+      // --- COMPUTE ---
+      const PADDING = 60;
+      const cx = width / 2;
+      const cy = height / 2;
 
-    const obs = new ResizeObserver(measure);
-    obs.observe(container);
-    return () => obs.disconnect();
-  }, []);
+      const maxNodes = Math.min(graphData.nodes.length, 60);
+      const topNodes = [...graphData.nodes]
+        .sort((a, b) => (b.val || 1) - (a.val || 1))
+        .slice(0, maxNodes);
+      const topIds = new Set(topNodes.map(n => n.id));
 
-  // Force simulation
-  useEffect(() => {
-    if (!graphData.nodes.length || dimensions.width < 100) return;
+      // Init positions in circle
+      const nodes = topNodes.map((n, i) => {
+        const angle = (i / topNodes.length) * Math.PI * 2;
+        const r = Math.min(width, height) * 0.3;
+        return {
+          ...n,
+          x: cx + Math.cos(angle) * r + (Math.random() - 0.5) * 40,
+          y: cy + Math.sin(angle) * r + (Math.random() - 0.5) * 40,
+          vx: 0, vy: 0,
+          radius: Math.max(5, Math.min(22, 3 + Math.sqrt(n.val || 1) * 2.5)),
+        };
+      });
 
-    const PADDING = 80;
-    const { width, height } = dimensions;
-    const cx = width / 2;
-    const cy = height / 2;
-    const usableW = width - PADDING * 2;
-    const usableH = height - PADDING * 2;
+      const nodeMap = new Map(nodes.map(n => [n.id, n]));
+      const links = graphData.links
+        .filter(l => topIds.has(l.source) && topIds.has(l.target))
+        .map(l => ({ ...l, s: nodeMap.get(l.source)!, t: nodeMap.get(l.target)! }))
+        .filter(l => l.s && l.t);
 
-    // Limit visible nodes for performance (50 max for instant rendering)
-    const maxNodes = Math.min(graphData.nodes.length, 50);
-    const topNodes = [...graphData.nodes]
-      .sort((a, b) => (b.val || 1) - (a.val || 1))
-      .slice(0, maxNodes);
-    const topIds = new Set(topNodes.map(n => n.id));
+      // Force simulation: 30 iterations, synchronous
+      for (let iter = 0; iter < 30; iter++) {
+        const alpha = Math.pow(1 - iter / 30, 1.5);
 
-    // Initialize positions in a circle with jitter
-    nodesRef.current = topNodes.map((n, i) => {
-      const angle = (i / topNodes.length) * Math.PI * 2;
-      const r = Math.min(usableW, usableH) * 0.35;
-      return {
-        ...n,
-        x: cx + Math.cos(angle) * r + (Math.random() - 0.5) * 60,
-        y: cy + Math.sin(angle) * r + (Math.random() - 0.5) * 60,
-        vx: 0,
-        vy: 0,
-        radius: Math.max(5, Math.min(24, 3 + Math.sqrt(n.val || 1) * 2.5)),
-      };
-    });
-
-    const nodeMap = new Map(nodesRef.current.map(n => [n.id, n]));
-
-    linksRef.current = graphData.links
-      .filter(l => topIds.has(l.source) && topIds.has(l.target))
-      .map(l => ({
-        ...l,
-        sourceNode: nodeMap.get(l.source),
-        targetNode: nodeMap.get(l.target),
-      }))
-      .filter(l => l.sourceNode && l.targetNode);
-
-    let iter = 0;
-    const maxIter = 40; // Very fast: 50 nodes × 40 iters = instant
-
-    // Run simulation synchronously (much faster than per-frame)
-    const runSimulation = () => {
-      try {
-      const nodes = nodesRef.current;
-      const links = linksRef.current;
-
-      for (iter = 0; iter < maxIter; iter++) {
-        const alpha = Math.pow(1 - iter / maxIter, 1.5);
-
-        // Repulsion — sample pairs for speed
+        // Repulsion
         for (let i = 0; i < nodes.length; i++) {
           for (let j = i + 1; j < nodes.length; j++) {
             const dx = nodes[j].x - nodes[i].x;
             const dy = nodes[j].y - nodes[i].y;
             const distSq = dx * dx + dy * dy;
-            if (distSq > 40000) continue;
+            if (distSq > 50000) continue;
             const dist = Math.max(1, Math.sqrt(distSq));
-            const force = (150 * alpha) / dist;
-            const fx = (dx / dist) * force;
-            const fy = (dy / dist) * force;
-            nodes[i].vx -= fx;
-            nodes[i].vy -= fy;
-            nodes[j].vx += fx;
-            nodes[j].vy += fy;
+            const f = (120 * alpha) / dist;
+            const fx = (dx / dist) * f;
+            const fy = (dy / dist) * f;
+            nodes[i].vx -= fx; nodes[i].vy -= fy;
+            nodes[j].vx += fx; nodes[j].vy += fy;
           }
         }
 
-      // Attraction along links
-      for (const link of links) {
-        const s = link.sourceNode;
-        const t = link.targetNode;
-        const dx = t.x - s.x;
-        const dy = t.y - s.y;
-        const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
-        const idealDist = 80 + (s.radius + t.radius);
-        const force = (dist - idealDist) * 0.008 * alpha;
-        const fx = (dx / dist) * force;
-        const fy = (dy / dist) * force;
-        s.vx += fx;
-        s.vy += fy;
-        t.vx -= fx;
-        t.vy -= fy;
-      }
-
-        // Centering
-        for (const node of nodes) {
-          node.vx += (cx - node.x) * 0.004 * alpha;
-          node.vy += (cy - node.y) * 0.004 * alpha;
+        // Attraction
+        for (const { s, t } of links) {
+          const dx = t.x - s.x;
+          const dy = t.y - s.y;
+          const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+          const f = (dist - 80) * 0.006 * alpha;
+          const fx = (dx / dist) * f;
+          const fy = (dy / dist) * f;
+          s.vx += fx; s.vy += fy;
+          t.vx -= fx; t.vy -= fy;
         }
 
-        // Apply + clamp
-        for (const node of nodes) {
-          node.vx *= 0.5;
-          node.vy *= 0.5;
-          node.x += node.vx;
-          node.y += node.vy;
-          node.x = Math.max(PADDING + node.radius, Math.min(width - PADDING - node.radius, node.x));
-          node.y = Math.max(PADDING + node.radius, Math.min(height - PADDING - node.radius, node.y));
+        // Center + apply
+        for (const n of nodes) {
+          n.vx += (cx - n.x) * 0.005 * alpha;
+          n.vy += (cy - n.y) * 0.005 * alpha;
+          n.vx *= 0.5; n.vy *= 0.5;
+          n.x += n.vx; n.y += n.vy;
+          n.x = Math.max(PADDING + n.radius, Math.min(width - PADDING - n.radius, n.x));
+          n.y = Math.max(PADDING + n.radius, Math.min(height - PADDING - n.radius, n.y));
         }
-      } // end for loop
-
-      setReady(true);
-      draw();
-      } catch (e) {
-        console.error('[GraphVisualization] Simulation error:', e);
-        setReady(true);
-      }
-    };
-
-    setReady(false);
-    // setTimeout lets React paint the loading overlay first, then we compute
-    const timer = setTimeout(runSimulation, 50);
-
-    return () => clearTimeout(timer);
-  }, [graphData, dimensions]);
-
-  const draw = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const { width, height } = dimsRef.current;
-    if (width < 10 || height < 10) return;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = width * dpr;
-    canvas.height = height * dpr;
-    ctx.scale(dpr, dpr);
-
-    // Clear with subtle gradient
-    const grad = ctx.createLinearGradient(0, 0, 0, height);
-    grad.addColorStop(0, '#fafbff');
-    grad.addColorStop(1, '#f5f7fb');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
-
-    const nodes = nodesRef.current;
-    const links = linksRef.current;
-
-    // Draw links
-    ctx.globalAlpha = 0.15;
-    for (const link of links) {
-      const s = link.sourceNode;
-      const t = link.targetNode;
-      ctx.beginPath();
-      ctx.moveTo(s.x, s.y);
-      ctx.lineTo(t.x, t.y);
-      ctx.strokeStyle = '#94a3b8';
-      ctx.lineWidth = Math.max(0.5, (link.strength || 0.5) * 1.5);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-
-    // Draw nodes
-    for (const node of nodes) {
-      const color = typeColors[node.type] || '#6b7280';
-      const isHovered = hoveredNode?.id === node.id;
-
-      // Shadow for larger nodes
-      if (node.radius > 8) {
-        ctx.beginPath();
-        ctx.arc(node.x, node.y + 2, node.radius + 1, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0,0,0,0.06)';
-        ctx.fill();
       }
 
-      // Hover glow
-      if (isHovered) {
+      nodesRef.current = nodes;
+      linksRef.current = links;
+
+      // --- DRAW ---
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
+      const ctx = canvas.getContext('2d')!;
+      ctx.scale(dpr, dpr);
+
+      // Background gradient
+      const grad = ctx.createLinearGradient(0, 0, 0, height);
+      grad.addColorStop(0, '#fafbff');
+      grad.addColorStop(1, '#f5f7fb');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, width, height);
+
+      // Links
+      ctx.globalAlpha = 0.12;
+      for (const { s, t, strength } of links) {
         ctx.beginPath();
-        ctx.arc(node.x, node.y, node.radius + 6, 0, Math.PI * 2);
-        ctx.fillStyle = color + '20';
+        ctx.moveTo(s.x, s.y);
+        ctx.lineTo(t.x, t.y);
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = Math.max(0.5, (strength || 0.5) * 1.5);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      // Nodes
+      for (const node of nodes) {
+        const color = typeColors[node.type] || '#6b7280';
+
+        // Shadow
+        if (node.radius > 7) {
+          ctx.beginPath();
+          ctx.arc(node.x, node.y + 2, node.radius + 1, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(0,0,0,0.05)';
+          ctx.fill();
+        }
+
+        // Circle
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+        ctx.fillStyle = color;
         ctx.fill();
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, node.radius + 2, 0, Math.PI * 2);
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+        ctx.lineWidth = 1;
         ctx.stroke();
       }
 
-      // Node circle
-      ctx.beginPath();
-      ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.fill();
+      // Labels (only for nodes radius > 6)
+      ctx.textAlign = 'center';
+      for (const node of nodes) {
+        if (node.radius <= 6) continue;
+        const label = node.name.length > 16 ? node.name.slice(0, 15) + '...' : node.name;
+        const fontSize = node.radius > 12 ? 10 : 9;
+        ctx.font = `500 ${fontSize}px Inter, system-ui, sans-serif`;
+        const textY = node.y + node.radius + 11;
 
-      // White border for polish
-      ctx.beginPath();
-      ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
+        // Background pill
+        const tw = ctx.measureText(label).width + 6;
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.fillRect(node.x - tw / 2, textY - fontSize / 2 - 2, tw, fontSize + 4);
 
-    // Draw labels (only for visible/larger nodes or hovered)
-    ctx.textAlign = 'center';
-    for (const node of nodes) {
-      const isHovered = hoveredNode?.id === node.id;
-      const showLabel = node.radius > 6 || isHovered;
-      if (!showLabel) continue;
+        ctx.fillStyle = '#334155';
+        ctx.fillText(label, node.x, textY + 2);
+      }
 
-      const fontSize = isHovered ? 11 : node.radius > 12 ? 10 : 9;
-      ctx.font = `${isHovered ? '600' : '500'} ${fontSize}px Inter, system-ui, sans-serif`;
+      drawnRef.current = true;
+    };
 
-      const label = node.name.length > 18 ? node.name.slice(0, 17) + '...' : node.name;
-
-      // Text background pill
-      const metrics = ctx.measureText(label);
-      const textW = metrics.width + 8;
-      const textH = fontSize + 4;
-      const textY = node.y + node.radius + 10;
-
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
-      ctx.beginPath();
-      ctx.roundRect(node.x - textW / 2, textY - textH / 2, textW, textH, 3);
-      ctx.fill();
-
-      ctx.fillStyle = '#334155';
-      ctx.fillText(label, node.x, textY + fontSize * 0.35 - 1);
-    }
-  }, [hoveredNode]);
+    // Start trying to render after a short delay
+    const timer = setTimeout(() => requestAnimationFrame(tryRender), 100);
+    return () => clearTimeout(timer);
+  }, [graphData]);
 
   // Mouse events
   const handleClick = (e: React.MouseEvent) => {
@@ -289,11 +202,9 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
     if (!rect) return;
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-
     for (const node of nodesRef.current) {
-      const dx = x - node.x;
-      const dy = y - node.y;
-      if (dx * dx + dy * dy < (node.radius + 4) ** 2) {
+      const dx = x - node.x, dy = y - node.y;
+      if (dx * dx + dy * dy < (node.radius + 5) ** 2) {
         onSelectEntity(node);
         return;
       }
@@ -305,30 +216,21 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
     if (!rect) return;
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-
     let found = null;
     for (const node of nodesRef.current) {
-      const dx = x - node.x;
-      const dy = y - node.y;
-      if (dx * dx + dy * dy < (node.radius + 6) ** 2) {
-        found = node;
-        break;
-      }
+      const dx = x - node.x, dy = y - node.y;
+      if (dx * dx + dy * dy < (node.radius + 6) ** 2) { found = node; break; }
     }
-    if (found !== hoveredNode) {
-      setHoveredNode(found);
-      if (canvasRef.current) {
-        canvasRef.current.style.cursor = found ? 'pointer' : 'default';
-      }
-    }
+    setHoveredNode(found);
+    if (canvasRef.current) canvasRef.current.style.cursor = found ? 'pointer' : 'default';
   };
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <div className="w-10 h-10 rounded-full border-2 border-slate-200 border-t-slate-600 animate-spin mx-auto mb-3" />
-          <p className="text-sm text-slate-500">Cargando grafo...</p>
+          <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin mx-auto mb-2" />
+          <p className="text-xs text-slate-500">Cargando grafo...</p>
         </div>
       </div>
     );
@@ -339,7 +241,7 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
       <div className="flex items-center justify-center h-full">
         <div className="text-center max-w-sm">
           <p className="text-sm text-slate-500 mb-2">El Knowledge Graph esta vacio.</p>
-          <p className="text-xs text-slate-400">Ejecuta un Build para extraer entidades de tus emails y calendario.</p>
+          <p className="text-xs text-slate-400">Ejecuta un Build para extraer entidades.</p>
         </div>
       </div>
     );
@@ -347,18 +249,9 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
 
   return (
     <div ref={containerRef} className="relative w-full h-full min-h-[400px]">
-      {/* Loading overlay during simulation */}
-      {!ready && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/80 backdrop-blur-sm">
-          <div className="text-center">
-            <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin mx-auto mb-2" />
-            <p className="text-xs text-slate-500">Calculando layout ({Math.min(graphData.nodes.length, 150)} de {graphData.nodes.length} entidades)...</p>
-          </div>
-        </div>
-      )}
       <canvas
         ref={canvasRef}
-        className="absolute inset-0 w-full h-full"
+        className="absolute inset-0"
         onClick={handleClick}
         onMouseMove={handleMouseMove}
       />
@@ -371,7 +264,7 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
           </div>
         ))}
         <span className="text-[10px] text-slate-400 ml-2">
-          {nodesRef.current.length}/{graphData.nodes.length} mostrados
+          {nodesRef.current.length}/{graphData.nodes.length}
         </span>
       </div>
     </div>
