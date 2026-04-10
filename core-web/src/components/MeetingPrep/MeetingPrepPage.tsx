@@ -59,7 +59,16 @@ export default function MeetingPrepPage() {
     if (!workspaceId) return;
     setLoading(true);
     api<any>(`/calendar/events?workspace_id=${workspaceId}`)
-      .then((data) => setEvents(Array.isArray(data) ? data : data?.events || []))
+      .then((data) => {
+        const events = Array.isArray(data) ? data : data?.events || [];
+        // Sort by start_time descending (most recent/upcoming first)
+        events.sort((a: any, b: any) => {
+          const da = new Date(b.start_time || 0).getTime();
+          const db = new Date(a.start_time || 0).getTime();
+          return da - db;
+        });
+        setEvents(events);
+      })
       .catch(() => setEvents([]))
       .finally(() => setLoading(false));
   }, [workspaceId]);
