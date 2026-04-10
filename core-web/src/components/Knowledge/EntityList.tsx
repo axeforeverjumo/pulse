@@ -16,10 +16,10 @@ const typeIcons: Record<string, any> = {
 };
 
 const typeColors: Record<string, string> = {
-  person: 'bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400',
-  organization: 'bg-purple-100 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400',
-  project: 'bg-green-100 text-green-600 dark:bg-green-500/10 dark:text-green-400',
-  topic: 'bg-amber-100 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400',
+  person: 'bg-blue-100 text-blue-600 dark:text-blue-400',
+  organization: 'bg-purple-100 text-purple-600 dark:text-purple-400',
+  project: 'bg-green-100 text-green-600 dark:text-green-400',
+  topic: 'bg-amber-100 text-amber-600 dark:text-amber-400',
 };
 
 interface Props {
@@ -49,7 +49,7 @@ export default function EntityList({ workspaceId, entityType, onSelectEntity }: 
           placeholder={`Buscar ${entityType}s...`}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-2 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+          className="w-full pl-10 pr-4 py-2 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg bg-white text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
         />
       </div>
 

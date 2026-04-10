@@ -153,7 +153,7 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
     ctx.scale(dpr, dpr);
 
     // Clear
-    ctx.fillStyle = document.documentElement.classList.contains('dark') ? '#09090b' : '#ffffff';
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
 
     const nodes = nodesRef.current;
@@ -166,7 +166,7 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
       ctx.beginPath();
       ctx.moveTo(s.x, s.y);
       ctx.lineTo(t.x, t.y);
-      ctx.strokeStyle = document.documentElement.classList.contains('dark') ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+      ctx.strokeStyle = 'rgba(0,0,0,0.06)';
       ctx.lineWidth = Math.max(0.5, (link.strength || 0.5) * 2);
       ctx.stroke();
     }
@@ -191,7 +191,7 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
       ctx.fill();
 
       // Label
-      ctx.fillStyle = document.documentElement.classList.contains('dark') ? '#d4d4d8' : '#3f3f46';
+      ctx.fillStyle = '#334155';
       ctx.font = `${isHovered ? 'bold ' : ''}${isHovered ? 11 : 9}px Inter, system-ui, sans-serif`;
       ctx.textAlign = 'center';
       const label = node.name.length > 15 ? node.name.slice(0, 14) + '...' : node.name;
@@ -270,7 +270,7 @@ export default function GraphVisualization({ workspaceId, onSelectEntity }: Prop
         onMouseMove={handleMouseMove}
       />
       {/* Legend */}
-      <div className="absolute bottom-4 left-4 flex gap-3 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm rounded-lg px-3 py-2 border border-zinc-200 dark:border-zinc-800">
+      <div className="absolute bottom-4 left-4 flex gap-3 bg-white/80 backdrop-blur-sm rounded-lg px-3 py-2 border border-zinc-200 dark:border-zinc-800">
         {Object.entries(typeColors).map(([type, color]) => (
           <div key={type} className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />

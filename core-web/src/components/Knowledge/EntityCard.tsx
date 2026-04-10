@@ -64,7 +64,7 @@ export default function EntityCard({ entity, workspaceId }: Props) {
     <div className="p-4 space-y-4">
       {/* Type badge */}
       <div className="flex items-center gap-2">
-        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
+        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 dark:text-indigo-400">
           {data.entity_type}
         </span>
         {data.mentions_count > 0 && (
@@ -107,7 +107,7 @@ export default function EntityCard({ entity, workspaceId }: Props) {
         {meta.keywords && meta.keywords.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1">
             {meta.keywords.map((kw: string, i: number) => (
-              <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
+              <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600 dark:text-zinc-400">
                 {kw}
               </span>
             ))}
@@ -176,7 +176,7 @@ export default function EntityCard({ entity, workspaceId }: Props) {
           </h4>
           <div className="flex flex-wrap gap-1">
             {[...new Set(data.source_refs.map((r: any) => r.source_type))].map((type: any) => (
-              <span key={type} className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
+              <span key={type} className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-500">
                 {type}
               </span>
             ))}

@@ -46,13 +46,13 @@ export default function KnowledgeSearch({ workspaceId, onSelectEntity }: Props) 
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="w-full pl-10 pr-4 py-2.5 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+            className="w-full pl-10 pr-4 py-2.5 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg bg-white text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
           />
         </div>
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
-          className="px-3 py-2 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300"
+          className="px-3 py-2 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg bg-white text-zinc-700 dark:text-zinc-300"
         >
           <option value="">Todos</option>
           <option value="person">Personas</option>
@@ -91,7 +91,7 @@ export default function KnowledgeSearch({ workspaceId, onSelectEntity }: Props) 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <h4 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{entity.name}</h4>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-500">
                         {entity.entity_type}
                       </span>
                     </div>

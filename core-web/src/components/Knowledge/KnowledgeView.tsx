@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   MagnifyingGlassIcon,
@@ -6,38 +6,30 @@ import {
   BuildingOfficeIcon,
   LightBulbIcon,
   FolderIcon,
-  ShareIcon,
-  ArrowPathIcon,
-  PlusIcon,
   XMarkIcon,
-  ClockIcon,
-  CalendarDaysIcon,
-  DocumentTextIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
-import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { Share2 } from 'lucide-react';
 import { useKnowledgeStore } from '../../stores/knowledgeStore';
 import GraphVisualization from './GraphVisualization';
 import EntityCard from './EntityCard';
 import KnowledgeSearch from './KnowledgeSearch';
 import EntityList from './EntityList';
-import LiveNotesView from '../LiveNotes/LiveNotesView';
-import MeetingPrepView from './MeetingPrepView';
 import { HeaderButtons } from '../MiniAppHeader';
 import { toast } from 'sonner';
 
 const tabs = [
-  { id: 'graph' as const, label: 'Grafo', icon: ShareIcon },
+  { id: 'graph' as const, label: 'Grafo', icon: Share2 },
   { id: 'people' as const, label: 'Personas', icon: UserGroupIcon },
   { id: 'organizations' as const, label: 'Organizaciones', icon: BuildingOfficeIcon },
   { id: 'projects' as const, label: 'Proyectos', icon: FolderIcon },
   { id: 'topics' as const, label: 'Temas', icon: LightBulbIcon },
   { id: 'search' as const, label: 'Buscar', icon: MagnifyingGlassIcon },
-  { id: 'live-notes' as const, label: 'Live Notes', icon: ClockIcon },
-  { id: 'meeting-prep' as const, label: 'Meeting Prep', icon: CalendarDaysIcon },
 ];
 
 export default function KnowledgeView() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const {
     activeView,
     setActiveView,
@@ -56,7 +48,7 @@ export default function KnowledgeView() {
     fetchBuildStatus(workspaceId);
     if (activeView === 'graph') {
       fetchGraph(workspaceId);
-    } else if (!['search', 'live-notes', 'meeting-prep'].includes(activeView)) {
+    } else if (activeView !== 'search') {
       const typeMap: Record<string, string> = {
         people: 'person',
         organizations: 'organization',
@@ -75,100 +67,97 @@ export default function KnowledgeView() {
   };
 
   const totalEntities = buildStates.reduce((sum: number, s: any) => sum + (s.entities_created || 0), 0);
-  const lastBuild = buildStates.length > 0
-    ? new Date(Math.max(...buildStates.map((s: any) => new Date(s.updated_at || 0).getTime()))).toLocaleString()
-    : 'Nunca';
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-zinc-950">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-zinc-200 dark:border-zinc-800">
-        <div className="flex items-center gap-3">
-          <ShareIcon className="w-5 h-5 text-indigo-500" />
-          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Knowledge Graph</h1>
-          <span className="text-xs text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full">
-            {totalEntities} entidades
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-zinc-400">Ultimo build: {lastBuild}</span>
-          <button
-            onClick={handleBuild}
-            disabled={isBuilding}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20 disabled:opacity-50 transition-colors"
-          >
-            <ArrowPathIcon className={`w-3.5 h-3.5 ${isBuilding ? 'animate-spin' : ''}`} />
-            {isBuilding ? 'Construyendo...' : 'Build'}
-          </button>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 px-6 py-2 border-b border-zinc-200 dark:border-zinc-800 overflow-x-auto">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveView(tab.id)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${
-              activeView === tab.id
-                ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400'
-                : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 dark:hover:text-zinc-300'
-            }`}
-          >
-            <tab.icon className="w-3.5 h-3.5" />
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Content */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Main content */}
-        <div className="flex-1 overflow-auto">
-          {activeView === 'graph' && workspaceId && (
-            <GraphVisualization
-              workspaceId={workspaceId}
-              onSelectEntity={(entity) => setSelectedEntity(entity)}
-            />
-          )}
-          {activeView === 'search' && workspaceId && (
-            <KnowledgeSearch
-              workspaceId={workspaceId}
-              onSelectEntity={(entity) => setSelectedEntity(entity)}
-            />
-          )}
-          {['people', 'organizations', 'projects', 'topics'].includes(activeView) && workspaceId && (
-            <EntityList
-              workspaceId={workspaceId}
-              entityType={activeView === 'people' ? 'person' : activeView === 'organizations' ? 'organization' : activeView === 'projects' ? 'project' : 'topic'}
-              onSelectEntity={(entity) => setSelectedEntity(entity)}
-            />
-          )}
-          {activeView === 'live-notes' && workspaceId && (
-            <LiveNotesView />
-          )}
-          {activeView === 'meeting-prep' && workspaceId && (
-            <MeetingPrepView workspaceId={workspaceId} />
-          )}
-        </div>
-
-        {/* Detail panel */}
-        {selectedEntity && (
-          <div className="w-96 border-l border-zinc-200 dark:border-zinc-800 overflow-auto">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                {selectedEntity.name}
-              </h3>
-              <button
-                onClick={() => setSelectedEntity(null)}
-                className="p-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              >
-                <XMarkIcon className="w-4 h-4 text-zinc-500" />
-              </button>
+    <div className="flex-1 flex h-full min-w-0 overflow-hidden">
+      <div className="relative flex-1 flex min-w-0 overflow-hidden rounded-[20px] bg-gradient-to-b from-[#f6fbff] to-[#edf4fb]">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white/92 md:rounded-[20px]">
+          {/* Header */}
+          <div className="h-14 flex items-center justify-between gap-2 border-b border-[#e4edf8] pl-3 pr-2 sm:pl-5 sm:pr-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <Share2 className="w-[18px] h-[18px] text-slate-700 hidden sm:block" />
+              <h1 className="text-sm sm:text-base font-semibold text-slate-900 truncate">
+                Knowledge Graph
+              </h1>
+              <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full hidden sm:inline">
+                {totalEntities} entidades
+              </span>
             </div>
-            <EntityCard entity={selectedEntity} workspaceId={workspaceId!} />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleBuild}
+                disabled={isBuilding}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+              >
+                <ArrowPathIcon className={`w-3.5 h-3.5 ${isBuilding ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">{isBuilding ? 'Construyendo...' : 'Build'}</span>
+              </button>
+              <HeaderButtons settingsButtonRef={settingsButtonRef} />
+            </div>
           </div>
-        )}
+
+          {/* Tabs */}
+          <div className="px-4 pt-3 pb-2 border-b border-[#e4edf8]">
+            <div className="flex gap-1 p-0.5 rounded-xl bg-slate-100/80">
+              {tabs.map((tab) => {
+                const isActive = activeView === tab.id;
+                const TabIcon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveView(tab.id)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      isActive
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <TabIcon className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="flex flex-1 min-h-0 overflow-hidden">
+            <div className="flex-1 overflow-auto">
+              {activeView === 'graph' && workspaceId && (
+                <GraphVisualization
+                  workspaceId={workspaceId}
+                  onSelectEntity={(entity) => setSelectedEntity(entity)}
+                />
+              )}
+              {activeView === 'search' && workspaceId && (
+                <KnowledgeSearch
+                  workspaceId={workspaceId}
+                  onSelectEntity={(entity) => setSelectedEntity(entity)}
+                />
+              )}
+              {['people', 'organizations', 'projects', 'topics'].includes(activeView) && workspaceId && (
+                <EntityList
+                  workspaceId={workspaceId}
+                  entityType={activeView === 'people' ? 'person' : activeView === 'organizations' ? 'organization' : activeView === 'projects' ? 'project' : 'topic'}
+                  onSelectEntity={(entity) => setSelectedEntity(entity)}
+                />
+              )}
+            </div>
+
+            {/* Detail panel */}
+            {selectedEntity && (
+              <div className="w-[360px] shrink-0 border-l border-[#e4edf8] overflow-auto bg-white hidden lg:block">
+                <div className="h-12 flex items-center justify-between px-4 border-b border-[#e4edf8]">
+                  <h3 className="text-sm font-semibold text-slate-900 truncate">{selectedEntity.name}</h3>
+                  <button onClick={() => setSelectedEntity(null)} className="p-1 rounded hover:bg-slate-100">
+                    <XMarkIcon className="w-4 h-4 text-slate-400" />
+                  </button>
+                </div>
+                <EntityCard entity={selectedEntity} workspaceId={workspaceId!} />
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
