@@ -11,9 +11,8 @@ import logging
 import json
 from typing import Dict, Any, List, Optional, AsyncIterator
 
-from openai import AsyncOpenAI
-
 from lib.supabase_client import get_authenticated_async_client, get_service_role_client
+from lib.openai_client import get_async_openai_client
 from api.config import settings
 from api.services.marketing.pulsemark_tools import (
     PULSEMARK_TOOLS_SCHEMA,
@@ -22,15 +21,6 @@ from api.services.marketing.pulsemark_tools import (
 )
 
 logger = logging.getLogger(__name__)
-
-_openai_client: Optional[AsyncOpenAI] = None
-
-
-def _get_openai_client() -> AsyncOpenAI:
-    global _openai_client
-    if _openai_client is None:
-        _openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
-    return _openai_client
 
 
 PULSEMARK_MODEL = "gpt-5.4-mini"
@@ -259,7 +249,7 @@ async def chat_stream(
         site=site,
     )
 
-    client = _get_openai_client()
+    client = get_async_openai_client()
 
     # Multi-turn loop for tool calls (max 8 iterations)
     for iteration in range(8):
