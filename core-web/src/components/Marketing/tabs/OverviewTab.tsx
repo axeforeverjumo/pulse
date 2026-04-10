@@ -177,29 +177,39 @@ export default function OverviewTab({ site, workspaceId, onSiteUpdated }: Props)
         </div>
       )}
 
-      {/* Connected + property selectors (compact) */}
-      {googleAuth?.connected && (!site.ga4_property_id || !site.gsc_site_url) && (
+      {/* Connected — show email + disconnect + optional property selectors */}
+      {googleAuth?.connected && (
         <div className="bg-white rounded-2xl p-4 border border-slate-200">
-          <div className="flex items-center gap-2 mb-3">
-            <CheckCircleIcon className="w-4 h-4 text-green-500" />
-            <span className="text-sm text-green-700 font-medium">{googleAuth.email}</span>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <CheckCircleIcon className="w-4 h-4 text-green-500" />
+              <span className="text-sm text-green-700 font-medium">{googleAuth.email}</span>
+            </div>
+            <button
+              onClick={handleConnectGoogle}
+              className="text-xs text-slate-400 hover:text-blue-600 transition-colors"
+            >
+              Reconectar
+            </button>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            {!site.ga4_property_id && ga4Properties.length > 0 && (
-              <select value="" onChange={(e) => handleGa4Change(e.target.value)}
-                className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-200">
-                <option value="">Seleccionar GA4...</option>
-                {ga4Properties.map((p) => <option key={p.property_id} value={p.property_id}>{p.display_name}</option>)}
-              </select>
-            )}
-            {!site.gsc_site_url && gscSites.length > 0 && (
-              <select value="" onChange={(e) => handleGscChange(e.target.value)}
-                className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-200">
-                <option value="">Seleccionar Search Console...</option>
-                {gscSites.map((s) => <option key={s.site_url} value={s.site_url}>{s.site_url}</option>)}
-              </select>
-            )}
-          </div>
+          {(!site.ga4_property_id || !site.gsc_site_url) && (
+            <div className="grid grid-cols-2 gap-3">
+              {!site.ga4_property_id && ga4Properties.length > 0 && (
+                <select value="" onChange={(e) => handleGa4Change(e.target.value)}
+                  className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-200">
+                  <option value="">Seleccionar GA4...</option>
+                  {ga4Properties.map((p) => <option key={p.property_id} value={p.property_id}>{p.display_name}</option>)}
+                </select>
+              )}
+              {!site.gsc_site_url && gscSites.length > 0 && (
+                <select value="" onChange={(e) => handleGscChange(e.target.value)}
+                  className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-200">
+                  <option value="">Seleccionar Search Console...</option>
+                  {gscSites.map((s) => <option key={s.site_url} value={s.site_url}>{s.site_url}</option>)}
+                </select>
+              )}
+            </div>
+          )}
         </div>
       )}
 
