@@ -59,7 +59,7 @@ async def get_email_context(
                 supabase.table("emails")
                 .select("subject, \"from\", snippet, received_at")
                 .gt("received_at", since)
-                .or_(f"\"from\".ilike.%{email_addr}%,\"to\".ilike.%{email_addr}%")
+                .ilike("from", f"%{email_addr}%")
                 .order("received_at", desc=True)
                 .limit(5)
                 .execute()

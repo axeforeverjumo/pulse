@@ -100,7 +100,7 @@ async def _get_recent_emails_with(
             supabase.table("emails")
             .select("id, subject, \"from\", \"to\", snippet, received_at")
             .gt("received_at", since)
-            .or_(f"\"from\".ilike.%{addr}%,\"to\".ilike.%{addr}%")
+            .ilike("from", f"%{addr}%")
             .order("received_at", desc=True)
             .limit(limit // len(email_addresses) + 1)
             .execute()
