@@ -83,18 +83,21 @@ function isFolder(mimeType: string): boolean {
 
 function getGoogleIconUrl(mimeType: string): string {
   const icons: Record<string, string> = {
-    "application/vnd.google-apps.folder": "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_2_folder_x32.png",
-    "application/vnd.google-apps.document": "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_document_x32.png",
-    "application/vnd.google-apps.spreadsheet": "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_spreadsheet_x32.png",
-    "application/vnd.google-apps.presentation": "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_presentation_x32.png",
-    "application/vnd.google-apps.form": "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_form_x32.png",
-    "application/pdf": "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_pdf_x32.png",
+    "application/vnd.google-apps.folder": "/drive-icons/folder.png",
+    "application/vnd.google-apps.document": "/drive-icons/doc.png",
+    "application/vnd.google-apps.spreadsheet": "/drive-icons/sheet.png",
+    "application/vnd.google-apps.presentation": "/drive-icons/slides.png",
+    "application/vnd.google-apps.form": "/drive-icons/form.png",
+    "application/pdf": "/drive-icons/pdf.png",
+    "text/plain": "/drive-icons/text.png",
+    "application/zip": "/drive-icons/archive.png",
+    "application/x-zip-compressed": "/drive-icons/archive.png",
   };
   if (icons[mimeType]) return icons[mimeType];
-  if (mimeType.startsWith("image/")) return "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_image_x32.png";
-  if (mimeType.startsWith("video/")) return "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_video_x32.png";
-  if (mimeType.startsWith("audio/")) return "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_audio_x32.png";
-  return "https://ssl.gstatic.com/docs/doclist/images/mediatype/icon_1_generic_x32.png";
+  if (mimeType.startsWith("image/")) return "/drive-icons/image.png";
+  if (mimeType.startsWith("video/")) return "/drive-icons/video.png";
+  if (mimeType.startsWith("audio/")) return "/drive-icons/audio.png";
+  return "/drive-icons/generic.png";
 }
 
 function formatFileSize(bytes?: string): string {
