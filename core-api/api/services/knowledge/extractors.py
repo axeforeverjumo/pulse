@@ -172,7 +172,7 @@ Extract all entities, relationships, and facts. Return valid JSON only."""
 
     try:
         response = await client.chat.completions.create(
-            model="gpt-4.1-mini",
+            model="gpt-5.4-mini",
             messages=[
                 {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},

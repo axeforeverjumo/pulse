@@ -7,7 +7,7 @@ by email and name similarity.
 import logging
 from typing import Dict, Any, List
 
-from lib.supabase_client import get_authenticated_async_client
+from lib.supabase_client import get_authenticated_async_client, get_async_service_role_client
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,10 @@ async def link_entities_to_crm(
 
     Returns stats on how many links were created.
     """
-    supabase = await get_authenticated_async_client(user_jwt)
+    if user_jwt:
+        supabase = await get_authenticated_async_client(user_jwt)
+    else:
+        supabase = await get_async_service_role_client()
     linked_contacts = 0
     linked_companies = 0
 
@@ -59,13 +62,15 @@ async def link_entities_to_crm(
             if contact_result.data:
                 contact = contact_result.data[0]
 
-        # Try name match if no email match
+        # Try name match if no email match (crm_contacts uses first_name + last_name)
         if not contact and person.get("name"):
+            name_parts = person["name"].split()
+            search_name = name_parts[0] if name_parts else person["name"]
             name_result = await (
                 supabase.table("crm_contacts")
                 .select("id")
                 .eq("workspace_id", workspace_id)
-                .ilike("name", f"%{person['name']}%")
+                .or_(f"first_name.ilike.%{search_name}%,last_name.ilike.%{search_name}%")
                 .is_("deleted_at", "null")
                 .limit(1)
                 .execute()

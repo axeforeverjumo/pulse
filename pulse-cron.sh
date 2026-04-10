@@ -40,6 +40,18 @@ if (( HOUR % 6 == 0 && MINUTE == 0 )); then
     curl -sf -m 60 "$API/renew-watches" -H "$AUTH" >> "$LOG" 2>&1 || log "WARN: renew-watches failed"
 fi
 
+# Every 10 minutes: Knowledge Graph build (extract entities from emails, calendar, CRM)
+if (( MINUTE % 10 == 0 )); then
+    log "Running knowledge-build"
+    curl -sf -m 300 "$API/knowledge-build" -H "$AUTH" >> "$LOG" 2>&1 || log "WARN: knowledge-build failed"
+fi
+
+# Every 15 minutes: Live Notes processor (update auto-notes)
+if (( MINUTE % 15 == 5 )); then
+    log "Running live-notes-process"
+    curl -sf -m 120 "$API/live-notes-process" -H "$AUTH" >> "$LOG" 2>&1 || log "WARN: live-notes-process failed"
+fi
+
 # Daily at 2 AM: daily-verification
 if (( HOUR == 2 && MINUTE == 0 )); then
     log "Running daily-verification"

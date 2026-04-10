@@ -1632,6 +1632,49 @@ async def cron_seo_snapshot(authorization: str = Header(None)):
         )
 
 
+@router.get("/knowledge-build")
+async def cron_knowledge_build(authorization: str = Header(None)):
+    """
+    Build knowledge graph for all workspaces.
+    Runs every 10 minutes via cron.
+    Processes new emails, calendar events, and CRM data into entities/relationships/facts.
+    """
+    from lib.supabase_client import get_service_role_client
+    from api.services.knowledge.builder import process_all_sources
+
+    sb = get_service_role_client()
+    # Get all workspaces
+    workspaces = sb.table("workspaces").select("id").execute()
+    results = []
+
+    for ws in (workspaces.data or []):
+        try:
+            # Use service role JWT for cron (no user auth needed, RLS bypassed)
+            stats = await process_all_sources(ws["id"], None)
+            if stats.get("entities", 0) > 0:
+                results.append({"workspace": ws["id"][:8], "stats": stats})
+        except Exception as e:
+            logger.error(f"[CRON] Knowledge build failed for {ws['id'][:8]}: {e}")
+
+    return {"status": "completed", "workspaces_processed": len(workspaces.data or []), "results": results}
+
+
+@router.get("/live-notes-process")
+async def cron_live_notes(authorization: str = Header(None)):
+    """
+    Process due live notes for all workspaces.
+    Runs every 15 minutes via cron.
+    """
+    from api.services.live_notes.processor import process_due_notes
+
+    try:
+        results = await process_due_notes()
+        return {"status": "completed", "notes_updated": len(results), "results": results}
+    except Exception as e:
+        logger.error(f"[CRON] Live notes processing failed: {e}")
+        return {"status": "error", "error": str(e)}
+
+
 @router.get("/health", response_model=CronHealthResponse)
 async def cron_health():
     """

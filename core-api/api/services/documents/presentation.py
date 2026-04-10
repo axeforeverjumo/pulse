@@ -134,7 +134,7 @@ async def generate_presentation(
 
     client = get_async_openai_client()
     response = await client.chat.completions.create(
-        model="gpt-4.1-mini",
+        model="gpt-5.4-mini",
         messages=[
             {"role": "system", "content": "You generate professional HTML presentations. Output only valid HTML."},
             {"role": "user", "content": prompt},
@@ -177,7 +177,7 @@ async def generate_brief(
 
     client = get_async_openai_client()
     response = await client.chat.completions.create(
-        model="gpt-4.1-mini",
+        model="gpt-5.4-mini",
         messages=[
             {"role": "system", "content": "You generate professional documents in Spanish using Markdown."},
             {"role": "user", "content": prompt},
@@ -286,7 +286,7 @@ async def generate_proposal(
 
     client = get_async_openai_client()
     response = await client.chat.completions.create(
-        model="gpt-4.1-mini",
+        model="gpt-5.4-mini",
         messages=[
             {"role": "system", "content": "You generate personalized commercial proposals in Spanish."},
             {"role": "user", "content": prompt},

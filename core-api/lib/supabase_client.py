@@ -207,6 +207,15 @@ async def get_async_supabase_client() -> AsyncClient:
     return _async_supabase_client
 
 
+async def get_async_service_role_client() -> AsyncClient:
+    """
+    Create an async Supabase client with service role key (bypasses RLS).
+    Used by cron jobs and background tasks that need full access.
+    """
+    supabase_url, supabase_service_key = _get_service_role_config()
+    return await acreate_client(supabase_url, supabase_service_key)
+
+
 async def get_authenticated_async_client(user_jwt: str) -> AsyncClient:
     """
     Create an async Supabase client authenticated as a specific user.

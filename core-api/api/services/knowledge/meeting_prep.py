@@ -131,7 +131,7 @@ async def _get_crm_context(
     for addr in email_addresses[:5]:
         contact_result = await (
             supabase.table("crm_contacts")
-            .select("id, name, email, job_title, company_id")
+            .select("id, first_name, last_name, email, job_title, company_id")
             .eq("workspace_id", workspace_id)
             .ilike("email", addr)
             .is_("deleted_at", "null")
@@ -140,7 +140,8 @@ async def _get_crm_context(
         )
         if contact_result.data:
             contact = contact_result.data[0]
-            parts.append(f"- **{contact.get('name', addr)}**: {contact.get('job_title', 'N/A')}")
+            full_name = f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip() or addr
+            parts.append(f"- **{full_name}**: {contact.get('job_title', 'N/A')}")
 
             # Check related opportunities
             if contact.get("id"):
@@ -225,7 +226,7 @@ async def generate_briefing(
 
     client = get_async_openai_client()
     response = await client.chat.completions.create(
-        model="gpt-4.1-mini",
+        model="gpt-5.4-mini",
         messages=[
             {"role": "system", "content": "You are a meeting preparation assistant. Generate briefings in Spanish."},
             {"role": "user", "content": prompt},

@@ -7,7 +7,7 @@ for injection into LLM prompts (deduplication context).
 import logging
 from typing import Dict, Any, List
 
-from lib.supabase_client import get_authenticated_async_client
+from lib.supabase_client import get_authenticated_async_client, get_async_service_role_client
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,10 @@ async def build_knowledge_index(
     Query all knowledge entities and format as markdown tables
     for prompt injection (like Rowboat's formatIndexForPrompt).
     """
-    supabase = await get_authenticated_async_client(user_jwt)
+    if user_jwt:
+        supabase = await get_authenticated_async_client(user_jwt)
+    else:
+        supabase = await get_async_service_role_client()
 
     result = await (
         supabase.table("knowledge_entities")

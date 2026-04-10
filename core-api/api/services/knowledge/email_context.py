@@ -83,7 +83,7 @@ async def get_email_context(
         try:
             contact_result = await (
                 supabase.table("crm_contacts")
-                .select("id, name, email, job_title, phone, company_id, ai_relationship_summary")
+                .select("id, first_name, last_name, email, job_title, phone, company_id, ai_relationship_summary")
                 .eq("workspace_id", workspace_id)
                 .ilike("email", email_addr)
                 .is_("deleted_at", "null")
@@ -92,7 +92,8 @@ async def get_email_context(
             )
             if contact_result.data:
                 contact = contact_result.data[0]
-                context_parts.append(f"\n## CRM: {contact.get('name', email_addr)}")
+                full_name = f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip() or email_addr
+                context_parts.append(f"\n## CRM: {full_name}")
                 if contact.get("job_title"):
                     context_parts.append(f"- Puesto: {contact['job_title']}")
                 if contact.get("phone"):

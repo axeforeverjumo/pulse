@@ -142,15 +142,16 @@ async def _gather_source_data(
             try:
                 contacts = await (
                     supabase.table("crm_contacts")
-                    .select("name, email, job_title")
+                    .select("first_name, last_name, email, job_title")
                     .eq("workspace_id", workspace_id)
-                    .ilike("name", f"%{kw}%")
+                    .or_(f"first_name.ilike.%{kw}%,last_name.ilike.%{kw}%,email.ilike.%{kw}%")
                     .is_("deleted_at", "null")
                     .limit(3)
                     .execute()
                 )
                 for c in (contacts.data or []):
-                    findings.append(f"[CRM Contact] {c['name']} — {c.get('email', '')} ({c.get('job_title', '')})")
+                    full_name = f"{c.get('first_name', '')} {c.get('last_name', '')}".strip()
+                    findings.append(f"[CRM Contact] {full_name} — {c.get('email', '')} ({c.get('job_title', '')})")
 
                 opps = await (
                     supabase.table("crm_opportunities")
@@ -230,7 +231,7 @@ async def process_single_note(
 
     client = get_async_openai_client()
     response = await client.chat.completions.create(
-        model="gpt-4.1-mini",
+        model="gpt-5.4-mini",
         messages=[
             {"role": "system", "content": "You update live notes with new information. Write in Spanish."},
             {"role": "user", "content": prompt},

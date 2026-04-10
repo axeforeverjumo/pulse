@@ -18,7 +18,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 
-from lib.supabase_client import get_authenticated_async_client, get_service_role_client
+from lib.supabase_client import get_authenticated_async_client, get_async_service_role_client
 from lib.embeddings import embed_text
 from api.services.knowledge.extractors import extract_from_batch
 from api.services.knowledge.index_builder import build_knowledge_index
@@ -27,6 +27,14 @@ from api.services.knowledge.linker import link_entities_to_crm
 logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 10  # Same as Rowboat
+
+
+async def _get_client(user_jwt: Optional[str] = None):
+    """Get Supabase client — authenticated if JWT provided, service role for cron."""
+    if user_jwt:
+        return await get_authenticated_async_client(user_jwt)
+    # For cron: use async service role (bypasses RLS, can read all data)
+    return await get_async_service_role_client()
 
 
 async def _get_or_create_build_state(
@@ -340,7 +348,7 @@ async def _process_source(
     Process a single source type (email, calendar, chat, crm).
     Equivalent to Rowboat's buildGraphWithFiles for one source folder.
     """
-    supabase = await get_authenticated_async_client(user_jwt)
+    supabase = await _get_client(user_jwt)
     state = await _get_or_create_build_state(supabase, workspace_id, source_type)
     last_processed = state.get("last_processed_at", "1970-01-01T00:00:00Z")
 
@@ -488,7 +496,7 @@ async def _fetch_source_items(
         # Fetch recently created/updated contacts and companies
         contacts = await (
             supabase.table("crm_contacts")
-            .select("id, name, email, phone, job_title, company_id, created_at")
+            .select("id, first_name, last_name, email, phone, job_title, company_id, created_at")
             .eq("workspace_id", workspace_id)
             .gt("created_at", since)
             .is_("deleted_at", "null")
