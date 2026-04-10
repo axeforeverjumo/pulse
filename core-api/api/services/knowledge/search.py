@@ -26,13 +26,13 @@ async def search_entities(
     """
     supabase = await get_authenticated_async_client(user_jwt)
 
-    # Text-based search first (fast)
+    # Text-based search first (fast) — no join, facts fetched separately
     text_query = (
         supabase.table("knowledge_entities")
-        .select("*, knowledge_facts(id, fact_type, content, is_active)")
+        .select("*")
         .eq("workspace_id", workspace_id)
         .is_("deleted_at", "null")
-        .ilike("name", f"%{query}%")
+        .or_(f"name.ilike.%{query}%,content.ilike.%{query}%")
         .order("mentions_count", desc=True)
         .limit(limit)
     )
@@ -42,13 +42,13 @@ async def search_entities(
     text_result = await text_query.execute()
     text_entities = text_result.data or []
 
-    # If we have enough text matches, return them
+    # If we have enough text matches, skip semantic search
     if len(text_entities) >= limit:
         return text_entities
 
-    # Semantic search via embedding
+    # Semantic search via embedding (skip if proxy doesn't support embeddings)
     try:
-        query_embedding = await embed_text(query)
+        query_embedding = await embed_text(query)  # May fail on subscription proxy
         # Use Supabase RPC for vector similarity search
         rpc_result = await supabase.rpc(
             "search_knowledge_entities",
