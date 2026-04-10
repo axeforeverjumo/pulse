@@ -887,7 +887,7 @@ export default function Sidebar() {
         tabIndex={0}
         onKeyDown={handleSidebarKeyDown}
         onFocus={() => setActiveZone("main-sidebar")}
-        className="w-16 shrink-0 text-text-secondary h-full flex flex-col items-center pb-3 outline-none pt-3 bg-gradient-to-b from-[#e8f1fc]/95 via-[#f2f8ff]/95 to-[#eaf3fd]/95 border-r border-[#d7e4f3] shadow-[inset_-1px_0_0_rgba(255,255,255,0.65)]"
+        className="sidebar-main w-16 shrink-0 text-text-secondary h-full flex flex-col items-center pb-3 outline-none pt-3 bg-gradient-to-b from-[#e8f1fc]/95 via-[#f2f8ff]/95 to-[#eaf3fd]/95 border-r border-[#d7e4f3] shadow-[inset_-1px_0_0_rgba(255,255,255,0.65)]"
       >
         {/* Product & Workspace Selector */}
         <div className="relative mb-4">

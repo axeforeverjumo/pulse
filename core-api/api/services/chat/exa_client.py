@@ -45,7 +45,8 @@ async def search_web(
         httpx.HTTPError: If API request fails
     """
     if not settings.exa_api_key:
-        raise ValueError("EXA_API_KEY not configured")
+        # Fallback to DuckDuckGo (free, no API key)
+        return await _search_duckduckgo(query, num_results)
 
     # Build request payload
     payload = {
@@ -126,3 +127,35 @@ def _get_google_favicon(url: str) -> str:
     """Generate Google Favicon API URL for a domain."""
     domain = _extract_domain(url)
     return f"https://www.google.com/s2/favicons?domain={domain}&sz=64"
+
+
+async def _search_duckduckgo(query: str, num_results: int = 5) -> dict:
+    """Fallback web search using DuckDuckGo (free, no API key)."""
+    from duckduckgo_search import DDGS
+    import warnings
+    warnings.filterwarnings('ignore', category=RuntimeWarning)
+
+    results = list(DDGS().text(query, max_results=min(num_results, 10)))
+
+    sources = []
+    context_parts = []
+
+    for i, r in enumerate(results, 1):
+        url = r.get("href", "")
+        title = r.get("title", "Untitled")
+        body = r.get("body", "")
+        domain = _extract_domain(url)
+        favicon = _get_google_favicon(url)
+
+        sources.append({
+            "url": url,
+            "title": title,
+            "domain": domain,
+            "favicon": favicon,
+        })
+        context_parts.append(f"[{i}] {domain}: {body[:500]}")
+
+    return {
+        "context": "\n\n".join(context_parts),
+        "sources": sources,
+    }

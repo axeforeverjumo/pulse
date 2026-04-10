@@ -7,6 +7,7 @@ import Modal from '../Modal/Modal';
 import EmailSignatureEditor from './EmailSignatureEditor';
 import { uploadAvatar, deleteAvatar } from '../../api/client';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { useThemeStore, type Theme } from '../../stores/themeStore';
 import ServersSettings from './ServersSettings';
 
 interface SettingsViewProps {
@@ -519,6 +520,12 @@ export default function SettingsView({ isOpen, onClose }: SettingsViewProps) {
         {isAuthenticated && emailAccounts.length > 0 && (
           <EmailSignatureEditor accounts={emailAccounts} />
         )}
+
+        {/* Appearance Section */}
+        <div>
+          <h2 className="text-sm font-medium text-text-body mb-4">Appearance</h2>
+          <ThemeSelector />
+        </div>
 
         {/* Servers Section */}
         {isAuthenticated && activeWorkspaceId && (

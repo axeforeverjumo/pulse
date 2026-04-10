@@ -173,27 +173,28 @@ async def _gather_findings_for_topic(
         except Exception:
             pass
 
-    # Web Search — use OpenAI with web_search tool for real-time internet results
+    # Web Search — DuckDuckGo (free, no API key needed)
     try:
-        client = get_async_openai_client()
-        web_response = await client.chat.completions.create(
-            model="gpt-5.4-mini",
-            messages=[
-                {"role": "system", "content": "Search the web and return the top 5 most relevant recent findings. Be concise. Return bullet points only."},
-                {"role": "user", "content": f"Find the latest news and updates about: {topic}. Focus on the last 7 days. Return 5 bullet points with source and date."},
-            ],
-            temperature=0.2,
-            max_tokens=800,
-        )
-        web_content = web_response.choices[0].message.content or ""
-        if web_content:
-            for line in web_content.strip().split("\n"):
-                line = line.strip()
-                if line and (line.startswith("-") or line.startswith("*") or line[0].isdigit()):
-                    clean = line.lstrip("-*0123456789. ")
-                    if clean:
-                        findings.append(f"[Web] {clean[:200]}")
-        logger.info(f"[LIVE_NOTES] Web search for '{topic}' returned {len([f for f in findings if f.startswith('[Web]')])} results")
+        from duckduckgo_search import DDGS
+        import warnings
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+
+        # Search news first (more relevant for monitoring)
+        ddg_results = list(DDGS().news(topic, max_results=3))
+        if not ddg_results:
+            # Fallback to text search
+            ddg_results = list(DDGS().text(topic, max_results=3))
+
+        for r in ddg_results:
+            title = r.get('title', '')
+            source = r.get('source', r.get('href', ''))
+            body = r.get('body', '')[:150]
+            if title:
+                findings.append(f"[Web: {source}] {title} — {body}")
+
+        web_count = len([f for f in findings if f.startswith('[Web')])
+        if web_count:
+            logger.info(f"[LIVE_NOTES] DuckDuckGo search for '{topic}': {web_count} results")
     except Exception as e:
         logger.warning(f"[LIVE_NOTES] Web search failed for '{topic}': {e}")
 
@@ -275,24 +276,20 @@ async def _gather_daily_brief_data(supabase, workspace_id: str) -> Dict[str, str
     except Exception:
         pass
 
-    # Industry news via web search (AI-powered)
+    # Industry news via DuckDuckGo (free, real web search)
     web_news = []
     try:
-        client = get_async_openai_client()
-        response = await client.chat.completions.create(
-            model="gpt-5.4-mini",
-            messages=[
-                {"role": "system", "content": "You are a business intelligence analyst. Return 3-5 bullet points of today's most relevant tech/AI/business news."},
-                {"role": "user", "content": "What are today's top 3-5 business and technology headlines? Focus on AI, SaaS, and startup news. Be concise, 1 line per item with date."},
-            ],
-            temperature=0.3,
-            max_tokens=500,
-        )
-        content = response.choices[0].message.content or ""
-        for line in content.strip().split("\n"):
-            line = line.strip()
-            if line and (line.startswith("-") or line.startswith("*") or line[0].isdigit()):
-                web_news.append(line)
+        from duckduckgo_search import DDGS
+        import warnings
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+
+        news_results = list(DDGS().news("artificial intelligence technology startups", max_results=5))
+        for r in news_results:
+            title = r.get('title', '')
+            source = r.get('source', '')
+            body = r.get('body', '')[:100]
+            if title:
+                web_news.append(f"- **{title}** ({source}) — {body}")
     except Exception:
         pass
 

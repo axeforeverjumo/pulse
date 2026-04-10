@@ -21,6 +21,7 @@ import { useGlobalRealtime } from "./hooks/useGlobalRealtime";
 import { useAppPreloader } from "./hooks/useAppPreloader";
 import { useWorkspacePresence } from "./hooks/useWorkspacePresence";
 import { useResumeRevalidation } from "./hooks/useResumeRevalidation";
+import { useThemeEffect } from "./hooks/useThemeEffect";
 import { Sentry, setSentryUser } from "./lib/sentry";
 import { identifyUser, resetUser, trackPageView } from "./lib/posthog";
 import { FeatureErrorBoundary } from "./components/ui/FeatureErrorBoundary";
@@ -240,7 +241,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     <KeyboardNavigationProvider>
       <Toaster position="top-right" richColors />
       <div className="h-[100dvh] w-screen overflow-hidden relative">
-        <div className="pointer-events-none absolute inset-0">
+        <div className="pointer-events-none absolute inset-0 ambient-glow">
           <div className="absolute -top-24 -left-16 h-64 w-64 rounded-full bg-cyan-200/45 blur-3xl" />
           <div className="absolute top-12 right-0 h-72 w-72 rounded-full bg-emerald-200/35 blur-3xl" />
           <div className="absolute bottom-0 left-1/3 h-56 w-56 rounded-full bg-sky-100/50 blur-3xl" />
@@ -394,6 +395,9 @@ function AppContent() {
         console.error("Failed to resolve post-signup invitations:", err);
       });
   }, [isAuthenticated, authLoading, currentUserId, isInviteRoute, isShareLinkRoute]);
+
+  // Apply dark/light theme to <html>
+  useThemeEffect();
 
   // Global realtime: messages notifications, file changes, channel changes
   useGlobalRealtime(!(isInviteRoute || isShareLinkRoute));
