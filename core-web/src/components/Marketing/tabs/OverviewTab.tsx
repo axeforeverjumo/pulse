@@ -49,8 +49,8 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
 
   const autoSavedRef = useRef(false);
 
-  useEffect(() => { checkGoogleAuth(); }, []);
-  useEffect(() => { if (googleAuth?.connected) loadProperties(); }, [googleAuth?.connected]);
+  useEffect(() => { if (workspaceId) checkGoogleAuth(); }, [workspaceId]);
+  useEffect(() => { if (googleAuth?.connected && workspaceId) loadProperties(); }, [googleAuth?.connected, workspaceId]);
   useEffect(() => { loadDashboardData(); }, [site.gsc_site_url, site.ga4_property_id]);
 
   useEffect(() => {
