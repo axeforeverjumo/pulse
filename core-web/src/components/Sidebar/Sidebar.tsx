@@ -369,9 +369,8 @@ export default function Sidebar() {
   const miniAppsForNav = useMemo(() => {
     if (!targetWorkspaceForNav) return [];
     const topLevel = ['chat', 'email', 'calendar'];
-    const pinnedTypes = ['email', 'calendar'];
-    const workspaceApps = (targetWorkspaceForNav.apps || [])
-      .filter((app) => appIcons[app.type] && !pinnedTypes.includes(app.type))
+    return (targetWorkspaceForNav.apps || [])
+      .filter((app) => appIcons[app.type])
       .map((app) => ({
         id: app.id,
         path: targetWorkspaceForNav.isDefault && topLevel.includes(app.type)
@@ -379,12 +378,6 @@ export default function Sidebar() {
           : getAppPath(targetWorkspaceForNav.id, app.type),
         type: app.type,
       }));
-    const pinnedApps = pinnedTypes.map((type) => ({
-      id: type,
-      path: `/${type}`,
-      type,
-    }));
-    return [...workspaceApps, ...pinnedApps];
   }, [targetWorkspaceForNav]);
 
   // All sidebar nav items come from workspace apps
@@ -906,7 +899,7 @@ export default function Sidebar() {
         tabIndex={0}
         onKeyDown={handleSidebarKeyDown}
         onFocus={() => setActiveZone("main-sidebar")}
-        className="sidebar-main w-16 shrink-0 text-text-secondary h-full flex flex-col items-center pb-3 outline-none pt-3 bg-gradient-to-b from-[#e8f1fc]/95 via-[#f2f8ff]/95 to-[#eaf3fd]/95 border-r border-[#d7e4f3] shadow-[inset_-1px_0_0_rgba(255,255,255,0.65)]"
+        className="sidebar-main w-[58px] shrink-0 text-text-secondary h-full flex flex-col items-center pb-3 outline-none pt-3.5 bg-gradient-to-b from-[#e8f1fc]/95 via-[#f2f8ff]/95 to-[#eaf3fd]/95 border-r border-[#d7e4f3] shadow-[inset_-1px_0_0_rgba(255,255,255,0.65)]"
       >
         {/* Product & Workspace Selector */}
         <div className="relative mb-4">
@@ -917,19 +910,10 @@ export default function Sidebar() {
             onClick={() =>
               setOpenMenu(openMenu === "view-selector" ? null : "view-selector")
             }
-            title={
-              activeProductType === 'ai_builder'
-                ? "Constructor de Apps IA"
-                : activeProductType === 'website_builder'
-                ? "Constructor de Sitios Web"
-                : selectedView === "dashboard"
-                ? "Personal"
-                : currentWorkspace?.name || "Seleccionar espacio de trabajo"
-            }
-            className={`w-10 h-10 flex items-center justify-center rounded-lg transition-all ${
+            className={`group/icon w-[34px] h-[34px] flex items-center justify-center rounded-[9px] transition-all ${
               openMenu === "view-selector"
-                ? "bg-slate-900 text-white"
-                : "hover:bg-white/70"
+                ? "ring-2 ring-brand-primary/30"
+                : ""
             }`}
           >
             <AnimatePresence mode="wait">
@@ -939,8 +923,10 @@ export default function Sidebar() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.08 }}
-                className={`w-9 h-9 flex items-center justify-center rounded-lg overflow-hidden ${
-                  activeProductType === 'workspace' && selectedView === "dashboard" ? "bg-white shadow-[0_6px_20px_-14px_rgba(15,23,42,0.55)]" : ""
+                className={`w-[34px] h-[34px] flex items-center justify-center rounded-[9px] overflow-hidden ${
+                  activeProductType === 'workspace' && selectedView === "dashboard"
+                    ? "bg-gradient-to-br from-brand-primary to-indigo-600 shadow-[0_6px_20px_-8px_rgba(91,127,255,0.5)]"
+                    : ""
                 }`}
               >
                 {activeProductType === 'ai_builder' ? (
@@ -1205,10 +1191,10 @@ export default function Sidebar() {
                 <button
                   onClick={() => navigate(app.path)}
                   onMouseEnter={() => prefetchView(app.type || app.id, app.id, targetWorkspace?.id)}
-                  title={app.name}
                   className={`${iconBtn} ${isItemActive ? iconBtnActive : iconBtnInactive}`}
                 >
                   <Icon icon={app.icon} size={18} active={isItemActive} />
+                  <span className="sidebar-tooltip">{app.name}</span>
                 </button>
                 {hasUnread && (
                   <span className="absolute top-[5px] right-[5px] w-[7px] h-[7px] rounded-full bg-red-500 border-[1.5px] border-bg-main-sidebar" />
@@ -1230,10 +1216,10 @@ export default function Sidebar() {
                 <button
                   onClick={() => navigate(app.path)}
                   onMouseEnter={() => prefetchView(app.type || app.id, app.id, targetWorkspace?.id)}
-                  title={app.name}
                   className={`${iconBtn} ${isItemActive ? iconBtnActive : iconBtnInactive}`}
                 >
                   <Icon icon={app.icon} size={18} active={isItemActive} />
+                  <span className="sidebar-tooltip">{app.name}</span>
                 </button>
               </div>
             );
@@ -1247,10 +1233,10 @@ export default function Sidebar() {
           <div className="flex-1 flex flex-col items-center gap-2 overflow-y-auto px-1 pt-1">
             <button
               onClick={() => navigate('/builder')}
-              title="Apps IA"
               className={`${iconBtn} ${location.pathname.startsWith('/builder') ? iconBtnActive : iconBtnInactive}`}
             >
-              <Icon icon={Code} size={20} />
+              <Icon icon={Code} size={18} />
+              <span className="sidebar-tooltip">Apps IA</span>
             </button>
           </div>
         )}
@@ -1260,10 +1246,10 @@ export default function Sidebar() {
           <div className="flex-1 flex flex-col items-center gap-2 overflow-y-auto px-1 pt-1">
             <button
               onClick={() => navigate('/sites')}
-              title="Mis Sitios"
               className={`${iconBtn} ${location.pathname.startsWith('/sites') ? iconBtnActive : iconBtnInactive}`}
             >
-              <Icon icon={ExternalLink} size={20} />
+              <Icon icon={ExternalLink} size={18} />
+              <span className="sidebar-tooltip">Mis Sitios</span>
             </button>
           </div>
         )}
@@ -1274,10 +1260,10 @@ export default function Sidebar() {
           {activeProductType === 'workspace' && targetWorkspace && (
             <button
               onClick={() => openWorkspaceSettingsModal(targetWorkspace.id, "members")}
-              title="Ajustes"
               className={`${iconBtn} ${iconBtnInactive}`}
             >
               <Icon icon={Settings} size={18} />
+              <span className="sidebar-tooltip">Ajustes</span>
             </button>
           )}
 

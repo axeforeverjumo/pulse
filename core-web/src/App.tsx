@@ -163,7 +163,7 @@ function RouteLoading() {
 
 function SidebarSkeleton() {
   return (
-    <div className="sidebar-main w-16 shrink-0 bg-gradient-to-b from-[#e9f1fb] via-[#f2f8ff] to-[#edf4fd] border-r border-border-light flex flex-col items-center py-3 gap-3">
+    <div className="sidebar-main w-[58px] shrink-0 bg-gradient-to-b from-[#e9f1fb] via-[#f2f8ff] to-[#edf4fd] border-r border-border-light flex flex-col items-center py-3 gap-3">
       <div className="w-10 h-10 rounded-xl bg-bg-gray-dark animate-pulse" />
       <div className="flex-1 flex flex-col items-center gap-2 mt-4">
         {[...Array(6)].map((_, i) => (
