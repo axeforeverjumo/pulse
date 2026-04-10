@@ -70,8 +70,7 @@ async def _gather_source_data(
             try:
                 result = await (
                     supabase.table("emails")
-                    .select("subject, from_address, snippet, received_at")
-                    .eq("workspace_id", workspace_id)
+                    .select("subject, \"from\", snippet, received_at")
                     .gt("received_at", since)
                     .or_(f"subject.ilike.%{kw}%,snippet.ilike.%{kw}%")
                     .order("received_at", desc=True)
@@ -177,7 +176,6 @@ async def _gather_source_data(
                 result = await (
                     supabase.table("calendar_events")
                     .select("title, start_time, description")
-                    .eq("workspace_id", workspace_id)
                     .gt("start_time", since)
                     .ilike("title", f"%{kw}%")
                     .limit(3)

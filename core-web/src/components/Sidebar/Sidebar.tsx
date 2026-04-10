@@ -30,6 +30,8 @@ import {
   Palette,
   TrendingUp,
   Share2,
+  Clock,
+  CalendarCheck,
 } from "lucide-react";
 import { Icon, type LucideIcon } from "../ui/Icon";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
@@ -146,6 +148,16 @@ const availableAppTypes = [
     name: "Knowledge",
     icon: Share2,
   },
+  {
+    type: "live-notes",
+    name: "Live Notes",
+    icon: Clock,
+  },
+  {
+    type: "meeting-prep",
+    name: "Meeting Prep",
+    icon: CalendarCheck,
+  },
 ];
 
 // Map app types to their icons
@@ -166,6 +178,8 @@ const appIcons: Record<string, LucideIcon> = {
   studio: Palette,
   marketing: TrendingUp,
   knowledge: Share2,
+  "live-notes": Clock,
+  "meeting-prep": CalendarCheck,
 };
 
 // Generate workspace-specific path for an app

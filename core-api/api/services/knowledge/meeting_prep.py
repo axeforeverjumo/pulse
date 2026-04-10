@@ -73,7 +73,6 @@ async def get_upcoming_meetings(
     result = await (
         supabase.table("calendar_events")
         .select("*")
-        .eq("workspace_id", workspace_id)
         .gte("start_time", now.isoformat())
         .lte("start_time", until.isoformat())
         .order("start_time")
@@ -99,10 +98,9 @@ async def _get_recent_emails_with(
     for addr in email_addresses[:5]:
         result = await (
             supabase.table("emails")
-            .select("id, subject, from_address, to_addresses, snippet, received_at")
-            .eq("workspace_id", workspace_id)
+            .select("id, subject, \"from\", \"to\", snippet, received_at")
             .gt("received_at", since)
-            .or_(f"from_address.ilike.%{addr}%,to_addresses.ilike.%{addr}%")
+            .or_(f"\"from\".ilike.%{addr}%,\"to\".ilike.%{addr}%")
             .order("received_at", desc=True)
             .limit(limit // len(email_addresses) + 1)
             .execute()
@@ -210,7 +208,7 @@ async def generate_briefing(
     # Step 3: Get recent emails with attendees
     recent_emails = await _get_recent_emails_with(supabase, workspace_id, attendee_emails)
     email_context_str = "\n".join(
-        f"- [{e.get('received_at', '')}] {e.get('subject', 'No subject')} (from: {e.get('from_address', '?')})"
+        f"- [{e.get('received_at', '')}] {e.get('subject', 'No subject')} (from: {e.get('from', '?')})"
         for e in recent_emails[:10]
     ) if recent_emails else "No recent emails with attendees."
 

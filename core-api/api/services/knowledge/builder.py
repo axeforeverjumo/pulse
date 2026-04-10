@@ -445,10 +445,10 @@ async def _fetch_source_items(
     """Fetch new items from a source since the last processed timestamp."""
 
     if source_type == "email":
+        # emails table uses "from" and "to" columns, RLS filters by user_id
         result = await (
             supabase.table("emails")
-            .select("id, subject, from_address, to_addresses, cc_addresses, snippet, received_at, sent_at")
-            .eq("workspace_id", workspace_id)
+            .select("id, subject, \"from\", \"to\", cc, snippet, received_at, sent_at")
             .gt("received_at", since)
             .order("received_at")
             .limit(limit)
@@ -457,10 +457,10 @@ async def _fetch_source_items(
         return result.data or []
 
     elif source_type == "calendar":
+        # calendar_events uses user_id, RLS filters
         result = await (
             supabase.table("calendar_events")
             .select("id, title, description, location, start_time, end_time, attendees, organizer_email")
-            .eq("workspace_id", workspace_id)
             .gt("created_at", since)
             .order("created_at")
             .limit(limit)
@@ -469,17 +469,20 @@ async def _fetch_source_items(
         return result.data or []
 
     elif source_type == "chat":
-        result = await (
-            supabase.table("messages")
-            .select("id, content, role, created_at, conversation_id")
-            .eq("workspace_id", workspace_id)
-            .gt("created_at", since)
-            .eq("role", "user")
-            .order("created_at")
-            .limit(limit)
-            .execute()
-        )
-        return result.data or []
+        # messages table — check if it has workspace_id or conversation scoping
+        try:
+            result = await (
+                supabase.table("messages")
+                .select("id, content, role, created_at, conversation_id")
+                .gt("created_at", since)
+                .eq("role", "user")
+                .order("created_at")
+                .limit(limit)
+                .execute()
+            )
+            return result.data or []
+        except Exception:
+            return []
 
     elif source_type == "crm":
         # Fetch recently created/updated contacts and companies

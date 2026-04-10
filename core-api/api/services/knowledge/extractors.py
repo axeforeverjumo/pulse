@@ -74,11 +74,11 @@ def _format_email_for_extraction(email: Dict[str, Any]) -> str:
     """Format an email record for the extraction prompt."""
     parts = []
     parts.append(f"Subject: {email.get('subject', '(no subject)')}")
-    parts.append(f"From: {email.get('from_address', 'unknown')}")
-    to = email.get("to_addresses") or email.get("to_address", "")
+    parts.append(f"From: {email.get('from', 'unknown')}")
+    to = email.get("to") or email.get("to_address", "")
     if to:
         parts.append(f"To: {to}")
-    cc = email.get("cc_addresses") or email.get("cc_address", "")
+    cc = email.get("cc") or email.get("cc_address", "")
     if cc:
         parts.append(f"CC: {cc}")
     parts.append(f"Date: {email.get('received_at') or email.get('sent_at', '')}")

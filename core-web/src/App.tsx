@@ -59,7 +59,8 @@ const AutomationsView = lazy(() => import("./components/Automations/AutomationsV
 const StudioView = lazy(() => import("./components/Studio/StudioView"));
 const MarketingView = lazy(() => import("./components/Marketing/MarketingView"));
 const KnowledgeView = lazy(() => import("./components/Knowledge/KnowledgeView"));
-const LiveNotesView = lazy(() => import("./components/LiveNotes/LiveNotesView"));
+const LiveNotesPage = lazy(() => import("./components/LiveNotes/LiveNotesView"));
+const MeetingPrepPage = lazy(() => import("./components/MeetingPrep/MeetingPrepPage"));
 const StudioRuntime = lazy(() => import("./components/Studio/runtime/StudioRuntime"));
 const OnboardingWizard = lazy(() => import("./components/Onboarding/OnboardingWizard"));
 const PENDING_INVITE_TOKEN_KEY = "pending_invite_token";
@@ -650,7 +651,8 @@ function AppContent() {
         <Route path="/workspace/:workspaceId/messaging" element={<MessagingView />} />
         <Route path="/workspace/:workspaceId/crm" element={<CrmView />} />
         <Route path="/workspace/:workspaceId/knowledge" element={<KnowledgeView />} />
-        <Route path="/workspace/:workspaceId/live-notes" element={<LiveNotesView />} />
+        <Route path="/workspace/:workspaceId/live-notes" element={<LiveNotesPage />} />
+        <Route path="/workspace/:workspaceId/meeting-prep" element={<MeetingPrepPage />} />
         <Route path="/workspace/:workspaceId/devops" element={<DevOpsView />} />
         <Route path="/workspace/:workspaceId/automations" element={<AutomationsView />} />
         <Route path="/workspace/:workspaceId/marketing" element={<MarketingView />} />
