@@ -298,17 +298,30 @@ async def ensure_daily_note(workspace_id: str):
 
     # Create the document
     try:
-        # Get any workspace_app_id for files
+        # Get workspace owner as user_id
+        owner = supabase.table("workspace_members") \
+            .select("user_id") \
+            .eq("workspace_id", workspace_id) \
+            .eq("role", "owner") \
+            .limit(1) \
+            .execute()
+        user_id = owner.data[0]["user_id"] if owner.data else None
+        if not user_id:
+            logger.warning(f"[LIVE_NOTES] No owner found for workspace {workspace_id[:8]}")
+            return None
+
+        # Get workspace_app_id for live-notes
         apps = supabase.table("workspace_apps") \
             .select("id") \
             .eq("workspace_id", workspace_id) \
-            .in_("app_type", ["live-notes", "files"]) \
+            .eq("app_type", "live-notes") \
             .limit(1) \
             .execute()
         app_id = apps.data[0]["id"] if apps.data else None
 
         doc_data = {
             "workspace_id": workspace_id,
+            "user_id": user_id,
             "title": title,
             "content": content,
             "type": "note",
