@@ -53,7 +53,7 @@ async def build_knowledge_index(
         for p in people:
             meta = p.get("metadata") or {}
             lines.append(
-                f"| {p['id'][:8]} | {p['name']} | {meta.get('email', '')} "
+                f"| {p['id']} | {p['name']} | {meta.get('email', '')} "
                 f"| {meta.get('role', '')} | {meta.get('organization', '')} |"
             )
         sections.append("\n".join(lines))
@@ -65,7 +65,7 @@ async def build_knowledge_index(
         for o in orgs:
             meta = o.get("metadata") or {}
             lines.append(
-                f"| {o['id'][:8]} | {o['name']} | {meta.get('domain', '')} "
+                f"| {o['id']} | {o['name']} | {meta.get('domain', '')} "
                 f"| {meta.get('industry', '')} |"
             )
         sections.append("\n".join(lines))
@@ -77,7 +77,7 @@ async def build_knowledge_index(
         for pr in projects:
             meta = pr.get("metadata") or {}
             lines.append(
-                f"| {pr['id'][:8]} | {pr['name']} | {meta.get('status', '')} "
+                f"| {pr['id']} | {pr['name']} | {meta.get('status', '')} "
                 f"| {meta.get('type', '')} |"
             )
         sections.append("\n".join(lines))
@@ -89,7 +89,7 @@ async def build_knowledge_index(
         for t in topics:
             meta = t.get("metadata") or {}
             kw = ", ".join(meta.get("keywords", [])[:5])
-            lines.append(f"| {t['id'][:8]} | {t['name']} | {kw} |")
+            lines.append(f"| {t['id']} | {t['name']} | {kw} |")
         sections.append("\n".join(lines))
 
     return "\n\n".join(sections)
