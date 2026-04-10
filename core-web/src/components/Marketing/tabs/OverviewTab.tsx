@@ -22,7 +22,6 @@ import {
   getMarketingGscSites,
   getMarketingSearchPerformance,
   getMarketingSearchKeywords,
-  getMarketingPageSpeed,
   runMarketingSeoAudit,
   getMarketingSeoAudits,
 } from "../../../api/client";
@@ -82,11 +81,6 @@ export default function OverviewTab({ site, onSiteUpdated }: Props) {
           getMarketingSearchKeywords(site.id).then((kw) => setTopKeywords(kw.slice(0, 8))).catch(() => null),
         );
       }
-
-      // PageSpeed (cached or fresh)
-      promises.push(
-        getMarketingPageSpeed(site.id, "mobile").then(setPagespeed).catch(() => null),
-      );
 
       // Last audit
       promises.push(
