@@ -138,22 +138,22 @@ export default function FinanceView() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
           <div className="p-4 rounded-xl border border-border-light bg-bg-white">
             <p className="text-[10px] text-text-tertiary mb-1.5">Facturado total</p>
-            <p className="font-display text-xl font-bold text-green-500">{fmt(summary?.invoices_total)}</p>
+            <p className="text-xl font-bold text-green-500">{fmt(summary?.invoices_total)}</p>
             <p className="text-[9.5px] text-text-tertiary mt-0.5">{fmt(summary?.invoices_paid)} cobrado</p>
           </div>
           <div className="p-4 rounded-xl border border-border-light bg-bg-white">
             <p className="text-[10px] text-text-tertiary mb-1.5">Pendiente de cobro</p>
-            <p className="font-display text-xl font-bold text-amber-500">{fmt(summary?.invoices_pending)}</p>
+            <p className="text-xl font-bold text-amber-500">{fmt(summary?.invoices_pending)}</p>
             <p className="text-[9.5px] text-text-tertiary mt-0.5">Facturas enviadas</p>
           </div>
           <div className="p-4 rounded-xl border border-border-light bg-bg-white">
             <p className="text-[10px] text-text-tertiary mb-1.5">Presupuestos</p>
-            <p className="font-display text-xl font-bold text-text-dark">{fmt(summary?.budgets_total)}</p>
+            <p className="text-xl font-bold text-text-dark">{fmt(summary?.budgets_total)}</p>
             <p className="text-[9.5px] text-text-tertiary mt-0.5">{fmt(summary?.budgets_accepted)} aceptados</p>
           </div>
           <div className="p-4 rounded-xl border border-border-light bg-bg-white">
             <p className="text-[10px] text-text-tertiary mb-1.5">Documentos</p>
-            <p className="font-display text-xl font-bold text-brand-primary">{summary?.total_documents || 0}</p>
+            <p className="text-xl font-bold text-brand-primary">{summary?.total_documents || 0}</p>
             <p className="text-[9.5px] text-text-tertiary mt-0.5">Total en el modulo</p>
           </div>
         </div>
@@ -163,7 +163,7 @@ export default function FinanceView() {
           {/* Budgets */}
           <div className="p-4 rounded-xl border border-border-light bg-bg-white">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-display text-[12px] font-semibold text-text-dark flex items-center gap-2">
+              <h3 className="text-[12px] font-semibold text-text-dark flex items-center gap-2">
                 <span>📄</span> Presupuestos
               </h3>
               <button
@@ -189,7 +189,7 @@ export default function FinanceView() {
           {/* Invoices */}
           <div className="p-4 rounded-xl border border-border-light bg-bg-white">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-display text-[12px] font-semibold text-text-dark flex items-center gap-2">
+              <h3 className="text-[12px] font-semibold text-text-dark flex items-center gap-2">
                 <span>🧾</span> Facturas
               </h3>
               <button
@@ -280,11 +280,11 @@ function DocRow({ doc, onStatusChange }: { doc: ModuleDocument; onStatusChange: 
       </div>
       <div className="flex items-center gap-2 shrink-0 ml-2">
         {doc.amount != null && (
-          <span className="text-[11px] font-display font-bold text-text-dark">
+          <span className="text-[11px] font-bold text-text-dark">
             €{doc.amount.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
           </span>
         )}
-        <span className={`text-[9px] font-display font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${statusColors[doc.status] || ''}`}>
+        <span className={`text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${statusColors[doc.status] || ''}`}>
           {statusLabels[doc.status] || doc.status}
         </span>
         {next && (

@@ -15,7 +15,7 @@ export default function SidePanel({ title, subtitle, children }: SidePanelProps)
   return (
     <div className="w-[200px] shrink-0 bg-bg-main-sidebar border-r border-border-light flex flex-col overflow-hidden">
       <div className="px-3.5 py-3 border-b border-border-light shrink-0">
-        <h2 className="font-display text-sm font-bold text-text-dark">{title}</h2>
+        <h2 className="text-sm font-bold text-text-dark">{title}</h2>
         {subtitle && <p className="text-[10px] text-text-tertiary mt-0.5">{subtitle}</p>}
       </div>
       <div className="flex-1 overflow-y-auto px-1.5 py-2">
@@ -28,7 +28,7 @@ export default function SidePanel({ title, subtitle, children }: SidePanelProps)
 /** Section label inside SidePanel */
 export function SPSection({ label }: { label: string }) {
   return (
-    <p className="font-display text-[8.5px] font-bold tracking-[0.13em] uppercase text-text-tertiary px-2 py-1.5 mt-1 first:mt-0">
+    <p className="text-[8.5px] font-bold tracking-[0.13em] uppercase text-text-tertiary px-2 py-1.5 mt-1 first:mt-0">
       {label}
     </p>
   );

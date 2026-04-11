@@ -85,7 +85,7 @@ export default function AutomationsView() {
       <div className="h-[50px] flex items-center justify-between px-4 border-b border-border-light shrink-0">
         <div className="flex items-center gap-2">
           <Zap size={18} className="text-brand-primary" />
-          <span className="font-display text-sm font-bold text-text-dark">Automatizaciones</span>
+          <span className="text-[15px] font-extrabold text-text-dark tracking-tight">Automatizaciones</span>
         </div>
         <button
           onClick={() => setFullscreen(!fullscreen)}

@@ -75,7 +75,7 @@ export function ActionCard({ action }: { action: ParsedAction }) {
         <span className="text-base">{icon}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-display text-[10px] font-bold tracking-[0.08em] uppercase text-text-tertiary">
+            <span className="text-[10px] font-bold tracking-[0.08em] uppercase text-text-tertiary">
               {label}
             </span>
             <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold ${sc.bg} ${sc.text}`}>

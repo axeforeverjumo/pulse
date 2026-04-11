@@ -131,9 +131,9 @@ p {
 
   /* Fonts */
   --font-sans: 'DM Sans', 'Manrope', 'Avenir Next', 'Segoe UI', sans-serif;
-  --font-display: 'Syne', 'Sora', 'Avenir Next', 'Segoe UI', sans-serif;
+  --font-display: 'Manrope', 'DM Sans', 'Avenir Next', 'Segoe UI', sans-serif;
   --font-mono: 'Chivo Mono', ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
-  --font-label: 'Syne', 'Space Grotesk', 'Avenir Next', 'Segoe UI', sans-serif;
+  --font-label: 'Space Grotesk', 'Manrope', 'Avenir Next', 'Segoe UI', sans-serif;
 
   /* Spacing scale */
   --spacing-xs: 4px;

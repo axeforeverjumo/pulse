@@ -30,7 +30,7 @@ export default function DashboardView() {
                 <p className="text-[11px] sm:text-xs font-semibold tracking-[0.18em] uppercase text-slate-500">
                   Pulse Control Center
                 </p>
-                <h1 className="font-display text-xl sm:text-2xl font-semibold text-slate-900">
+                <h1 className="text-xl sm:text-2xl font-extrabold text-text-dark tracking-tight">
                   {workspace.name}
                 </h1>
               </div>

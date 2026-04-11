@@ -614,14 +614,14 @@ export default function SidebarChat() {
           </div>
           {/* Agent info */}
           <div className="flex-1 min-w-0">
-            <span className="font-display text-[13px] font-bold text-text-dark block truncate">{agentConfig.name}</span>
+            <span className="text-[13px] font-bold text-text-dark block truncate">{agentConfig.name}</span>
             <span className="text-[10px] text-green-500 flex items-center gap-1">
               <span className="w-[5px] h-[5px] rounded-full bg-green-500 inline-block" />
               {agentConfig.status}
             </span>
           </div>
           {/* Pill + actions */}
-          <span className={`text-[8px] font-display font-bold tracking-[0.04em] px-1.5 py-0.5 rounded-[10px] border ${agentConfig.pillColor}`}>IA</span>
+          <span className={`text-[8px] font-bold tracking-wider px-1.5 py-0.5 rounded-md border ${agentConfig.pillColor}`}>IA</span>
           <div className="flex items-center gap-0.5">
             <button
               onClick={() => {
@@ -727,7 +727,7 @@ export default function SidebarChat() {
                 {agentConfig.emoji}
               </div>
               <div className="text-center">
-                <p className="font-display text-sm font-bold text-text-dark">{agentConfig.name}</p>
+                <p className="text-sm font-bold text-text-dark">{agentConfig.name}</p>
                 <p className="text-xs text-text-tertiary mt-1">Listo para ayudarte</p>
               </div>
               {/* Suggestion chips */}

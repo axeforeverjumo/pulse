@@ -20,13 +20,13 @@ interface ViewTopBarProps {
 }
 
 const pillStyles: Record<string, string> = {
-  accent: 'bg-[#eef3ff] text-[#3b6cf5] border-[#c5d5f9]',
-  green: 'bg-[#ecfdf3] text-[#12875d] border-[#a6ebc9]',
-  amber: 'bg-[#fff8eb] text-[#b45309] border-[#fcd99e]',
-  red: 'bg-[#fef2f2] text-[#dc2626] border-[#fca5a5]',
-  cyan: 'bg-[#ecfeff] text-[#0e7490] border-[#a5e9f0]',
-  pink: 'bg-[#fdf2f8] text-[#c026a3] border-[#f0abdb]',
-  violet: 'bg-[#f5f3ff] text-[#7c3aed] border-[#c4b5fd]',
+  accent: 'bg-blue-50 text-blue-600 border-blue-200',
+  green: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  amber: 'bg-amber-50 text-amber-700 border-amber-200',
+  red: 'bg-red-50 text-red-600 border-red-200',
+  cyan: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+  pink: 'bg-pink-50 text-pink-600 border-pink-200',
+  violet: 'bg-violet-50 text-violet-600 border-violet-200',
 };
 
 export default function ViewTopBar({
@@ -40,14 +40,14 @@ export default function ViewTopBar({
   const ps = pill ? pillStyles[pill.color || 'accent'] : null;
 
   return (
-    <div className="h-[54px] flex items-center justify-between gap-4 border-b border-border-light px-5 shrink-0">
+    <div className="h-[52px] flex items-center justify-between gap-4 border-b border-border-light px-5 shrink-0">
       {/* Left: title + pill */}
       <div className="flex items-center gap-3 min-w-0">
-        <h1 className="text-[16px] font-extrabold text-text-dark tracking-tight truncate" style={{ fontFamily: "'Syne', var(--font-display)" }}>
+        <h1 className="text-[15px] font-extrabold text-text-dark tracking-tight truncate">
           {title}
         </h1>
         {pill && ps && (
-          <span className={`text-[10px] font-bold tracking-wide uppercase px-2.5 py-[3px] rounded-md border ${ps}`} style={{ fontFamily: "'Syne', var(--font-display)" }}>
+          <span className={`text-[10px] font-bold tracking-wide uppercase px-2.5 py-[3px] rounded-md border ${ps}`}>
             {pill.label}
           </span>
         )}

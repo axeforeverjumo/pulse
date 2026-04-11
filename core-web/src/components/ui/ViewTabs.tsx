@@ -115,7 +115,7 @@ function ListTemplate({ data }: { data: Record<string, unknown> }) {
 
   return (
     <div>
-      <h3 className="font-display text-sm font-bold text-text-dark mb-3">{title}</h3>
+      <h3 className="text-sm font-bold text-text-dark mb-3">{title}</h3>
       <div className="space-y-1.5">
         {items.map((item, i) => (
           <div key={i} className="flex items-center justify-between p-3 rounded-lg border border-border-light hover:border-border-gray transition-colors bg-bg-white">
@@ -125,11 +125,11 @@ function ListTemplate({ data }: { data: Record<string, unknown> }) {
             </div>
             <div className="flex items-center gap-2">
               {item.status && (
-                <span className="text-[9px] font-display font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-bg-gray text-text-secondary">
+                <span className="text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-bg-gray text-text-secondary">
                   {item.status}
                 </span>
               )}
-              {item.value && <span className="text-[12px] font-display font-bold text-text-dark">{item.value}</span>}
+              {item.value && <span className="text-[12px] font-bold text-text-dark">{item.value}</span>}
             </div>
           </div>
         ))}
@@ -145,11 +145,11 @@ function DetailTemplate({ data }: { data: Record<string, unknown> }) {
 
   return (
     <div>
-      <h3 className="font-display text-sm font-bold text-text-dark mb-3">{title}</h3>
+      <h3 className="text-sm font-bold text-text-dark mb-3">{title}</h3>
       <div className="grid grid-cols-2 gap-2">
         {fields.map((f, i) => (
           <div key={i} className="p-3 rounded-lg border border-border-light bg-bg-white">
-            <p className="text-[8px] font-display font-bold uppercase tracking-[0.12em] text-text-tertiary mb-1">{f.label}</p>
+            <p className="text-[8px] font-bold uppercase tracking-[0.12em] text-text-tertiary mb-1">{f.label}</p>
             <p className="text-[12px] text-text-dark">{f.value}</p>
           </div>
         ))}
@@ -164,7 +164,7 @@ function DocumentTemplate({ data }: { data: Record<string, unknown> }) {
 
   return (
     <div className="max-w-2xl">
-      <h3 className="font-display text-lg font-bold text-text-dark mb-4">{title}</h3>
+      <h3 className="text-lg font-bold text-text-dark mb-4">{title}</h3>
       <div className="prose prose-sm text-text-body" dangerouslySetInnerHTML={{ __html: content }} />
     </div>
   );

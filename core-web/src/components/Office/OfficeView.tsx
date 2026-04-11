@@ -18,16 +18,16 @@ export default function OfficeView() {
       />
       <div className="flex-1 overflow-auto p-5">
         <div className="mb-6">
-          <p className="font-display text-[9.5px] font-bold tracking-[0.13em] uppercase text-text-tertiary mb-3">Empleados IA</p>
+          <p className="text-[9.5px] font-bold tracking-[0.13em] uppercase text-text-tertiary mb-3">Empleados IA</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {roles.map((role) => (
               <div key={role.name} className="relative p-4 rounded-xl border border-border-light bg-bg-white hover:border-border-gray transition-all cursor-pointer group">
-                <span className="absolute top-2 right-2 text-[8px] font-display font-bold px-1.5 py-0.5 rounded-[10px] bg-brand-primary/10 text-brand-primary border border-brand-primary/20 tracking-[0.04em]">IA</span>
+                <span className="absolute top-2 right-2 text-[8px] font-bold px-1.5 py-0.5 rounded-[10px] bg-brand-primary/10 text-brand-primary border border-brand-primary/20 tracking-[0.04em]">IA</span>
                 <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${role.color} flex items-center justify-center text-xl mb-3`}>
                   {role.emoji}
                 </div>
-                <span className="text-[8.5px] font-display font-bold tracking-[0.08em] uppercase px-2 py-0.5 rounded-full bg-bg-gray text-text-tertiary inline-block mb-2">{role.dept}</span>
-                <p className="font-display text-[12px] font-semibold text-text-dark mb-0.5">{role.name}</p>
+                <span className="text-[8.5px] font-bold tracking-[0.08em] uppercase px-2 py-0.5 rounded-full bg-bg-gray text-text-tertiary inline-block mb-2">{role.dept}</span>
+                <p className="text-[12px] font-semibold text-text-dark mb-0.5">{role.name}</p>
                 <div className="flex items-center gap-1 text-[10px] text-green-500 font-medium mb-3">
                   <span className="w-[5px] h-[5px] rounded-full bg-green-500" />
                   {role.status}

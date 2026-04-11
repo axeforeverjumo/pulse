@@ -216,7 +216,7 @@ export default function ProjectsView() {
                     <Icon icon={PanelLeft} size={14} />
                     Tableros
                   </button>
-                  <h1 className="font-display text-sm font-bold text-text-dark truncate">
+                  <h1 className="text-[15px] font-extrabold text-text-dark tracking-tight truncate">
                     {activeBoard?.name || "Project Board"}
                   </h1>
                   {activeBoard?.deploy_url && (
@@ -224,7 +224,7 @@ export default function ProjectsView() {
                       href={activeBoard.deploy_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-display font-bold uppercase tracking-[0.08em] text-brand-primary bg-brand-primary/[.1] border border-brand-primary/[.18] rounded-full hover:bg-brand-primary/[.15] transition-colors truncate max-w-[200px]"
+                      className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-primary bg-blue-50 border border-blue-200 rounded-full hover:bg-blue-100 transition-colors truncate max-w-[200px]"
                       title={activeBoard.deploy_url}
                     >
                       {activeBoard.deploy_url.replace(/^https?:\/\//, '')}

@@ -15,7 +15,7 @@ export default function ProactiveAlert({ label, text, chips, onChipClick, onDism
   return (
     <div className="mx-3 mb-2 rounded-[10px] bg-brand-primary/[.07] border border-brand-primary/[.18] p-3 animate-in fade-in slide-in-from-top-2 duration-300">
       <div className="flex items-center justify-between mb-1.5">
-        <span className="font-display text-[8.5px] font-bold tracking-[0.1em] uppercase text-brand-primary flex items-center gap-1">
+        <span className="text-[8.5px] font-bold tracking-[0.1em] uppercase text-brand-primary flex items-center gap-1">
           <span>⚡</span> {label}
         </span>
         {onDismiss && (
