@@ -1,11 +1,21 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { Search, Download, Star, ArrowLeft } from "lucide-react";
+import { Search, Download, Star, ArrowLeft, Settings2, Bot, Store, Pencil, Check, X } from "lucide-react";
 import { Icon } from "../ui/Icon";
 import {
   getAgenciaTemplates,
+  getWorkspaceAgents,
   createAgent,
+  updateAgent,
+  deleteAgent,
+  getWorkspaceSkills,
+  getAgentSkills,
+  createSkill,
+  assignSkillToAgent,
+  unassignSkillFromAgent,
   type AgentTemplate,
+  type AgentInstance,
+  type AgentSkill,
 } from "../../api/client";
 
 const DEPARTMENTS = [
@@ -33,8 +43,335 @@ const DEPT_COLORS: Record<string, string> = {
   general: "bg-gray-100 text-gray-700",
 };
 
+const AVAILABLE_MODELS = [
+  { value: "gpt-5.4-mini", label: "GPT-5.4 Mini (rapido)" },
+  { value: "gpt-5.3-codex", label: "GPT-5.3 Codex (codigo)" },
+  { value: "gpt-5.4", label: "GPT-5.4 (avanzado)" },
+];
+
 export default function AgenciaView() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
+  const [activeTab, setActiveTab] = useState<"mis-agentes" | "tienda">("mis-agentes");
+
+  return (
+    <div className="flex-1 flex min-w-0 overflow-hidden rounded-[20px] bg-gradient-to-b from-[#f6fbff] to-[#edf4fb]">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white/92 md:rounded-[20px]">
+        {/* Header */}
+        <div className="h-14 flex items-center justify-between gap-2 border-b border-[#e4edf8] pl-3 pr-2 sm:pl-5 sm:pr-3">
+          <div className="flex items-center gap-3">
+            <h1 className="text-sm font-semibold text-slate-800">Agencia</h1>
+            {/* Tabs */}
+            <div className="flex gap-1 p-0.5 rounded-xl bg-slate-100/80">
+              <button
+                onClick={() => setActiveTab("mis-agentes")}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                  activeTab === "mis-agentes"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                <Icon icon={Bot} size={13} />
+                Mis Agentes
+              </button>
+              <button
+                onClick={() => setActiveTab("tienda")}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                  activeTab === "tienda"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                <Icon icon={Store} size={13} />
+                Tienda
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        {activeTab === "mis-agentes" ? (
+          <MisAgentesTab workspaceId={workspaceId!} />
+        ) : (
+          <TiendaTab workspaceId={workspaceId!} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// MIS AGENTES TAB
+// =============================================================================
+
+function MisAgentesTab({ workspaceId }: { workspaceId: string }) {
+  const [agents, setAgents] = useState<AgentInstance[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedAgent, setSelectedAgent] = useState<AgentInstance | null>(null);
+  const [skills, setSkills] = useState<AgentSkill[]>([]);
+  const [agentSkillIds, setAgentSkillIds] = useState<Set<string>>(new Set());
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState("");
+
+  const loadAgents = () => {
+    setLoading(true);
+    getWorkspaceAgents(workspaceId)
+      .then((r) => setAgents(r.agents))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { loadAgents(); }, [workspaceId]);
+
+  // Load workspace skills
+  useEffect(() => {
+    getWorkspaceSkills(workspaceId)
+      .then((r) => setSkills(r.skills))
+      .catch(console.error);
+  }, [workspaceId]);
+
+  // Load agent's assigned skills when selected
+  useEffect(() => {
+    if (!selectedAgent) return;
+    getAgentSkills(selectedAgent.id)
+      .then((r) => {
+        const ids = new Set(r.skills.map((s: any) => s.skill_id || s.skill?.id));
+        setAgentSkillIds(ids);
+      })
+      .catch(console.error);
+  }, [selectedAgent?.id]);
+
+  const handleModelChange = async (agent: AgentInstance, model: string) => {
+    try {
+      const updated = await updateAgent(agent.id, { model } as any);
+      setAgents((prev) => prev.map((a) => (a.id === agent.id ? { ...a, ...updated } : a)));
+      if (selectedAgent?.id === agent.id) setSelectedAgent({ ...selectedAgent, ...updated });
+    } catch (err) {
+      console.error("Failed to update model:", err);
+    }
+  };
+
+  const handleNameSave = async () => {
+    if (!selectedAgent || !nameValue.trim()) return;
+    try {
+      const updated = await updateAgent(selectedAgent.id, { name: nameValue.trim() });
+      setAgents((prev) => prev.map((a) => (a.id === selectedAgent.id ? { ...a, ...updated } : a)));
+      setSelectedAgent({ ...selectedAgent, ...updated });
+      setEditingName(false);
+    } catch (err) {
+      console.error("Failed to update name:", err);
+    }
+  };
+
+  const handleToggleSkill = async (skillId: string) => {
+    if (!selectedAgent) return;
+    try {
+      if (agentSkillIds.has(skillId)) {
+        await unassignSkillFromAgent(selectedAgent.id, skillId);
+        setAgentSkillIds((prev) => { const n = new Set(prev); n.delete(skillId); return n; });
+      } else {
+        await assignSkillToAgent(selectedAgent.id, skillId);
+        setAgentSkillIds((prev) => new Set(prev).add(skillId));
+      }
+    } catch (err) {
+      console.error("Failed to toggle skill:", err);
+    }
+  };
+
+  const handleDelete = async (agentId: string) => {
+    if (!confirm("Eliminar este agente?")) return;
+    try {
+      await deleteAgent(agentId);
+      setAgents((prev) => prev.filter((a) => a.id !== agentId));
+      if (selectedAgent?.id === agentId) setSelectedAgent(null);
+    } catch (err) {
+      console.error("Failed to delete agent:", err);
+    }
+  };
+
+  return (
+    <div className="flex flex-1 overflow-hidden">
+      {/* Agent list */}
+      <div className="flex-1 overflow-y-auto p-5">
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="animate-spin w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full" />
+          </div>
+        ) : agents.length === 0 ? (
+          <div className="text-center py-16">
+            <p className="text-sm text-slate-400 mb-2">No tienes agentes instalados</p>
+            <p className="text-xs text-slate-400">Ve a la Tienda para instalar agentes</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {agents.map((agent) => (
+              <div
+                key={agent.id}
+                onClick={() => { setSelectedAgent(agent); setNameValue(agent.name); setEditingName(false); }}
+                className={`group flex flex-col p-3.5 rounded-xl border cursor-pointer transition-all ${
+                  selectedAgent?.id === agent.id
+                    ? "border-indigo-300 bg-indigo-50/50 shadow-sm"
+                    : "border-slate-100 bg-white hover:border-slate-200 hover:shadow-sm"
+                }`}
+              >
+                <div className="flex items-start gap-2.5 mb-2">
+                  {agent.avatar_url ? (
+                    <img src={agent.avatar_url} className="w-8 h-8 rounded-lg object-cover shrink-0" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-semibold text-sm shrink-0"
+                      style={{ background: "linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)" }}>
+                      {agent.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-slate-800 truncate">{agent.name}</p>
+                    <p className="text-[11px] text-slate-400">
+                      {(agent.config as any)?.role || "Agente"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between mt-auto pt-2">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-mono">
+                    {agent.model || (agent.config as any)?.model || "gpt-5.4-mini"}
+                  </span>
+                  <span className={`w-2 h-2 rounded-full ${
+                    agent.status === "working" ? "bg-green-400 animate-pulse" :
+                    agent.status === "error" ? "bg-red-400" : "bg-gray-300"
+                  }`} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Agent detail panel */}
+      {selectedAgent && (
+        <div className="w-[300px] shrink-0 border-l border-slate-100 overflow-y-auto p-4 space-y-5">
+          {/* Name */}
+          <div>
+            {editingName ? (
+              <div className="flex items-center gap-1.5">
+                <input
+                  value={nameValue}
+                  onChange={(e) => setNameValue(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleNameSave()}
+                  className="flex-1 text-sm font-semibold text-slate-800 px-2 py-1 rounded-lg border border-indigo-300 focus:outline-none"
+                  autoFocus
+                />
+                <button onClick={handleNameSave} className="p-1 rounded hover:bg-green-50 text-green-600">
+                  <Icon icon={Check} size={14} />
+                </button>
+                <button onClick={() => setEditingName(false)} className="p-1 rounded hover:bg-slate-100 text-slate-400">
+                  <Icon icon={X} size={14} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <h3 className="text-sm font-semibold text-slate-800 flex-1 truncate">{selectedAgent.name}</h3>
+                <button onClick={() => { setEditingName(true); setNameValue(selectedAgent.name); }}
+                  className="p-1 rounded hover:bg-slate-100 text-slate-400">
+                  <Icon icon={Pencil} size={12} />
+                </button>
+              </div>
+            )}
+            <p className="text-[11px] text-slate-400 mt-0.5">{(selectedAgent.config as any)?.role || "Agente"}</p>
+          </div>
+
+          {/* Model selector */}
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-slate-500 mb-1.5 font-medium">Modelo</p>
+            <select
+              value={selectedAgent.model || (selectedAgent.config as any)?.model || "gpt-5.4-mini"}
+              onChange={(e) => handleModelChange(selectedAgent, e.target.value)}
+              className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+            >
+              {AVAILABLE_MODELS.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Status */}
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-slate-500 mb-1.5 font-medium">Estado</p>
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${
+                selectedAgent.status === "working" ? "bg-green-400 animate-pulse" :
+                selectedAgent.status === "error" ? "bg-red-400" : "bg-gray-300"
+              }`} />
+              <span className="text-xs text-slate-600 capitalize">{selectedAgent.status}</span>
+              {selectedAgent.sandbox_status && (
+                <span className="text-[10px] text-slate-400">({selectedAgent.sandbox_status})</span>
+              )}
+            </div>
+          </div>
+
+          {/* Tools */}
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-slate-500 mb-1.5 font-medium">
+              Tools ({selectedAgent.enabled_tools.length})
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {selectedAgent.enabled_tools.slice(0, 12).map((tool) => (
+                <span key={tool} className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                  {tool}
+                </span>
+              ))}
+              {selectedAgent.enabled_tools.length > 12 && (
+                <span className="text-[10px] text-slate-400">+{selectedAgent.enabled_tools.length - 12}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Skills */}
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-slate-500 mb-1.5 font-medium">
+              Skills ({agentSkillIds.size})
+            </p>
+            {skills.length === 0 ? (
+              <p className="text-[11px] text-slate-400">No hay skills en este workspace</p>
+            ) : (
+              <div className="space-y-1">
+                {skills.map((skill) => (
+                  <label key={skill.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={agentSkillIds.has(skill.id)}
+                      onChange={() => handleToggleSkill(skill.id)}
+                      className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-slate-700 truncate">{skill.name}</p>
+                      {skill.description && (
+                        <p className="text-[10px] text-slate-400 truncate">{skill.description}</p>
+                      )}
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Delete */}
+          <div className="pt-3 border-t border-slate-100">
+            <button
+              onClick={() => handleDelete(selectedAgent.id)}
+              className="text-[11px] text-red-500 hover:text-red-700 transition-colors"
+            >
+              Eliminar agente
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =============================================================================
+// TIENDA TAB
+// =============================================================================
+
+function TiendaTab({ workspaceId }: { workspaceId: string }) {
   const [templates, setTemplates] = useState<AgentTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDept, setSelectedDept] = useState("all");
@@ -46,13 +383,11 @@ export default function AgenciaView() {
   const [installing, setInstalling] = useState(false);
   const [installed, setInstalled] = useState<string | null>(null);
 
-  // Debounce search
   useEffect(() => {
     const t = setTimeout(() => setSearchDebounced(search), 300);
     return () => clearTimeout(t);
   }, [search]);
 
-  // Fetch templates
   useEffect(() => {
     setLoading(true);
     getAgenciaTemplates({
@@ -90,108 +425,77 @@ export default function AgenciaView() {
   const rest = templates.filter((t) => !t.is_featured);
 
   return (
-    <div className="flex-1 flex min-w-0 overflow-hidden rounded-[20px] bg-gradient-to-b from-[#f6fbff] to-[#edf4fb]">
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white/92 md:rounded-[20px]">
-        {/* Header */}
-        <div className="h-14 flex items-center justify-between gap-2 border-b border-[#e4edf8] pl-3 pr-2 sm:pl-5 sm:pr-3">
-          <div className="flex items-center gap-2">
-            <h1 className="text-sm font-semibold text-slate-800">Agencia</h1>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium">
-              Marketplace
-            </span>
-          </div>
-          <div className="relative w-64">
-            <Icon icon={Search} size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar agentes..."
-              className="w-full text-xs pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
-            />
-          </div>
+    <div className="flex flex-1 overflow-hidden">
+      {/* Sidebar departments */}
+      <div className="w-48 shrink-0 border-r border-slate-100 overflow-y-auto p-2.5">
+        {/* Search */}
+        <div className="relative mb-3">
+          <Icon icon={Search} size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar..."
+            className="w-full text-[11px] pl-7 pr-2 py-1.5 rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+          />
         </div>
+        {DEPARTMENTS.map((dept) => (
+          <button
+            key={dept.id}
+            onClick={() => setSelectedDept(dept.id)}
+            className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors mb-0.5 ${
+              selectedDept === dept.id
+                ? "bg-indigo-50 text-indigo-700 font-medium"
+                : "text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            <span className="text-sm">{dept.emoji}</span>
+            <span>{dept.label}</span>
+          </button>
+        ))}
+      </div>
 
-        {/* Content */}
-        <div className="flex flex-1 overflow-hidden">
-          {/* Sidebar departments */}
-          <div className="w-48 shrink-0 border-r border-slate-100 overflow-y-auto p-2.5">
-            {DEPARTMENTS.map((dept) => (
-              <button
-                key={dept.id}
-                onClick={() => setSelectedDept(dept.id)}
-                className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors mb-0.5 ${
-                  selectedDept === dept.id
-                    ? "bg-indigo-50 text-indigo-700 font-medium"
-                    : "text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                <span className="text-sm">{dept.emoji}</span>
-                <span>{dept.label}</span>
-              </button>
-            ))}
+      {/* Main grid */}
+      <div className="flex-1 overflow-y-auto p-5">
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="animate-spin w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full" />
           </div>
-
-          {/* Main grid */}
-          <div className="flex-1 overflow-y-auto p-5">
-            {loading ? (
-              <div className="flex items-center justify-center py-16">
-                <div className="animate-spin w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full" />
-              </div>
-            ) : templates.length === 0 ? (
-              <div className="text-center py-16">
-                <p className="text-sm text-slate-400">No se encontraron agentes</p>
-              </div>
-            ) : (
-              <>
-                {/* Featured */}
-                {featured.length > 0 && !searchDebounced && (
-                  <div className="mb-6">
-                    <div className="flex items-center gap-1.5 mb-3">
-                      <Icon icon={Star} size={14} className="text-amber-500" />
-                      <h2 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Destacados</h2>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {featured.map((t) => (
-                        <AgenciaCard
-                          key={t.id}
-                          template={t}
-                          onInstall={() => {
-                            setSelectedTemplate(t);
-                            setInstallName(t.name);
-                          }}
-                          installed={installed === t.slug}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* All */}
-                <div>
-                  {!searchDebounced && featured.length > 0 && (
-                    <h2 className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-3">
-                      Todos los agentes
-                    </h2>
-                  )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {(searchDebounced ? templates : rest).map((t) => (
-                      <AgenciaCard
-                        key={t.id}
-                        template={t}
-                        onInstall={() => {
-                          setSelectedTemplate(t);
-                          setInstallName(t.name);
-                        }}
-                        installed={installed === t.slug}
-                      />
-                    ))}
-                  </div>
+        ) : templates.length === 0 ? (
+          <div className="text-center py-16">
+            <p className="text-sm text-slate-400">No se encontraron agentes</p>
+          </div>
+        ) : (
+          <>
+            {featured.length > 0 && !searchDebounced && (
+              <div className="mb-6">
+                <div className="flex items-center gap-1.5 mb-3">
+                  <Icon icon={Star} size={14} className="text-amber-500" />
+                  <h2 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Destacados</h2>
                 </div>
-              </>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {featured.map((t) => (
+                    <AgenciaCard key={t.id} template={t}
+                      onInstall={() => { setSelectedTemplate(t); setInstallName(t.name); }}
+                      installed={installed === t.slug} />
+                  ))}
+                </div>
+              </div>
             )}
-          </div>
-        </div>
+            <div>
+              {!searchDebounced && featured.length > 0 && (
+                <h2 className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-3">Todos</h2>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {(searchDebounced ? templates : rest).map((t) => (
+                  <AgenciaCard key={t.id} template={t}
+                    onInstall={() => { setSelectedTemplate(t); setInstallName(t.name); }}
+                    installed={installed === t.slug} />
+                ))}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Install modal */}
@@ -200,64 +504,39 @@ export default function AgenciaView() {
           <div className="bg-white rounded-xl shadow-2xl w-[420px] overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setSelectedTemplate(null)}
-                  className="p-1 rounded hover:bg-slate-100 text-slate-400"
-                >
+                <button onClick={() => setSelectedTemplate(null)} className="p-1 rounded hover:bg-slate-100 text-slate-400">
                   <Icon icon={ArrowLeft} size={14} />
                 </button>
                 <h3 className="text-sm font-semibold text-slate-800">Instalar Agente</h3>
               </div>
             </div>
             <div className="p-5 space-y-4">
-              {/* Template preview */}
               <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-50">
                 <span className="text-2xl">{selectedTemplate.emoji || "\u{1F916}"}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-slate-800 truncate">{selectedTemplate.name}</p>
                   <p className="text-[11px] text-slate-500 line-clamp-1">{selectedTemplate.description}</p>
                 </div>
-                {selectedTemplate.department && (
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${DEPT_COLORS[selectedTemplate.department] || DEPT_COLORS.general}`}>
-                    {selectedTemplate.department}
-                  </span>
-                )}
               </div>
-
-              {/* Name */}
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1.5">Nombre del agente</label>
-                <input
-                  type="text"
-                  value={installName}
-                  onChange={(e) => setInstallName(e.target.value)}
+                <label className="block text-xs font-medium text-slate-600 mb-1.5">Nombre</label>
+                <input type="text" value={installName} onChange={(e) => setInstallName(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleInstall()}
                   className="w-full text-sm px-3 py-2 rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                  autoFocus
-                />
+                  autoFocus />
               </div>
-
-              {/* Model */}
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1.5">Modelo</label>
-                <select
-                  value={installModel}
-                  onChange={(e) => setInstallModel(e.target.value)}
-                  className="w-full text-sm px-3 py-2 rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                >
-                  <option value="gpt-5.4-mini">GPT-5.4 Mini (rapido)</option>
-                  <option value="gpt-5.3-codex">GPT-5.3 Codex (codigo)</option>
-                  <option value="gpt-5.4">GPT-5.4 (avanzado)</option>
+                <select value={installModel} onChange={(e) => setInstallModel(e.target.value)}
+                  className="w-full text-sm px-3 py-2 rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400">
+                  {AVAILABLE_MODELS.map((m) => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
                 </select>
               </div>
-
-              {/* Install button */}
-              <button
-                onClick={handleInstall}
-                disabled={installing || !installName.trim()}
-                className="w-full py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-              >
-                {installed ? "\u2713 Instalado" : installing ? "Instalando..." : "Instalar en este workspace"}
+              <button onClick={handleInstall} disabled={installing || !installName.trim()}
+                className="w-full py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                {installed ? "\u2713 Instalado" : installing ? "Instalando..." : "Instalar"}
               </button>
             </div>
           </div>
@@ -267,29 +546,22 @@ export default function AgenciaView() {
   );
 }
 
-function AgenciaCard({
-  template,
-  onInstall,
-  installed,
-}: {
-  template: AgentTemplate;
-  onInstall: () => void;
-  installed: boolean;
+// =============================================================================
+// CARD
+// =============================================================================
+
+function AgenciaCard({ template, onInstall, installed }: {
+  template: AgentTemplate; onInstall: () => void; installed: boolean;
 }) {
   return (
     <div className="group relative flex flex-col p-3.5 rounded-xl border border-slate-100 bg-white hover:border-indigo-200 hover:shadow-sm transition-all">
-      {/* Header */}
       <div className="flex items-start gap-2.5 mb-2">
         <span className="text-xl shrink-0">{template.emoji || "\u{1F916}"}</span>
         <div className="flex-1 min-w-0">
           <p className="text-[13px] font-semibold text-slate-800 truncate">{template.name}</p>
-          <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed mt-0.5">
-            {template.description}
-          </p>
+          <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed mt-0.5">{template.description}</p>
         </div>
       </div>
-
-      {/* Footer */}
       <div className="flex items-center justify-between mt-auto pt-2.5">
         <div className="flex items-center gap-1.5">
           {template.department && (
@@ -299,19 +571,14 @@ function AgenciaCard({
           )}
           {(template.install_count || 0) > 0 && (
             <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
-              <Icon icon={Download} size={10} />
-              {template.install_count}
+              <Icon icon={Download} size={10} />{template.install_count}
             </span>
           )}
         </div>
-        <button
-          onClick={onInstall}
+        <button onClick={onInstall}
           className={`text-[11px] px-3 py-1 rounded-md font-medium transition-colors ${
-            installed
-              ? "bg-green-100 text-green-700"
-              : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
-          }`}
-        >
+            installed ? "bg-green-100 text-green-700" : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+          }`}>
           {installed ? "\u2713" : "Instalar"}
         </button>
       </div>
