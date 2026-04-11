@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { PlusIcon, XMarkIcon } from "@heroicons/react/24/outline";
-import { createMarketingProject, getMarketingClients } from "../../api/client";
+import { createMarketingProject, createMarketingSite, getMarketingClients, getMarketingSites } from "../../api/client";
 import { toast } from "sonner";
 
 const PROJECT_TYPES = [
@@ -47,12 +47,16 @@ export default function NewProjectForm({ workspaceId, onCreated, onCancel }: Pro
   const [dueDate, setDueDate] = useState("");
   const [kpis, setKpis] = useState<{ metric: string; target: string; deadline: string }[]>([]);
   const [repositoryUrl, setRepositoryUrl] = useState("");
+  const [siteUrl, setSiteUrl] = useState("");
+  const [existingSites, setExistingSites] = useState<any[]>([]);
+  const [selectedSiteId, setSelectedSiteId] = useState("");
   const [activeTools, setActiveTools] = useState<string[]>(["ga4", "gsc", "pagespeed"]);
   const [clients, setClients] = useState<any[]>([]);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     loadClients();
+    loadExistingSites();
   }, [workspaceId]);
 
   async function loadClients() {
@@ -62,6 +66,13 @@ export default function NewProjectForm({ workspaceId, onCreated, onCancel }: Pro
     } catch (e) {
       // CRM may not have clients yet
     }
+  }
+
+  async function loadExistingSites() {
+    try {
+      const data = await getMarketingSites(workspaceId);
+      setExistingSites(data.sites || []);
+    } catch (e) {}
   }
 
   function toggleTool(toolId: string) {
@@ -88,6 +99,20 @@ export default function NewProjectForm({ workspaceId, onCreated, onCancel }: Pro
     if (!name.trim()) return;
     setCreating(true);
     try {
+      // If a site URL is provided and no existing site selected, create one
+      let siteId = selectedSiteId || undefined;
+      if (!siteId && siteUrl.trim()) {
+        try {
+          const site = await createMarketingSite(workspaceId, {
+            name: name.trim(),
+            url: siteUrl.trim(),
+          });
+          siteId = site.id;
+        } catch (e) {
+          console.error("Failed to create site, continuing without it", e);
+        }
+      }
+
       const project = await createMarketingProject(workspaceId, {
         name: name.trim(),
         project_type: projectType,
@@ -98,6 +123,7 @@ export default function NewProjectForm({ workspaceId, onCreated, onCancel }: Pro
         kpis: kpis.filter((k) => k.target),
         repository_url: repositoryUrl || undefined,
         active_tools: activeTools,
+        site_id: siteId,
       });
       onCreated(project);
     } catch (e: any) {
@@ -175,6 +201,54 @@ export default function NewProjectForm({ workspaceId, onCreated, onCancel }: Pro
                 </option>
               ))}
             </select>
+          </div>
+        </div>
+
+          {/* Site URL / Existing site */}
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[9px] font-bold tracking-[0.12em] uppercase text-slate-400">
+                Sitio web
+              </label>
+              <span className="text-[9px] text-slate-300 italic">necesario para Google Suite</span>
+            </div>
+            {existingSites.length > 0 ? (
+              <div className="space-y-2">
+                <select
+                  value={selectedSiteId}
+                  onChange={(e) => {
+                    setSelectedSiteId(e.target.value);
+                    if (e.target.value) setSiteUrl("");
+                  }}
+                  className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white"
+                >
+                  <option value="">— Crear nuevo sitio —</option>
+                  {existingSites.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.domain})
+                    </option>
+                  ))}
+                </select>
+                {!selectedSiteId && (
+                  <input
+                    type="url"
+                    value={siteUrl}
+                    onChange={(e) => setSiteUrl(e.target.value)}
+                    placeholder="https://example.com"
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  />
+                )}
+              </div>
+            ) : (
+              <input
+                type="url"
+                value={siteUrl}
+                onChange={(e) => setSiteUrl(e.target.value)}
+                placeholder="https://example.com"
+                className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              />
+            )}
+            <p className="text-[9.5px] text-slate-300 mt-1">Se conectara con Google Analytics, Search Console, PageSpeed y SEO</p>
           </div>
         </div>
 
