@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { PlusIcon, BookmarkIcon } from "@heroicons/react/24/outline";
 import { useViewTabsStore } from "../../stores/viewTabsStore";
 
@@ -28,8 +29,9 @@ interface Props {
 }
 
 export default function ProjectSidebar({ projects, loading, selectedId, onSelect, onNew }: Props) {
-  const pinnedTabs = useViewTabsStore((s) => s.tabs.filter((t) => t.state === "pinned"));
+  const allTabs = useViewTabsStore((s) => s.tabs);
   const setActiveTab = useViewTabsStore((s) => s.setActiveTab);
+  const pinnedTabs = useMemo(() => allTabs.filter((t) => t.state === "pinned"), [allTabs]);
 
   if (loading) {
     return (
