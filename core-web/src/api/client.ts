@@ -4364,7 +4364,80 @@ export async function restoreStudioVersion(pageId: string, versionId: string): P
 }
 
 // ============================================================================
-// Marketing API
+// Marketing API — Projects
+// ============================================================================
+
+export async function getMarketingProjects(workspaceId: string, status?: string) {
+  const params = new URLSearchParams({ workspace_id: workspaceId });
+  if (status) params.set('status', status);
+  return api<{ projects: any[]; count: number }>(`/marketing/projects?${params}`);
+}
+
+export async function getMarketingProject(projectId: string) {
+  return api<any>(`/marketing/projects/${projectId}`);
+}
+
+export async function createMarketingProject(workspaceId: string, data: Record<string, any>) {
+  return api<any>('/marketing/projects', {
+    method: 'POST',
+    body: JSON.stringify({ workspace_id: workspaceId, ...data }),
+  });
+}
+
+export async function updateMarketingProject(projectId: string, data: Record<string, any>) {
+  return api<any>(`/marketing/projects/${projectId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteMarketingProject(projectId: string) {
+  return api<void>(`/marketing/projects/${projectId}`, { method: 'DELETE' });
+}
+
+export async function getMarketingProjectMembers(projectId: string) {
+  return api<any[]>(`/marketing/projects/${projectId}/members`);
+}
+
+export async function addMarketingProjectMember(projectId: string, data: Record<string, any>) {
+  return api<any>(`/marketing/projects/${projectId}/members`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function removeMarketingProjectMember(projectId: string, memberId: string) {
+  return api<void>(`/marketing/projects/${projectId}/members/${memberId}`, { method: 'DELETE' });
+}
+
+export async function getMarketingKanbanColumns(projectId: string) {
+  return api<any[]>(`/marketing/projects/${projectId}/columns`);
+}
+
+export async function createMarketingKanbanColumn(projectId: string, data: Record<string, any>) {
+  return api<any>(`/marketing/projects/${projectId}/columns`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateMarketingKanbanColumn(projectId: string, columnId: string, data: Record<string, any>) {
+  return api<any>(`/marketing/projects/${projectId}/columns/${columnId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteMarketingKanbanColumn(projectId: string, columnId: string) {
+  return api<void>(`/marketing/projects/${projectId}/columns/${columnId}`, { method: 'DELETE' });
+}
+
+export async function getMarketingClients(workspaceId: string) {
+  return api<any[]>(`/marketing/clients?workspace_id=${encodeURIComponent(workspaceId)}`);
+}
+
+// ============================================================================
+// Marketing API — Sites
 // ============================================================================
 
 export async function getMarketingSites(workspaceId: string, search?: string) {

@@ -1,10 +1,25 @@
 """
-Marketing router — HTTP endpoints for sites, analytics, search console, SEO audits, PageSpeed.
+Marketing router — HTTP endpoints for projects, sites, analytics, search console, SEO audits, PageSpeed.
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import Any, Dict, Optional, List
 from pydantic import BaseModel, Field
 
+from api.services.marketing.projects import (
+    list_projects,
+    get_project,
+    create_project,
+    update_project,
+    delete_project,
+    add_member,
+    remove_member,
+    list_members,
+    list_columns,
+    create_column,
+    update_column,
+    delete_column,
+    list_clients,
+)
 from api.services.marketing.sites import (
     list_sites,
     get_site,
@@ -81,6 +96,252 @@ class UpdateSiteRequest(BaseModel):
 
 class RunAuditRequest(BaseModel):
     url: Optional[str] = None  # defaults to site url
+
+
+# -- Project models --
+
+class CreateProjectRequest(BaseModel):
+    workspace_id: str
+    name: str = Field(..., min_length=1, max_length=200)
+    project_type: str = "seo"
+    client_id: Optional[str] = None
+    client_name: Optional[str] = None
+    objective: Optional[str] = None
+    due_date: Optional[str] = None
+    kpis: List[Dict[str, Any]] = Field(default_factory=list)
+    knowledge_folder_id: Optional[str] = None
+    repository_url: Optional[str] = None
+    active_tools: List[str] = Field(default_factory=list)
+    assigned_agents: List[str] = Field(default_factory=list)
+    site_id: Optional[str] = None
+    icon: str = "chart"
+    config: Dict[str, Any] = Field(default_factory=dict)
+
+
+class UpdateProjectRequest(BaseModel):
+    name: Optional[str] = None
+    project_type: Optional[str] = None
+    status: Optional[str] = None
+    client_id: Optional[str] = None
+    client_name: Optional[str] = None
+    objective: Optional[str] = None
+    due_date: Optional[str] = None
+    kpis: Optional[List[Dict[str, Any]]] = None
+    knowledge_folder_id: Optional[str] = None
+    repository_url: Optional[str] = None
+    active_tools: Optional[List[str]] = None
+    assigned_agents: Optional[List[str]] = None
+    site_id: Optional[str] = None
+    color: Optional[str] = None
+    icon: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
+
+
+class AddMemberRequest(BaseModel):
+    user_id: Optional[str] = None
+    agent_slug: Optional[str] = None
+    role: str = "member"
+    specialty: Optional[str] = None
+    display_name: Optional[str] = None
+    avatar_color: str = "#5b7fff"
+    max_tasks: int = 10
+
+
+class CreateColumnRequest(BaseModel):
+    name: str
+    slug: Optional[str] = None
+    color: str = "#94a3b8"
+    position: Optional[int] = None
+    is_done_column: bool = False
+
+
+class UpdateColumnRequest(BaseModel):
+    name: Optional[str] = None
+    slug: Optional[str] = None
+    color: Optional[str] = None
+    position: Optional[int] = None
+    is_done_column: Optional[bool] = None
+
+
+# ============================================================================
+# Projects CRUD
+# ============================================================================
+
+@router.get("/projects")
+async def api_list_projects(
+    workspace_id: str = Query(...),
+    status: Optional[str] = None,
+    limit: int = Query(50, ge=1, le=200),
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    try:
+        return await list_projects(workspace_id, user_jwt, status, limit)
+    except Exception as e:
+        handle_api_exception(e, "Failed to list projects", logger)
+
+
+@router.get("/projects/{project_id}")
+async def api_get_project(
+    project_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    try:
+        project = await get_project(project_id, user_jwt)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        return project
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to get project", logger)
+
+
+@router.post("/projects")
+async def api_create_project(
+    body: CreateProjectRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+    user_id: str = Depends(get_current_user_id),
+):
+    try:
+        return await create_project(body.workspace_id, user_id, body.model_dump(), user_jwt)
+    except Exception as e:
+        handle_api_exception(e, "Failed to create project", logger)
+
+
+@router.patch("/projects/{project_id}")
+async def api_update_project(
+    project_id: str,
+    body: UpdateProjectRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    try:
+        return await update_project(project_id, body.model_dump(exclude_none=True), user_jwt)
+    except Exception as e:
+        handle_api_exception(e, "Failed to update project", logger)
+
+
+@router.delete("/projects/{project_id}")
+async def api_delete_project(
+    project_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    try:
+        await delete_project(project_id, user_jwt)
+        return {"ok": True}
+    except Exception as e:
+        handle_api_exception(e, "Failed to delete project", logger)
+
+
+# -- Project Members --
+
+@router.get("/projects/{project_id}/members")
+async def api_list_members(
+    project_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    try:
+        return await list_members(project_id, user_jwt)
+    except Exception as e:
+        handle_api_exception(e, "Failed to list members", logger)
+
+
+@router.post("/projects/{project_id}/members")
+async def api_add_member(
+    project_id: str,
+    body: AddMemberRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    try:
+        project = await get_project(project_id, user_jwt)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        return await add_member(project_id, project["workspace_id"], body.model_dump(), user_jwt)
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to add member", logger)
+
+
+@router.delete("/projects/{project_id}/members/{member_id}")
+async def api_remove_member(
+    project_id: str,
+    member_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    try:
+        await remove_member(member_id, user_jwt)
+        return {"ok": True}
+    except Exception as e:
+        handle_api_exception(e, "Failed to remove member", logger)
+
+
+# -- Kanban Columns --
+
+@router.get("/projects/{project_id}/columns")
+async def api_list_columns(
+    project_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    try:
+        return await list_columns(project_id, user_jwt)
+    except Exception as e:
+        handle_api_exception(e, "Failed to list columns", logger)
+
+
+@router.post("/projects/{project_id}/columns")
+async def api_create_column(
+    project_id: str,
+    body: CreateColumnRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    try:
+        project = await get_project(project_id, user_jwt)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        return await create_column(project_id, project["workspace_id"], body.model_dump(), user_jwt)
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to create column", logger)
+
+
+@router.patch("/projects/{project_id}/columns/{column_id}")
+async def api_update_column(
+    project_id: str,
+    column_id: str,
+    body: UpdateColumnRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    try:
+        return await update_column(column_id, body.model_dump(exclude_none=True), user_jwt)
+    except Exception as e:
+        handle_api_exception(e, "Failed to update column", logger)
+
+
+@router.delete("/projects/{project_id}/columns/{column_id}")
+async def api_delete_column(
+    project_id: str,
+    column_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    try:
+        await delete_column(column_id, user_jwt)
+        return {"ok": True}
+    except Exception as e:
+        handle_api_exception(e, "Failed to delete column", logger)
+
+
+# -- CRM Clients (for project creation) --
+
+@router.get("/clients")
+async def api_list_clients(
+    workspace_id: str = Query(...),
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    try:
+        return await list_clients(workspace_id, user_jwt)
+    except Exception as e:
+        handle_api_exception(e, "Failed to list clients", logger)
 
 
 # ============================================================================

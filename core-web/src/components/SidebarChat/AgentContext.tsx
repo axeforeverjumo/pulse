@@ -63,12 +63,17 @@ const agentConfigs: Record<string, AgentConfig> = {
     },
   },
   marketing: {
-    name: 'PulseMark',
-    status: 'Monitorizando sitios',
-    gradient: 'from-pink-500 to-rose-500',
-    emoji: '📈',
-    pillColor: 'bg-pink-500/10 text-pink-500 border-pink-500/20',
-    chips: ['Auditar SEO', 'Analizar tráfico', 'Competencia'],
+    name: 'Project Manager',
+    status: 'Coordinando equipo',
+    gradient: 'from-blue-500 to-indigo-500',
+    emoji: '📋',
+    pillColor: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+    chips: ['Tareas de hoy', 'Capacidad del equipo', 'Genera informe', 'Ver riesgos'],
+    proactiveAlert: {
+      label: 'Proyecto activo',
+      text: 'Revisa las <strong>tareas en curso</strong> y la carga del equipo. Puedo generar vistas o crear tareas.',
+      chips: ['Ver tareas', 'Capacidad', 'Crear tarea', 'Nueva rutina'],
+    },
   },
   calendar: {
     name: 'Asistente de Agenda',
