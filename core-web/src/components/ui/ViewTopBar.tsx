@@ -20,13 +20,13 @@ interface ViewTopBarProps {
 }
 
 const pillStyles: Record<string, string> = {
-  accent: 'bg-gradient-to-r from-blue-500/10 to-indigo-500/10 text-blue-600 border-blue-400/20',
-  green: 'bg-gradient-to-r from-emerald-500/10 to-teal-500/10 text-emerald-600 border-emerald-400/20',
-  amber: 'bg-gradient-to-r from-amber-500/10 to-orange-500/10 text-amber-600 border-amber-400/20',
-  red: 'bg-gradient-to-r from-red-500/10 to-rose-500/10 text-red-600 border-red-400/20',
-  cyan: 'bg-gradient-to-r from-cyan-500/10 to-sky-500/10 text-cyan-600 border-cyan-400/20',
-  pink: 'bg-gradient-to-r from-pink-500/10 to-rose-500/10 text-pink-600 border-pink-400/20',
-  violet: 'bg-gradient-to-r from-violet-500/10 to-purple-500/10 text-violet-600 border-violet-400/20',
+  accent: 'bg-[#eef3ff] text-[#3b6cf5] border-[#c5d5f9]',
+  green: 'bg-[#ecfdf3] text-[#12875d] border-[#a6ebc9]',
+  amber: 'bg-[#fff8eb] text-[#b45309] border-[#fcd99e]',
+  red: 'bg-[#fef2f2] text-[#dc2626] border-[#fca5a5]',
+  cyan: 'bg-[#ecfeff] text-[#0e7490] border-[#a5e9f0]',
+  pink: 'bg-[#fdf2f8] text-[#c026a3] border-[#f0abdb]',
+  violet: 'bg-[#f5f3ff] text-[#7c3aed] border-[#c4b5fd]',
 };
 
 export default function ViewTopBar({
@@ -40,14 +40,14 @@ export default function ViewTopBar({
   const ps = pill ? pillStyles[pill.color || 'accent'] : null;
 
   return (
-    <div className="h-[52px] flex items-center justify-between gap-3 border-b border-border-light px-5 shrink-0">
+    <div className="h-[54px] flex items-center justify-between gap-4 border-b border-border-light px-5 shrink-0">
       {/* Left: title + pill */}
       <div className="flex items-center gap-3 min-w-0">
-        <h1 className="font-display text-[15px] font-extrabold text-text-dark tracking-[-0.01em] truncate">
+        <h1 className="text-[16px] font-extrabold text-text-dark tracking-tight truncate" style={{ fontFamily: "'Syne', var(--font-display)" }}>
           {title}
         </h1>
         {pill && ps && (
-          <span className={`text-[9px] font-display font-bold tracking-[0.06em] uppercase px-2.5 py-1 rounded-full border ${ps}`}>
+          <span className={`text-[10px] font-bold tracking-wide uppercase px-2.5 py-[3px] rounded-md border ${ps}`} style={{ fontFamily: "'Syne', var(--font-display)" }}>
             {pill.label}
           </span>
         )}
@@ -61,7 +61,7 @@ export default function ViewTopBar({
         {cta && (
           <button
             onClick={cta.onClick}
-            className="flex items-center gap-1.5 px-3.5 py-[7px] rounded-[9px] text-[11px] font-semibold bg-gradient-to-b from-brand-primary to-indigo-700 text-white shadow-[0_2px_8px_-2px_rgba(91,127,255,0.4)] hover:shadow-[0_4px_12px_-2px_rgba(91,127,255,0.5)] hover:translate-y-[-0.5px] transition-all active:translate-y-0"
+            className="flex items-center gap-1.5 px-4 py-[7px] rounded-lg text-[12px] font-bold bg-text-dark text-white hover:bg-brand-primary transition-colors shadow-sm"
           >
             {cta.icon}
             {cta.label}

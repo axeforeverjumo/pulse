@@ -899,11 +899,11 @@ export default function Sidebar() {
 
   // Icon button styles
   const iconBtn =
-    "group/icon w-[38px] h-[38px] flex items-center justify-center rounded-[10px] transition-all duration-150 relative outline-none focus:outline-none border border-transparent";
+    "group/icon w-[38px] h-[38px] flex items-center justify-center rounded-[10px] transition-all duration-150 relative outline-none focus:outline-none";
   const iconBtnActive =
-    "bg-gradient-to-b from-brand-primary to-indigo-700 text-white border-brand-primary/30 shadow-[0_3px_10px_-3px_rgba(91,127,255,0.45)]";
+    "bg-text-dark text-white shadow-sm";
   const iconBtnInactive =
-    "text-text-tertiary hover:text-text-dark hover:bg-bg-gray-dark/40 hover:border-border-gray/50 hover:shadow-[0_2px_6px_-2px_rgba(0,0,0,0.08)]";
+    "text-text-tertiary hover:text-text-secondary hover:bg-bg-gray-dark/30";
 
   // Section label style
   const sectionLabel =

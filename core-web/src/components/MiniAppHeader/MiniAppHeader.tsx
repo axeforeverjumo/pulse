@@ -8,11 +8,11 @@ import NotificationsPanel from '../NotificationsPanel/NotificationsPanel';
 
 // Icon button styles
 const iconBtn =
-  'w-[30px] h-[30px] flex items-center justify-center rounded-[8px] transition-all duration-150 outline-none focus:outline-none';
+  'w-[32px] h-[32px] flex items-center justify-center rounded-lg transition-all duration-150 outline-none focus:outline-none';
 const iconBtnActive =
-  'bg-gradient-to-b from-brand-primary to-indigo-700 text-white shadow-[0_2px_8px_-2px_rgba(91,127,255,0.4)]';
+  'bg-text-dark text-white';
 const iconBtnInactive =
-  'text-text-tertiary hover:text-text-dark hover:bg-bg-gray-dark/30';
+  'text-text-tertiary hover:text-text-dark hover:bg-bg-gray';
 
 /**
  * HeaderButtons - Inline buttons for AI chat, notifications, and settings
