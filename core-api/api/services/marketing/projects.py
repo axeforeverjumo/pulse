@@ -37,7 +37,7 @@ async def list_projects(
     supabase = await get_authenticated_async_client(user_jwt)
     query = (
         supabase.table("marketing_projects")
-        .select("*, marketing_sites(id, name, domain, url), marketing_project_members(id, user_id, agent_slug, role, specialty, display_name, avatar_color)", count="exact")
+        .select("*, marketing_sites!marketing_projects_site_id_fkey(id, name, domain, url), marketing_project_members(id, user_id, agent_slug, role, specialty, display_name, avatar_color)", count="exact")
         .eq("workspace_id", workspace_id)
         .order("created_at", desc=True)
         .limit(limit)
@@ -52,7 +52,7 @@ async def get_project(project_id: str, user_jwt: str) -> Optional[Dict[str, Any]
     supabase = await get_authenticated_async_client(user_jwt)
     result = await (
         supabase.table("marketing_projects")
-        .select("*, marketing_sites(id, name, domain, url), marketing_project_members(id, user_id, agent_slug, role, specialty, display_name, avatar_color), marketing_kanban_columns(id, name, slug, color, position, is_done_column)")
+        .select("*, marketing_sites!marketing_projects_site_id_fkey(id, name, domain, url), marketing_project_members(id, user_id, agent_slug, role, specialty, display_name, avatar_color), marketing_kanban_columns(id, name, slug, color, position, is_done_column)")
         .eq("id", project_id)
         .single()
         .execute()
