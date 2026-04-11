@@ -202,7 +202,6 @@ export default function NewProjectForm({ workspaceId, onCreated, onCancel }: Pro
               ))}
             </select>
           </div>
-        </div>
 
           {/* Site URL / Existing site */}
           <div className="mt-4">
