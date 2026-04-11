@@ -6,13 +6,13 @@ import { useUIStore } from '../../stores/uiStore';
 import { useNotificationStore } from '../../stores/notificationStore';
 import NotificationsPanel from '../NotificationsPanel/NotificationsPanel';
 
-// Icon button styles (dark-mode ready via semantic tokens)
+// Icon button styles
 const iconBtn =
-  'w-8 h-8 flex items-center justify-center rounded-lg border transition-all outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40';
+  'w-[30px] h-[30px] flex items-center justify-center rounded-[8px] transition-all duration-150 outline-none focus:outline-none';
 const iconBtnActive =
-  'border-brand-primary/[.22] bg-brand-primary/[.13] text-brand-primary';
+  'bg-gradient-to-b from-brand-primary to-indigo-700 text-white shadow-[0_2px_8px_-2px_rgba(91,127,255,0.4)]';
 const iconBtnInactive =
-  'border-border-light bg-bg-white/75 text-text-tertiary hover:bg-bg-gray hover:text-text-secondary hover:border-border-gray';
+  'text-text-tertiary hover:text-text-dark hover:bg-bg-gray-dark/30';
 
 /**
  * HeaderButtons - Inline buttons for AI chat, notifications, and settings
@@ -32,17 +32,16 @@ export function HeaderButtons({ onSettingsClick, settingsButtonRef }: { onSettin
 
   return (
     <>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         {/* Notifications toggle + dropdown */}
         <div className="relative" data-notification-bell>
           <button
             onClick={toggleNotificationsPanel}
-            title="Notificaciones"
             className={`${iconBtn} ${isNotificationsPanelOpen ? iconBtnActive : iconBtnInactive} relative`}
           >
-            <Icon icon={Bell} size={20} active={isNotificationsPanelOpen} />
+            <Icon icon={Bell} size={16} active={isNotificationsPanelOpen} />
             {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-0.5 bg-rose-500 text-white text-[9px] font-semibold rounded-full flex items-center justify-center border border-white/90">
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-gradient-to-b from-rose-500 to-red-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center shadow-[0_2px_4px_rgba(239,68,68,0.3)]">
                 {unreadCount > 99 ? '99+' : unreadCount}
               </span>
             )}
@@ -54,19 +53,17 @@ export function HeaderButtons({ onSettingsClick, settingsButtonRef }: { onSettin
         <button
           ref={settingsButtonRef}
           onClick={() => onSettingsClick ? onSettingsClick() : setShowSettingsModal(true)}
-          title="App Settings"
           className={`${iconBtn} ${showSettingsModal || (onSettingsClick && false) ? iconBtnActive : iconBtnInactive}`}
         >
-          <Icon icon={Settings} size={20} active={showSettingsModal || (onSettingsClick && false)} />
+          <Icon icon={Settings} size={16} active={showSettingsModal || (onSettingsClick && false)} />
         </button>
 
         {/* AI Chat toggle */}
         <button
           onClick={toggleSidebarChat}
-          title="AI Chat"
           className={`${iconBtn} ${isSidebarChatOpen ? iconBtnActive : iconBtnInactive}`}
         >
-          <Icon icon={MessageCircle} size={20} active={isSidebarChatOpen} className="-scale-x-100" />
+          <Icon icon={MessageCircle} size={16} active={isSidebarChatOpen} className="-scale-x-100" />
         </button>
       </div>
 

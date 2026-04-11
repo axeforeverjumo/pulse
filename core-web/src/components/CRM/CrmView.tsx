@@ -152,9 +152,9 @@ export default function CrmView() {
 
   return (
     <div className="flex-1 flex h-full min-w-0 overflow-hidden">
-      <div className="relative flex-1 flex min-w-0 overflow-hidden rounded-[20px] bg-gradient-to-b from-[#f6fbff] to-[#edf4fb]">
+      <div className="relative flex-1 flex min-w-0 overflow-hidden">
         {/* Main Content */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white/92 md:rounded-[20px]">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-bg-white">
           <ViewTopBar
             title="Comercial · CRM"
             pill={{ label: 'Pipeline', color: 'amber' }}
@@ -171,7 +171,7 @@ export default function CrmView() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Buscar contactos, empresas..."
-                className="w-full pl-9 pr-8 py-2 text-sm rounded-xl border border-slate-200 bg-white/80 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition-colors placeholder:text-slate-400"
+                className="w-full pl-9 pr-8 py-2 text-[13px] rounded-[10px] border border-border-light bg-bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary/40 transition-all placeholder:text-text-tertiary"
               />
               {searchQuery && (
                 <button
@@ -184,7 +184,7 @@ export default function CrmView() {
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-1 p-0.5 rounded-xl bg-slate-100/80 max-w-lg">
+            <div className="flex gap-1 p-[3px] rounded-[10px] bg-bg-gray max-w-lg border border-border-light">
               {tabs.map((tab) => {
                 const isActive = activeView === tab.id;
                 const TabIcon = tab.icon;
@@ -192,10 +192,10 @@ export default function CrmView() {
                   <button
                     key={tab.id}
                     onClick={() => setActiveView(tab.id)}
-                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-[6px] rounded-[7px] text-[11px] font-semibold transition-all ${
                       isActive
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
+                        ? 'bg-bg-white text-text-dark shadow-sm border border-border-light'
+                        : 'text-text-tertiary hover:text-text-secondary border border-transparent'
                     }`}
                   >
                     <TabIcon className="w-3.5 h-3.5" />

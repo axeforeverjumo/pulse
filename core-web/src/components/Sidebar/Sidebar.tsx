@@ -887,31 +887,30 @@ export default function Sidebar() {
     : [];
 
   // Categorize apps into sections
-  const toolTypes = new Set(['email', 'calendar', 'files', 'messages', 'messaging', 'live-notes', 'meeting-prep']);
+  const utilityTypes = new Set(['email', 'calendar', 'files', 'messages', 'messaging', 'live-notes', 'meeting-prep']);
   const espacioTypes = new Set(['dashboard', 'projects', 'crm', 'marketing', 'agents', 'automations', 'devops', 'knowledge', 'studio', 'office', 'mentors', 'finance']);
 
   const chatApp = displayMiniApps.find((a) => a.type === 'chat');
-  const toolApps = displayMiniApps.filter((a) => toolTypes.has(a.type || ''));
+  const utilityApps = displayMiniApps.filter((a) => utilityTypes.has(a.type || ''));
   const espacioApps = displayMiniApps.filter((a) => espacioTypes.has(a.type || ''));
-  // Anything not categorized goes to espacios
   const uncategorized = displayMiniApps.filter(
-    (a) => a.type !== 'chat' && !toolTypes.has(a.type || '') && !espacioTypes.has(a.type || '')
+    (a) => a.type !== 'chat' && !utilityTypes.has(a.type || '') && !espacioTypes.has(a.type || '')
   );
 
-  // Icon button styles (modern sidebar)
+  // Icon button styles
   const iconBtn =
-    "group/icon w-[38px] h-[38px] flex items-center justify-center rounded-[9px] transition-all relative outline-none focus:outline-none border border-transparent";
+    "group/icon w-[38px] h-[38px] flex items-center justify-center rounded-[10px] transition-all duration-150 relative outline-none focus:outline-none border border-transparent";
   const iconBtnActive =
-    "bg-brand-primary/[.13] text-brand-primary border-brand-primary/[.22]";
+    "bg-gradient-to-b from-brand-primary to-indigo-700 text-white border-brand-primary/30 shadow-[0_3px_10px_-3px_rgba(91,127,255,0.45)]";
   const iconBtnInactive =
-    "text-text-tertiary hover:text-text-secondary hover:bg-bg-gray hover:border-border-light";
+    "text-text-tertiary hover:text-text-dark hover:bg-bg-gray-dark/40 hover:border-border-gray/50 hover:shadow-[0_2px_6px_-2px_rgba(0,0,0,0.08)]";
 
   // Section label style
   const sectionLabel =
-    "font-display text-[7.5px] font-bold tracking-[0.13em] uppercase text-text-tertiary mt-1 mb-0.5";
+    "font-display text-[7px] font-extrabold tracking-[0.16em] uppercase text-text-tertiary/60 mt-2 mb-1";
   // Separator
   const sectionSep =
-    "w-7 h-px bg-border-gray my-1.5";
+    "w-7 h-px bg-border-gray my-2";
 
   return (
     <>
@@ -1190,10 +1189,10 @@ export default function Sidebar() {
           })()}
 
           <div className={sectionSep} />
-          <span className={sectionLabel}>Tools</span>
+          <span className={sectionLabel}>Utilidades</span>
 
-          {/* ── Tools section ── */}
-          {toolApps.map((app) => {
+          {/* ── Utilidades section ── */}
+          {utilityApps.map((app) => {
             const isItemActive = isActivePath(app.path) || !!(
               targetWorkspace && location.pathname.match(new RegExp(`/workspace/[^/]+/${app.type}(/|$)`))
             );
