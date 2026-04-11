@@ -15,7 +15,7 @@ import GraphVisualization from './GraphVisualization';
 import EntityCard from './EntityCard';
 import KnowledgeSearch from './KnowledgeSearch';
 import EntityList from './EntityList';
-import { HeaderButtons } from '../MiniAppHeader';
+import ViewTopBar from '../ui/ViewTopBar';
 import { toast } from 'sonner';
 
 const tabs = [
@@ -72,29 +72,12 @@ export default function KnowledgeView() {
     <div className="flex-1 flex h-full min-w-0 overflow-hidden">
       <div className="relative flex-1 flex min-w-0 overflow-hidden rounded-[20px] bg-gradient-to-b from-[#f6fbff] to-[#edf4fb]">
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white/92 md:rounded-[20px]">
-          {/* Header */}
-          <div className="h-14 flex items-center justify-between gap-2 border-b border-[#e4edf8] pl-3 pr-2 sm:pl-5 sm:pr-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <Share2 className="w-[18px] h-[18px] text-slate-700 hidden sm:block" />
-              <h1 className="text-sm sm:text-base font-semibold text-slate-900 truncate">
-                Knowledge Graph
-              </h1>
-              <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full hidden sm:inline">
-                {totalEntities} entidades
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleBuild}
-                disabled={isBuilding}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
-              >
-                <ArrowPathIcon className={`w-3.5 h-3.5 ${isBuilding ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">{isBuilding ? 'Construyendo...' : 'Build'}</span>
-              </button>
-              <HeaderButtons settingsButtonRef={settingsButtonRef} />
-            </div>
-          </div>
+          <ViewTopBar
+            title="Knowledge Graph"
+            pill={{ label: `${totalEntities} entidades`, color: 'accent' }}
+            cta={{ label: isBuilding ? 'Construyendo...' : 'Build', icon: <ArrowPathIcon className={`w-3.5 h-3.5 ${isBuilding ? 'animate-spin' : ''}`} />, onClick: handleBuild }}
+            settingsButtonRef={settingsButtonRef}
+          />
 
           {/* Tabs */}
           <div className="px-4 pt-3 pb-2 border-b border-[#e4edf8]">

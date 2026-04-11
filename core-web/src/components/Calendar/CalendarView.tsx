@@ -86,9 +86,9 @@ function CalendarContent({
   });
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-white">
-      {/* Header: matches mini app h-12 pattern */}
-      <div className="h-12 flex items-center justify-between pl-4 pr-2 shrink-0 border-b border-border-gray">
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-bg-white">
+      {/* Header */}
+      <div className="h-[50px] flex items-center justify-between pl-4 pr-3 shrink-0 border-b border-border-light">
         {/* Left side: date header with navigation */}
         <div className="flex items-center gap-1">
           <CalendarHeader

@@ -6,6 +6,12 @@
 
 import type { ViewType } from '../../stores/viewContextStore';
 
+export interface ProactiveAlertConfig {
+  label: string;
+  text: string;
+  chips: string[];
+}
+
 export interface AgentConfig {
   name: string;
   status: string;
@@ -13,6 +19,7 @@ export interface AgentConfig {
   emoji: string;
   pillColor: string;
   chips: string[];
+  proactiveAlert?: ProactiveAlertConfig;
 }
 
 const agentConfigs: Record<string, AgentConfig> = {
@@ -23,6 +30,11 @@ const agentConfigs: Record<string, AgentConfig> = {
     emoji: '✉️',
     pillColor: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
     chips: ['Resumir emails', 'Redactar respuesta', 'Emails sin leer'],
+    proactiveAlert: {
+      label: 'Bandeja de entrada',
+      text: 'Tienes emails sin leer que pueden requerir respuesta. Puedo <strong>resumirlos</strong> o redactar respuestas.',
+      chips: ['Resumir sin leer', 'Emails urgentes'],
+    },
   },
   projects: {
     name: 'Project Manager',
@@ -31,6 +43,11 @@ const agentConfigs: Record<string, AgentConfig> = {
     emoji: '📋',
     pillColor: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20',
     chips: ['Tareas pendientes', 'Crear tarea', 'Resumen del sprint'],
+    proactiveAlert: {
+      label: 'Sprint en curso',
+      text: 'Revisa las <strong>tareas bloqueadas</strong> o atrasadas del sprint actual.',
+      chips: ['Ver bloqueadas', 'Resumen del sprint'],
+    },
   },
   crm: {
     name: 'Director Comercial',
@@ -39,6 +56,11 @@ const agentConfigs: Record<string, AgentConfig> = {
     emoji: '🎯',
     pillColor: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
     chips: ['Ver pipeline', 'Nuevo contacto', 'Deals estancados'],
+    proactiveAlert: {
+      label: 'Accion requerida',
+      text: 'Revisa tus <strong>deals sin actividad</strong> reciente. Puedo preparar follow-ups automaticos.',
+      chips: ['Ver deals estancados', 'Preparar follow-ups'],
+    },
   },
   marketing: {
     name: 'PulseMark',

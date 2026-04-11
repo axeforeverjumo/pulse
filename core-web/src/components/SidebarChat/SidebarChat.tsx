@@ -18,6 +18,7 @@ import SidebarChatInput from "./SidebarChatInput";
 import { useViewContextStore } from "../../stores/viewContextStore";
 import { getAgentConfig } from "./AgentContext";
 import { parseActions, ActionCard } from "./ActionCard";
+import ProactiveAlert from "./ProactiveAlert";
 
 export default function SidebarChat() {
   const queryClient = useQueryClient();
@@ -694,6 +695,18 @@ export default function SidebarChat() {
 
       {/* Content */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
+        {/* Proactive alert */}
+        {isEmpty && agentConfig.proactiveAlert && (
+          <div className="shrink-0 pt-3">
+            <ProactiveAlert
+              label={agentConfig.proactiveAlert.label}
+              text={agentConfig.proactiveAlert.text}
+              chips={agentConfig.proactiveAlert.chips}
+              onChipClick={handleChipClick}
+            />
+          </div>
+        )}
+
         <AnimatePresence
           onExitComplete={() => {
             if (isClearing) {

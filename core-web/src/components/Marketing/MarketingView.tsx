@@ -7,7 +7,7 @@ import {
   ChartBarIcon,
 } from "@heroicons/react/24/outline";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
-import { HeaderButtons } from "../MiniAppHeader";
+import ViewTopBar from "../ui/ViewTopBar";
 import SitesList from "./SitesList";
 import SiteDetail from "./SiteDetail";
 import { getMarketingSites, createMarketingSite } from "../../api/client";
@@ -114,25 +114,11 @@ export default function MarketingView() {
     <div className="flex-1 flex h-full min-w-0 overflow-hidden">
       <div className="relative flex-1 flex min-w-0 overflow-hidden rounded-[20px] bg-gradient-to-b from-[#f6fbff] to-[#edf4fb]">
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white/92 md:rounded-[20px]">
-          {/* Header toolbar */}
-          <div className="h-14 flex items-center justify-between gap-2 border-b border-[#e4edf8] pl-3 pr-2 sm:pl-5 sm:pr-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <ChartBarIcon className="w-[18px] h-[18px] text-slate-700 hidden sm:block" />
-              <h1 className="text-sm sm:text-base font-semibold text-slate-900 truncate">
-                Marketing
-              </h1>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowAddSite(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-xl border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
-              >
-                <PlusIcon className="w-4 h-4" />
-                Nuevo sitio
-              </button>
-              <HeaderButtons />
-            </div>
-          </div>
+          <ViewTopBar
+            title="Marketing"
+            pill={{ label: 'Sitios', color: 'accent' }}
+            cta={{ label: 'Nuevo sitio', icon: <PlusIcon className="w-3.5 h-3.5" />, onClick: () => setShowAddSite(true) }}
+          />
 
           {/* Content area */}
           <div className="flex flex-1 overflow-hidden">

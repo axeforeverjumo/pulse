@@ -66,6 +66,7 @@ const StudioRuntime = lazy(() => import("./components/Studio/runtime/StudioRunti
 const OfficeView = lazy(() => import("./components/Office/OfficeView"));
 const MentorsView = lazy(() => import("./components/Mentors/MentorsView"));
 const FinanceView = lazy(() => import("./components/Finance/FinanceView"));
+const ViewTabs = lazy(() => import("./components/ui/ViewTabs"));
 const OnboardingWizard = lazy(() => import("./components/Onboarding/OnboardingWizard"));
 const PENDING_INVITE_TOKEN_KEY = "pending_invite_token";
 const PENDING_INVITE_TOKEN_SET_AT_KEY = "pending_invite_token_set_at";
@@ -250,14 +251,20 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 
           {/* Content area */}
           <div className="flex-1 flex min-w-0 min-h-0 p-2 sm:p-3 lg:p-3 xl:p-4 gap-2 sm:gap-3">
-            <main className="app-surface flex-1 flex min-w-0 overflow-hidden rounded-[20px] lg:rounded-[24px]">
-              {authLoading ? (
-                <RouteLoading />
-              ) : (
-                <FeatureErrorBoundary feature="this view">
-                  <Suspense fallback={<RouteLoading />}>{children}</Suspense>
-                </FeatureErrorBoundary>
-              )}
+            <main className="app-surface flex-1 flex flex-col min-w-0 overflow-hidden rounded-[20px] lg:rounded-[24px]">
+              {/* Dynamic tabs from agent-generated views */}
+              <Suspense fallback={null}>
+                <ViewTabs />
+              </Suspense>
+              <div className="flex-1 flex min-w-0 overflow-hidden">
+                {authLoading ? (
+                  <RouteLoading />
+                ) : (
+                  <FeatureErrorBoundary feature="this view">
+                    <Suspense fallback={<RouteLoading />}>{children}</Suspense>
+                  </FeatureErrorBoundary>
+                )}
+              </div>
             </main>
 
             {/* AI Chat Panel - desktop only */}

@@ -11,6 +11,7 @@ import {
   LinkIcon,
 } from '@heroicons/react/24/outline';
 import { HeaderButtons } from '../MiniAppHeader';
+// TODO: migrate to ViewTopBar when sidebar layout is refactored
 import { generateMeetingPrep } from '../../api/client';
 import { api } from '../../api/client';
 import { toast } from 'sonner';
