@@ -5619,3 +5619,7 @@ async def run_pipeline(
             "enqueued": enqueued,
             "issues": created_issues,
         }
+    except HTTPException:
+        raise
+    except Exception as e:
+        handle_api_exception(e, "Failed to run pipeline", logger)
