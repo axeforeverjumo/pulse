@@ -35,6 +35,7 @@ import {
   Building2,
   Compass,
   Banknote,
+  Store,
 } from "lucide-react";
 import { Icon, type LucideIcon } from "../ui/Icon";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
@@ -176,6 +177,11 @@ const availableAppTypes = [
     name: "Finanzas",
     icon: Banknote,
   },
+  {
+    type: "agencia",
+    name: "Agencia",
+    icon: Store,
+  },
 ];
 
 // Map app types to their icons
@@ -201,6 +207,7 @@ const appIcons: Record<string, LucideIcon> = {
   office: Building2,
   mentors: Compass,
   finance: Banknote,
+  agencia: Store,
 };
 
 // Generate workspace-specific path for an app

@@ -164,7 +164,7 @@ export default function CrmView() {
           {/* Search + Tabs bar */}
           <div className="px-5 pt-3 pb-2 space-y-3 border-b border-border-light">
             {/* Search */}
-            <div className="relative max-w-sm">
+            <div className="relative">
               <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary" />
               <input
                 type="text"

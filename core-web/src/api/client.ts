@@ -3229,6 +3229,7 @@ export async function createAgent(workspaceId: string, data: {
   system_prompt?: string;
   enabled_tools?: string[];
   config?: Record<string, unknown>;
+  model?: string;
   role?: string;
   backstory?: string;
   objective?: string;
@@ -3257,7 +3258,7 @@ export async function uploadAgentAvatar(agentId: string, file: File): Promise<Ag
   return response.json();
 }
 
-export async function updateAgent(agentId: string, data: Partial<Pick<AgentInstance, 'name' | 'system_prompt' | 'enabled_tools' | 'config' | 'avatar_url'>>): Promise<AgentInstance> {
+export async function updateAgent(agentId: string, data: Partial<Pick<AgentInstance, 'name' | 'system_prompt' | 'enabled_tools' | 'config' | 'avatar_url' | 'model'>>): Promise<AgentInstance> {
   return api(`/agents/${agentId}`, {
     method: 'PATCH',
     body: JSON.stringify(data),
@@ -3352,6 +3353,62 @@ export async function listSandboxFiles(agentId: string, path: string = "/home/us
 export async function readSandboxFile(agentId: string, path: string): Promise<string> {
   const result = await api<{ content: string }>(`/agents/${agentId}/sandbox/files/read?path=${encodeURIComponent(path)}`);
   return result.content;
+}
+
+// --- Agencia (Agent Store) ---
+
+export async function getAgenciaTemplates(params?: {
+  department?: string;
+  search?: string;
+  featured?: boolean;
+}): Promise<{ templates: AgentTemplate[]; count: number }> {
+  const searchParams = new URLSearchParams();
+  if (params?.department) searchParams.set('department', params.department);
+  if (params?.search) searchParams.set('search', params.search);
+  if (params?.featured) searchParams.set('featured', 'true');
+  const qs = searchParams.toString();
+  return api(`/agent-templates/agencia${qs ? `?${qs}` : ''}`);
+}
+
+// --- Skills ---
+
+export async function getWorkspaceSkills(workspaceId: string): Promise<{ skills: AgentSkill[]; count: number }> {
+  return api(`/workspaces/${workspaceId}/skills`);
+}
+
+export async function createSkill(workspaceId: string, data: {
+  name: string;
+  content: string;
+  description?: string;
+  config?: Record<string, unknown>;
+}): Promise<AgentSkill> {
+  return api(`/workspaces/${workspaceId}/skills`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateSkill(skillId: string, data: Partial<Pick<AgentSkill, 'name' | 'content' | 'description' | 'config'>>): Promise<AgentSkill> {
+  return api(`/skills/${skillId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteSkill(skillId: string): Promise<{ status: string }> {
+  return api(`/skills/${skillId}`, { method: 'DELETE' });
+}
+
+export async function getAgentSkills(agentId: string): Promise<{ skills: Array<{ id: string; agent_id: string; skill_id: string; skill: AgentSkill }>; count: number }> {
+  return api(`/agents/${agentId}/skills`);
+}
+
+export async function assignSkillToAgent(agentId: string, skillId: string): Promise<void> {
+  await api(`/agents/${agentId}/skills/${skillId}/assign`, { method: 'POST' });
+}
+
+export async function unassignSkillFromAgent(agentId: string, skillId: string): Promise<void> {
+  await api(`/agents/${agentId}/skills/${skillId}/unassign`, { method: 'DELETE' });
 }
 
 // ============================================================================
