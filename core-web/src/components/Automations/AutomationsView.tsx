@@ -81,11 +81,11 @@ export default function AutomationsView() {
   })();
 
   return (
-    <div className={`flex flex-col h-full ${fullscreen ? "fixed inset-0 z-50 bg-white" : ""}`}>
-      <div className="flex items-center justify-between px-4 py-2 border-b border-[#d7e4f2]">
+    <div className={`flex flex-col w-full min-w-0 overflow-hidden ${fullscreen ? "fixed inset-0 z-50 bg-bg-white" : "flex-1 h-full"}`}>
+      <div className="h-[50px] flex items-center justify-between px-4 border-b border-border-light shrink-0">
         <div className="flex items-center gap-2">
           <Zap size={18} className="text-brand-primary" />
-          <span className="text-sm font-semibold text-text-dark">Automatizaciones</span>
+          <span className="font-display text-sm font-bold text-text-dark">Automatizaciones</span>
         </div>
         <button
           onClick={() => setFullscreen(!fullscreen)}
@@ -96,7 +96,7 @@ export default function AutomationsView() {
         </button>
       </div>
 
-      <div className="flex-1 relative">
+      <div className="flex-1 relative min-h-0">
         {(loading || !embedUrl) && (
           <div className="absolute inset-0 flex items-center justify-center bg-bg-light z-10">
             <div className="flex flex-col items-center gap-3">

@@ -655,6 +655,7 @@ export default function EmailView() {
   const [inboxViewMode, setInboxViewMode] = useState<'grouped' | 'tabs'>(() =>
     (localStorage.getItem('pulse-inbox-view') as 'grouped' | 'tabs') || 'grouped'
   );
+  const [readFilter, setReadFilter] = useState<'all' | 'unread' | 'read'>('all');
   const [activeTabCategory, setActiveTabCategory] = useState<EmailCategory>(EMAIL_CATEGORIES[0].id);
   const archiveMutation = useArchiveEmail(
     activeFolder as RQEmailFolder,
@@ -1102,19 +1103,27 @@ export default function EmailView() {
     fetchNextPage,
   ]);
 
+  // Apply read/unread filter
+  const readFilteredEmails = useMemo(() => {
+    if (readFilter === 'all') return filteredEmails;
+    return filteredEmails.filter((email) =>
+      readFilter === 'unread' ? !email.is_read : email.is_read
+    );
+  }, [filteredEmails, readFilter]);
+
   // First group emails by thread, then by date
   // Skip threading for DRAFT and SENT folders - show each email individually
   const threadedEmails = useMemo(() => {
     if (activeFolder === "DRAFT" || activeFolder === "SENT") {
       // Don't group drafts/sent - each is its own item
-      return filteredEmails.map((email) => ({
+      return readFilteredEmails.map((email) => ({
         ...email,
         threadCount: 1,
         threadEmails: [email],
       }));
     }
-    return groupEmailsByThread(filteredEmails);
-  }, [filteredEmails, activeFolder]);
+    return groupEmailsByThread(readFilteredEmails);
+  }, [readFilteredEmails, activeFolder]);
   const groupedEmails = useMemo(
     () => groupEmailsByDate(threadedEmails),
     [threadedEmails],
@@ -2003,9 +2012,33 @@ export default function EmailView() {
                   </div>
                 )}
 
+              {/* Read filter (all folders, not when searching) */}
+              {!isSearchOpen && (
+                <div className="px-3 py-1.5 flex items-center gap-1.5 border-b border-border-light">
+                  {(['all', 'unread', 'read'] as const).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setReadFilter(f)}
+                      className={`px-2.5 py-1 text-[11px] rounded-lg font-medium transition-colors ${
+                        readFilter === f
+                          ? 'bg-brand-primary/[.1] text-brand-primary'
+                          : 'text-text-tertiary hover:text-text-secondary hover:bg-bg-gray'
+                      }`}
+                    >
+                      {f === 'all' ? 'Todos' : f === 'unread' ? 'No leidos' : 'Leidos'}
+                    </button>
+                  ))}
+                  {readFilter !== 'all' && (
+                    <span className="text-[10px] text-text-tertiary ml-1">
+                      {readFilter === 'unread' ? readFilteredEmails.length + ' sin leer' : readFilteredEmails.length + ' leidos'}
+                    </span>
+                  )}
+                </div>
+              )}
+
               {/* View mode toggle + tabs (only for INBOX, not searching) */}
               {activeFolder === "INBOX" && !isSearchOpen && (
-                <div className="border-b border-border-gray">
+                <div className="border-b border-border-light">
                   {/* Toggle row */}
                   <div className="px-3 py-1.5 flex items-center justify-between">
                     <span className="text-[10px] text-text-tertiary uppercase tracking-wide font-medium">
