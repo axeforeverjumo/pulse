@@ -846,6 +846,40 @@ html {
   background-color: #1b1f2a;
 }
 
+/* Dark modal/dialog styles */
+:root[data-theme="dark"] .bg-gray-900 {
+  background-color: #151820;
+}
+
+:root[data-theme="dark"] .bg-gray-100,
+:root[data-theme="dark"] .bg-gray-50 {
+  background-color: #151820;
+}
+
+:root[data-theme="dark"] .text-gray-900 {
+  color: var(--color-text-dark);
+}
+
+:root[data-theme="dark"] .text-gray-700,
+:root[data-theme="dark"] .text-gray-600 {
+  color: var(--color-text-secondary);
+}
+
+:root[data-theme="dark"] .text-gray-500,
+:root[data-theme="dark"] .text-gray-400 {
+  color: var(--color-text-tertiary);
+}
+
+:root[data-theme="dark"] .border-gray-100,
+:root[data-theme="dark"] .border-gray-200 {
+  border-color: rgba(255, 255, 255, 0.055);
+}
+
+:root[data-theme="dark"] .hover\:bg-gray-50:hover,
+:root[data-theme="dark"] .hover\:bg-gray-100:hover {
+  background-color: #1b1f2a;
+}
+
 /* Dark input styles */
 :root[data-theme="dark"] input,
 :root[data-theme="dark"] textarea,
@@ -863,6 +897,40 @@ html {
 :root[data-theme="dark"] input:focus,
 :root[data-theme="dark"] textarea:focus {
   border-color: var(--color-brand-primary);
+}
+
+/* Dark sidebar/panel backgrounds used in views */
+:root[data-theme="dark"] .bg-\[\#F9F9F9\],
+:root[data-theme="dark"] .bg-\[\#f8f9fb\],
+:root[data-theme="dark"] .bg-\[\#f9fafb\] {
+  background-color: #0f1117;
+}
+
+:root[data-theme="dark"] .border-black\/5 {
+  border-color: rgba(255, 255, 255, 0.055);
+}
+
+/* Blue accent in dark mode */
+:root[data-theme="dark"] .bg-blue-50 {
+  background-color: rgba(91, 127, 255, 0.08);
+}
+
+:root[data-theme="dark"] .border-blue-200 {
+  border-color: rgba(91, 127, 255, 0.2);
+}
+
+:root[data-theme="dark"] .text-blue-700,
+:root[data-theme="dark"] .text-blue-600 {
+  color: #5b7fff;
+}
+
+/* Ring focus dark */
+:root[data-theme="dark"] .focus\:ring-blue-200:focus {
+  --tw-ring-color: rgba(91, 127, 255, 0.2);
+}
+
+:root[data-theme="dark"] .focus\:border-blue-400:focus {
+  border-color: #5b7fff;
 }
 
 /* ── SIDEBAR TOOLTIP ── */

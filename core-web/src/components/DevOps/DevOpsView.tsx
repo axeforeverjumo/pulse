@@ -378,7 +378,7 @@ export default function DevOpsView() {
   const btnSecondary = 'px-3 py-2 text-[12px] font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors';
 
   return (
-    <div className="flex flex-col h-full bg-bg-white">
+    <div className="flex flex-col h-full bg-bg-white min-w-0 overflow-hidden">
       <ViewTopBar title="DevOps" pill={{ label: 'Infra', color: 'cyan' }} />
 
       {/* Tabs */}

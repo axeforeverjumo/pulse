@@ -1901,7 +1901,7 @@ export default function EmailView() {
               onFocus={() => setActiveZone("content")}
               className="w-80 shrink-0 flex flex-col outline-none border-r border-border-gray"
             >
-              <div className="h-12 shrink-0 flex items-center pl-4 pr-2 border-b border-border-gray">
+              <div className="h-[50px] shrink-0 flex items-center pl-4 pr-2 border-b border-border-light">
                 <AnimatePresence mode="wait">
                   {isSearchOpen ? (
                     <motion.div
@@ -2274,7 +2274,7 @@ export default function EmailView() {
               {selectedEmail ? (
                 <>
                   {/* Toolbar */}
-                  <div className="h-12 flex items-center justify-between px-4 border-b border-border-gray">
+                  <div className="h-[50px] flex items-center justify-between px-4 border-b border-border-light">
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => openInlineReply(selectedEmail, "reply")}
@@ -2710,7 +2710,7 @@ export default function EmailView() {
               ) : (
                 <>
                   {/* Header with buttons */}
-                  <div className="h-12 flex items-center justify-end pl-6 pr-3 border-b border-border-gray">
+                  <div className="h-[50px] flex items-center justify-end pl-6 pr-3 border-b border-border-light">
                     <HeaderButtons
                       onSettingsClick={() =>
                         setShowSettingsDropdown((prev) => !prev)

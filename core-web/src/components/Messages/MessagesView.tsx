@@ -2729,7 +2729,7 @@ export default function MessagesView() {
             className={`flex-1 min-w-0 flex flex-col ${activeThreadId ? "border-r border-border-gray" : ""}`}
           >
             {/* Header */}
-            <div className="h-12 shrink-0 border-b border-border-gray pl-5 pr-3 flex items-center justify-between">
+            <div className="h-[50px] shrink-0 border-b border-border-light pl-5 pr-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {isInDM ? (
                   <>

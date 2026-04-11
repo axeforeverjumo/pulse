@@ -202,22 +202,21 @@ export default function ProjectsView() {
         </div>
 
         {/* Board Content */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white/92 md:rounded-r-[20px]">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-bg-white/92 md:rounded-r-[20px]">
           {activeProjectId ? (
             <>
               {/* Board Header */}
-              <div className="h-14 flex items-center justify-between gap-2 border-b border-[#e4edf8] pl-3 pr-2 sm:pl-5 sm:pr-3">
+              <div className="h-[50px] flex items-center justify-between gap-2 border-b border-border-light pl-3 pr-3 sm:pl-4 shrink-0">
                 <div className="flex min-w-0 items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setIsMobileSidebarOpen(true)}
-                    className="md:hidden inline-flex h-8 items-center gap-1 rounded-lg border border-[#d7e4f2] bg-white px-2 text-xs font-semibold text-slate-700 shadow-sm"
+                    className="md:hidden inline-flex h-8 items-center gap-1 rounded-lg border border-border-light bg-bg-white px-2 text-xs font-semibold text-text-secondary shadow-sm"
                   >
                     <Icon icon={PanelLeft} size={14} />
                     Tableros
                   </button>
-                  <Icon icon={Columns3} size={18} className="text-slate-700 hidden sm:block" />
-                  <h1 className="text-sm sm:text-base font-semibold text-slate-900 truncate">
+                  <h1 className="font-display text-sm font-bold text-text-dark truncate">
                     {activeBoard?.name || "Project Board"}
                   </h1>
                   {activeBoard?.deploy_url && (
@@ -225,7 +224,7 @@ export default function ProjectsView() {
                       href={activeBoard.deploy_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-full hover:bg-blue-100 transition-colors truncate max-w-[200px]"
+                      className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-display font-bold uppercase tracking-[0.08em] text-brand-primary bg-brand-primary/[.1] border border-brand-primary/[.18] rounded-full hover:bg-brand-primary/[.15] transition-colors truncate max-w-[200px]"
                       title={activeBoard.deploy_url}
                     >
                       {activeBoard.deploy_url.replace(/^https?:\/\//, '')}

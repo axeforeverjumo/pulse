@@ -2557,7 +2557,7 @@ export function LocalFilesView({ basePath = "files" }: { basePath?: string }) {
           {selectedNote && isSelectedImage ? (
             <>
               {/* Image viewer header */}
-              <div className="h-12 shrink-0 flex items-center justify-between pl-6 pr-3 border-b border-border-gray">
+              <div className="h-[50px] shrink-0 flex items-center justify-between pl-6 pr-3 border-b border-border-light">
                 <span className="text-sm font-medium text-text-body truncate">
                   {selectedNote.title}
                 </span>
@@ -2780,7 +2780,7 @@ export function LocalFilesView({ basePath = "files" }: { basePath?: string }) {
           ) : (
             <div className="flex-1 flex flex-col">
               {/* Header with buttons */}
-              <div className="h-12 shrink-0 flex items-center justify-end pl-6 pr-3 border-b border-border-gray">
+              <div className="h-[50px] shrink-0 flex items-center justify-end pl-6 pr-3 border-b border-border-light">
                 <HeaderButtons onSettingsClick={() => setShowSettingsDropdown(!showSettingsDropdown)} settingsButtonRef={settingsButtonRef} />
               </div>
               {/* Empty state - relative for overlay panels */}
