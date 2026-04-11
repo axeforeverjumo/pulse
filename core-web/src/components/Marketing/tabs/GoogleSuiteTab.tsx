@@ -14,6 +14,9 @@ import {
   ShieldCheckIcon,
   GlobeAltIcon,
   ArrowTopRightOnSquareIcon,
+  CodeBracketIcon,
+  ServerStackIcon,
+  ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 import {
   getMarketingAuthUrl,
@@ -29,7 +32,9 @@ import {
   getMarketingSeoAudits,
   updateMarketingSite,
   getMarketingSite,
+  listServers,
 } from "../../../api/client";
+import type { WorkspaceServer } from "../../../api/client";
 import { toast } from "sonner";
 
 interface Props {
@@ -38,7 +43,7 @@ interface Props {
   onProjectUpdated?: (project: any) => void;
 }
 
-type Section = "overview" | "analytics" | "search" | "pagespeed" | "audit";
+type Section = "overview" | "analytics" | "search" | "pagespeed" | "audit" | "repo" | "server";
 
 export default function GoogleSuiteTab({ project, workspaceId, onProjectUpdated }: Props) {
   const [activeSection, setActiveSection] = useState<Section>("overview");
@@ -224,6 +229,8 @@ export default function GoogleSuiteTab({ project, workspaceId, onProjectUpdated 
     { id: "search", label: "Search Console", icon: MagnifyingGlassCircleIcon, configured: !!site?.gsc_site_url },
     { id: "pagespeed", label: "PageSpeed", icon: BoltIcon, configured: true },
     { id: "audit", label: "SEO Audit", icon: ShieldCheckIcon, configured: true },
+    { id: "repo", label: "Repositorio", icon: CodeBracketIcon, configured: !!site?.repository_url },
+    { id: "server", label: "Servidor", icon: ServerStackIcon, configured: !!site?.server_ip },
   ];
 
   return (
@@ -285,6 +292,12 @@ export default function GoogleSuiteTab({ project, workspaceId, onProjectUpdated 
         )}
         {activeSection === "audit" && (
           <AuditSection history={auditHistory} running={runningAudit} onRun={handleRunAudit} />
+        )}
+        {activeSection === "repo" && (
+          <RepoSection site={site} onSave={handleSaveProperty} />
+        )}
+        {activeSection === "server" && (
+          <ServerSection site={site} workspaceId={workspaceId} onSave={handleSaveProperty} />
         )}
       </div>
     </div>
@@ -729,6 +742,244 @@ function ScoreCircle({ score }: { score: number | null }) {
     </div>
   );
 }
+
+// ============================================================================
+// REPOSITORIO
+// ============================================================================
+
+function RepoSection({ site, onSave }: { site: any; onSave: (field: string, value: string) => void }) {
+  const [repoUrl, setRepoUrl] = useState(site?.repository_url || "");
+  const [repoFullName, setRepoFullName] = useState(site?.repository_full_name || "");
+  const [githubToken, setGithubToken] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (repoUrl && !repoFullName) {
+      const match = repoUrl.match(/github\.com\/([^/]+\/[^/.]+)/);
+      if (match) setRepoFullName(match[1]);
+    }
+  }, [repoUrl]);
+
+  const hasRepo = !!site?.repository_url;
+  const changed = repoUrl !== (site?.repository_url || "") || repoFullName !== (site?.repository_full_name || "");
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await updateMarketingSite(site.id, {
+        repository_url: repoUrl || null,
+        repository_full_name: repoFullName || null,
+      });
+      // If token provided, save it too
+      if (githubToken) {
+        await updateMarketingSite(site.id, { github_token_encrypted: githubToken });
+      }
+      onSave("repository_url", repoUrl);
+    } catch {}
+    setSaving(false);
+  }
+
+  return (
+    <div className="max-w-xl space-y-5">
+      <div className={`flex items-center gap-3 p-4 rounded-xl border ${hasRepo ? "bg-green-50/50 border-green-200" : "bg-slate-50 border-slate-200"}`}>
+        <CodeBracketIcon className={`w-6 h-6 flex-shrink-0 ${hasRepo ? "text-green-500" : "text-slate-400"}`} />
+        <div className="flex-1">
+          <p className="text-sm font-medium text-slate-700">
+            {hasRepo ? `Repositorio: ${site.repository_full_name || site.repository_url}` : "Sin repositorio configurado"}
+          </p>
+          <p className="text-xs text-slate-400">
+            {hasRepo ? "PulseMark puede leer, editar y desplegar codigo" : "Conecta el repo para que el agente pueda modificar y desplegar el sitio"}
+          </p>
+        </div>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+        <div>
+          <label className="block text-[10px] font-medium text-slate-500 mb-1">URL del repositorio</label>
+          <input
+            type="url"
+            value={repoUrl}
+            onChange={(e) => setRepoUrl(e.target.value)}
+            placeholder="https://github.com/usuario/mi-web"
+            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-medium text-slate-500 mb-1">GitHub owner/repo</label>
+          <input
+            type="text"
+            value={repoFullName}
+            onChange={(e) => setRepoFullName(e.target.value)}
+            placeholder="usuario/mi-web"
+            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          />
+          <p className="text-[9px] text-slate-300 mt-1">Se detecta automaticamente de la URL</p>
+        </div>
+        <div>
+          <label className="block text-[10px] font-medium text-slate-500 mb-1">GitHub Token (opcional)</label>
+          <input
+            type="password"
+            value={githubToken}
+            onChange={(e) => setGithubToken(e.target.value)}
+            placeholder="ghp_xxxx..."
+            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          />
+          <p className="text-[9px] text-slate-300 mt-1">Para repos privados. Se guarda encriptado.</p>
+        </div>
+        {(changed || githubToken) && (
+          <div className="flex justify-end">
+            <button onClick={handleSave} disabled={saving}
+              className="px-4 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors">
+              {saving ? "Guardando..." : "Guardar"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Capabilities */}
+      <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+        <h4 className="text-xs font-semibold text-blue-700 mb-2">Con repo configurado, el agente puede:</h4>
+        <ul className="text-xs text-blue-600 space-y-1">
+          <li>• Leer y editar archivos del codigo fuente</li>
+          <li>• Corregir meta tags, titles, alt texts, schema markup</li>
+          <li>• Crear/actualizar sitemap.xml y robots.txt</li>
+          <li>• Hacer commit y push a una rama de staging</li>
+          <li>• Desplegar a staging para validacion antes de produccion</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+
+// ============================================================================
+// SERVIDOR
+// ============================================================================
+
+function ServerSection({ site, workspaceId, onSave }: { site: any; workspaceId: string; onSave: (field: string, value: string) => void }) {
+  const [servers, setServers] = useState<WorkspaceServer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+
+  const hasServer = !!site?.server_ip;
+
+  useEffect(() => {
+    if (workspaceId) {
+      listServers(workspaceId)
+        .then((res) => setServers(res.servers || []))
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    }
+  }, [workspaceId]);
+
+  const selectedServer = servers.find((s) => s.id === site?.server_id);
+
+  async function handleSelect(server: WorkspaceServer | null) {
+    try {
+      await updateMarketingSite(site.id, {
+        server_id: server?.id || null,
+        server_host: server?.name || null,
+        server_ip: server?.host || null,
+        server_user: server?.username || null,
+        server_port: server?.port || 22,
+      });
+      onSave("server_ip", server?.host || "");
+    } catch {}
+    setOpen(false);
+  }
+
+  return (
+    <div className="max-w-xl space-y-5">
+      <div className={`flex items-center gap-3 p-4 rounded-xl border ${hasServer ? "bg-green-50/50 border-green-200" : "bg-slate-50 border-slate-200"}`}>
+        <ServerStackIcon className={`w-6 h-6 flex-shrink-0 ${hasServer ? "text-green-500" : "text-slate-400"}`} />
+        <div className="flex-1">
+          <p className="text-sm font-medium text-slate-700">
+            {hasServer ? `Servidor: ${site.server_host || site.server_ip}` : "Sin servidor configurado"}
+          </p>
+          <p className="text-xs text-slate-400">
+            {hasServer
+              ? `${site.server_user || "root"}@${site.server_ip}:${site.server_port || 22} — Deploy staging + produccion disponible`
+              : "Selecciona un servidor de DevOps para deploy staging → produccion"}
+          </p>
+        </div>
+      </div>
+
+      {/* Server selector */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4">
+        <label className="block text-[10px] font-medium text-slate-500 mb-2">Servidor de produccion</label>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setOpen(!open)}
+            className="w-full flex items-center justify-between px-3 py-2.5 text-sm border border-slate-200 rounded-lg bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-200"
+          >
+            <span className={selectedServer ? "text-slate-700" : "text-slate-400"}>
+              {loading ? "Cargando servidores..." : selectedServer?.name || site?.server_host || "Seleccionar servidor..."}
+            </span>
+            <ChevronDownIcon className="w-4 h-4 text-slate-400 shrink-0" />
+          </button>
+
+          {open && (
+            <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              <button
+                type="button"
+                onClick={() => handleSelect(null)}
+                className="w-full px-3 py-2 text-xs text-slate-400 hover:bg-slate-50 text-left"
+              >
+                Sin servidor
+              </button>
+
+              {servers.length === 0 && !loading && (
+                <div className="px-3 py-3 text-xs text-slate-400 text-center">
+                  No hay servidores en DevOps. Anade uno desde la app DevOps primero.
+                </div>
+              )}
+
+              {servers.map((server) => (
+                <button
+                  key={server.id}
+                  type="button"
+                  onClick={() => handleSelect(server)}
+                  className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-slate-50 text-left ${
+                    server.id === site?.server_id ? "bg-blue-50 text-blue-700" : "text-slate-700"
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${
+                    server.status === "verified" ? "bg-green-500" : server.status === "failed" ? "bg-red-500" : "bg-slate-300"
+                  }`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium truncate">{server.name}</div>
+                    <div className="text-xs text-slate-400">{server.host} · {server.username}@:{server.port || 22}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Deploy flow explanation */}
+      <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+        <h4 className="text-xs font-semibold text-blue-700 mb-2">Flujo de deploy del agente:</h4>
+        <div className="space-y-2">
+          <div className="flex items-start gap-2 text-xs text-blue-600">
+            <span className="w-5 h-5 rounded-full bg-blue-200 text-blue-700 flex items-center justify-center font-bold flex-shrink-0 text-[10px]">1</span>
+            <span>Edita el codigo en rama <code className="bg-blue-100 px-1 rounded">pulsemark/staging</code></span>
+          </div>
+          <div className="flex items-start gap-2 text-xs text-blue-600">
+            <span className="w-5 h-5 rounded-full bg-blue-200 text-blue-700 flex items-center justify-center font-bold flex-shrink-0 text-[10px]">2</span>
+            <span>Despliega a <code className="bg-blue-100 px-1 rounded">staging-*.factoriaia.com</code> para revision</span>
+          </div>
+          <div className="flex items-start gap-2 text-xs text-blue-600">
+            <span className="w-5 h-5 rounded-full bg-blue-200 text-blue-700 flex items-center justify-center font-bold flex-shrink-0 text-[10px]">3</span>
+            <span>Tu revisas en staging, confirmas, y se promueve a produccion</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 function formatNum(n: any): string {
   if (n == null) return "—";

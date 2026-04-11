@@ -39,7 +39,7 @@ const PERMANENT_TABS = [
   // separator
   { id: "carga", label: "Carga", icon: "👥", group: 2 },
   { id: "rutinas", label: "Rutinas", icon: "↻", group: 2 },
-  { id: "google", label: "Google Suite", icon: "🔗", group: 2 },
+  { id: "google", label: "Conexiones", icon: "🔗", group: 2 },
 ] as const;
 
 type TabId = (typeof PERMANENT_TABS)[number]["id"];
