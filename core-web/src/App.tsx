@@ -66,6 +66,7 @@ const StudioRuntime = lazy(() => import("./components/Studio/runtime/StudioRunti
 const OfficeView = lazy(() => import("./components/Office/OfficeView"));
 const MentorsView = lazy(() => import("./components/Mentors/MentorsView"));
 const FinanceView = lazy(() => import("./components/Finance/FinanceView"));
+const AgenciaView = lazy(() => import("./components/Agents/AgenciaView"));
 const ViewTabs = lazy(() => import("./components/ui/ViewTabs"));
 const OnboardingWizard = lazy(() => import("./components/Onboarding/OnboardingWizard"));
 const PENDING_INVITE_TOKEN_KEY = "pending_invite_token";
@@ -670,6 +671,7 @@ function AppContent() {
         <Route path="/workspace/:workspaceId/office" element={<OfficeView />} />
         <Route path="/workspace/:workspaceId/mentors" element={<MentorsView />} />
         <Route path="/workspace/:workspaceId/finance" element={<FinanceView />} />
+        <Route path="/workspace/:workspaceId/agencia" element={<AgenciaView />} />
 
         {/* Website / Linktree Builder */}
         <Route path="/sites" element={<WebsiteBuilderView />} />
