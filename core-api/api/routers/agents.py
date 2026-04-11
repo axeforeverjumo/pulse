@@ -387,6 +387,41 @@ async def create_new_agent(
             except Exception:
                 pass  # Non-fatal
 
+        # Bridge: also create an openclaw_agent (tier core) so it's @mentionable in chat
+        if request.template_slug and request.template_slug.startswith("agencia-"):
+            try:
+                import re
+                from lib.supabase_client import get_async_service_role_client
+                supa_sr = await get_async_service_role_client()
+                agent_slug = re.sub(r"[^a-z0-9]+", "-", request.name.lower()).strip("-")
+                # Extract first ~500 chars of prompt for soul, rest for identity
+                soul = f"Eres {request.name}. Siempre respondes en español. Eres profesional, claro y directo."
+                identity = system_prompt[:2000] if system_prompt else ""
+                oc_result = await supa_sr.table("openclaw_agents").insert({
+                    "openclaw_agent_id": f"agencia-{agent_slug}",
+                    "name": request.name,
+                    "description": template.get("description", "") if template else "",
+                    "tier": "core",
+                    "category": (template.get("department", "general") if template else "general"),
+                    "model": request.model or "gpt-5.4-mini",
+                    "tools": [],
+                    "soul_md": soul,
+                    "identity_md": identity,
+                    "avatar_url": f"https://api.dicebear.com/9.x/bottts-neutral/svg?seed={agent_slug}",
+                    "created_by": user_id,
+                    "is_active": True,
+                }).execute()
+                oc_agent = (oc_result.data or [None])[0]
+                if oc_agent:
+                    await supa_sr.table("workspace_agent_assignments").insert({
+                        "workspace_id": workspace_id,
+                        "agent_id": oc_agent["id"],
+                        "assigned_by": user_id,
+                    }).execute()
+                    logger.info(f"Bridge: created openclaw_agent '{request.name}' for @mention in chat")
+            except Exception as e:
+                logger.warning(f"Bridge openclaw_agent creation failed (non-fatal): {e}")
+
         # Upload identity.json to Storage if identity fields provided
         has_identity = any([request.backstory, request.objective, request.personality, request.role])
         if has_identity:
