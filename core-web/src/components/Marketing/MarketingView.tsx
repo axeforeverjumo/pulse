@@ -39,7 +39,7 @@ export default function MarketingView() {
     store.setCurrentView("marketing");
     if (selectedProject) {
       store.setMarketingSite({
-        id: selectedProject.id,
+        id: selectedProject.site_id || selectedProject.id,
         name: selectedProject.name,
         domain: selectedProject.client_name || selectedProject.project_type,
         url: "",
@@ -47,6 +47,8 @@ export default function MarketingView() {
         gsc_site_url: undefined,
         repository_url: selectedProject.repository_url,
         last_audit_score: undefined,
+        projectId: selectedProject.id,
+        siteId: selectedProject.site_id || undefined,
       });
     } else {
       store.setMarketingSite(null);

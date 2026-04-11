@@ -2,7 +2,9 @@ import { useState, useEffect } from "react";
 import {
   Cog6ToothIcon,
   TrashIcon,
+  SparklesIcon,
 } from "@heroicons/react/24/outline";
+import { getMarketingTasks } from "../../api/client";
 import KanbanTab from "./tabs/KanbanTab";
 import GanttTab from "./tabs/GanttTab";
 import CalendarTab from "./tabs/CalendarTab";
@@ -61,13 +63,25 @@ export default function ProjectDetail({
 }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>("tablero");
   const [columns, setColumns] = useState<any[]>([]);
+  const [agentTaskCount, setAgentTaskCount] = useState(0);
 
   const color = TYPE_COLORS[project.project_type] || "#5b7fff";
   const typeLabel = TYPE_LABELS[project.project_type] || project.project_type;
 
   useEffect(() => {
     loadColumns();
+    loadAgentTasks();
+    const interval = setInterval(loadAgentTasks, 10000);
+    return () => clearInterval(interval);
   }, [project.id]);
+
+  async function loadAgentTasks() {
+    try {
+      const data = await getMarketingTasks(project.site_id || project.id, { status: "in_progress" });
+      const agentTasks = (data.tasks || []).filter((t: any) => t.assigned_agent);
+      setAgentTaskCount(agentTasks.length);
+    } catch {}
+  }
 
   async function loadColumns() {
     try {
@@ -117,6 +131,16 @@ export default function ProjectDetail({
           </div>
 
           <div className="flex items-center gap-1.5 flex-shrink-0">
+            {/* Cola IA */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-[11px] text-slate-500">
+              <SparklesIcon className="w-3.5 h-3.5" />
+              Cola IA
+              <span className={`min-w-[18px] text-center text-[10px] font-bold px-1 py-0.5 rounded-full ${
+                agentTaskCount > 0 ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-400"
+              }`}>
+                {agentTaskCount}
+              </span>
+            </div>
             <button
               onClick={onOpenConfig}
               className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"

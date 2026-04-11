@@ -1,4 +1,5 @@
-import { PlusIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, BookmarkIcon } from "@heroicons/react/24/outline";
+import { useViewTabsStore } from "../../stores/viewTabsStore";
 
 const TYPE_COLORS: Record<string, string> = {
   seo: "#5b7fff",
@@ -27,6 +28,9 @@ interface Props {
 }
 
 export default function ProjectSidebar({ projects, loading, selectedId, onSelect, onNew }: Props) {
+  const pinnedTabs = useViewTabsStore((s) => s.tabs.filter((t) => t.state === "pinned"));
+  const setActiveTab = useViewTabsStore((s) => s.setActiveTab);
+
   if (loading) {
     return (
       <div className="p-3 space-y-2">
@@ -69,6 +73,28 @@ export default function ProjectSidebar({ projects, loading, selectedId, onSelect
         <div className="text-xs text-slate-400 px-2 py-3 text-center italic">
           Sin proyectos activos
         </div>
+      )}
+
+      {/* Pinned views */}
+      {pinnedTabs.length > 0 && (
+        <>
+          <div className="mx-2 my-2 border-t border-slate-200" />
+          <div className="flex items-center px-2 py-1">
+            <span className="text-[9px] font-bold tracking-[0.12em] uppercase text-slate-400">
+              Vistas guardadas
+            </span>
+          </div>
+          {pinnedTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[11px] text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+            >
+              <BookmarkIcon className="w-3 h-3 text-blue-400 flex-shrink-0" />
+              <span className="truncate">{tab.title}</span>
+            </button>
+          ))}
+        </>
       )}
 
       {other.length > 0 && (

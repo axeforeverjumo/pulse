@@ -16,6 +16,7 @@ import type { MentionData } from "../../types/mention";
 import ChatMessage from "./SidebarChatMessage";
 import SidebarChatInput from "./SidebarChatInput";
 import { useViewContextStore } from "../../stores/viewContextStore";
+import { useViewTabsStore } from "../../stores/viewTabsStore";
 import { getAgentConfig } from "./AgentContext";
 import { parseActions, ActionCard } from "./ActionCard";
 import ProactiveAlert from "./ProactiveAlert";
@@ -113,7 +114,7 @@ export default function SidebarChat() {
             id: m.id,
             role: m.role === "user" ? ("user" as const) : ("assistant" as const),
             content: m.content || "",
-            agentName: m.role === "assistant" ? "PulseMark" : undefined,
+            agentName: m.role === "assistant" ? "Project Manager" : undefined,
             agentAvatar: m.role === "assistant" ? "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=pulsemark" : undefined,
           }));
         useSidebarChatStore.getState().setMessages(display);
@@ -269,28 +270,59 @@ export default function SidebarChat() {
     if (mkCtx.currentView === "marketing" && workspaceId) {
       try {
         let streamed = "";
-        const siteId = mkCtx.currentMarketingSite?.id || null;
+        const siteId = mkCtx.currentMarketingSite?.siteId || mkCtx.currentMarketingSite?.id || null;
+        const projectId = mkCtx.currentMarketingSite?.projectId || null;
         await streamPulseMarkChat(workspaceId, siteId, displayText, (event) => {
           if (event.type === "content") {
             streamed += event.data.delta || "";
             setStreamingContent(streamed);
             setIsWaitingForResponse(false);
           } else if (event.type === "tool_start") {
-            streamed += `\n\n_PulseMark ejecutando: ${event.data.tool}..._\n`;
+            const tool = event.data.tool || "";
+            const args = event.data.args || {};
+            // Inject ACTION markers for object creation tools
+            if (tool === "create_marketing_task" && args.title) {
+              streamed += `\n[ACTION:task_created|${args.title}|${args.category || "tarea"}|pending|Prioridad ${args.priority || 2}]\n`;
+            } else if (tool === "update_marketing_task" && args.status) {
+              streamed += `\n[ACTION:task_updated|Tarea actualizada|${args.status}|in_progress|→ ${args.status}]\n`;
+            } else {
+              streamed += `\n\n_Project Manager ejecutando: ${tool}..._\n`;
+            }
             setStreamingContent(streamed);
           } else if (event.type === "tool_result") {
-            // Tool finished — keep the note inline for visibility
+            // Check if tool result contains viewable data — create dynamic tab
+            const toolName = event.data?.tool || "";
+            const result = event.data?.result;
+            if (result && typeof result === "object" && !result.error) {
+              const viewTools = ["list_tasks", "list_keywords", "run_seo_audit", "get_pagespeed"];
+              if (viewTools.includes(toolName) && (result.tasks || result.keywords || result.issues || result.categories)) {
+                try {
+                  const { addTab } = useViewTabsStore.getState();
+                  const title = toolName === "list_tasks" ? "Tareas" :
+                    toolName === "list_keywords" ? "Keywords" :
+                    toolName === "run_seo_audit" ? "SEO Audit" :
+                    toolName === "get_pagespeed" ? "PageSpeed" : toolName;
+                  addTab({
+                    title,
+                    state: "temporary",
+                    template: "list",
+                    data: { title, items: result.tasks || result.keywords || result.issues || [], raw: result },
+                    module: "marketing",
+                  });
+                } catch {}
+              }
+            }
           } else if (event.type === "error") {
             streamed += `\n\n[Error: ${event.data.error}]`;
             setStreamingContent(streamed);
           }
-        });
+        }, undefined, projectId);
         // Finalize
         addMessage({
           id: `assistant-${Date.now()}`,
           role: "assistant",
           content: streamed || "(sin respuesta)",
-          agentName: "PulseMark",
+          agentName: "Project Manager",
           agentAvatar: "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=pulsemark",
         });
         setStreamingContent("");

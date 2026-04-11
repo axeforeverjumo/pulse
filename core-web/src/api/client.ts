@@ -4668,6 +4668,7 @@ export async function streamPulseMarkChat(
   message: string,
   onEvent: (event: PulseMarkStreamEvent) => void,
   signal?: AbortSignal,
+  projectId?: string | null,
 ): Promise<void> {
   const token = useAuthStore.getState().getAccessToken();
   if (!token) throw new AuthExpiredError();
@@ -4681,6 +4682,7 @@ export async function streamPulseMarkChat(
     body: JSON.stringify({
       workspace_id: workspaceId,
       site_id: siteId,
+      project_id: projectId || undefined,
       message,
     }),
     signal,

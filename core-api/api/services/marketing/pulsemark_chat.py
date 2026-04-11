@@ -138,12 +138,44 @@ async def save_message(
     return result.data[0]
 
 
-async def build_system_prompt(site: Optional[Dict[str, Any]], user_id: str, user_jwt: str) -> str:
+async def build_system_prompt(site: Optional[Dict[str, Any]], user_id: str, user_jwt: str, project: Optional[Dict[str, Any]] = None) -> str:
     """Build system prompt with live marketing context."""
     prompt = PULSEMARK_SYSTEM_BASE + "\n\n"
 
+    # Project context
+    if project:
+        prompt += f"=== PROYECTO ACTIVO ===\n"
+        prompt += f"Nombre: {project.get('name')}\n"
+        prompt += f"Tipo: {project.get('project_type', 'seo')}\n"
+        prompt += f"Estado: {project.get('status', 'active')}\n"
+        if project.get("client_name"):
+            prompt += f"Cliente: {project['client_name']}\n"
+        if project.get("objective"):
+            prompt += f"Objetivo: {project['objective']}\n"
+        if project.get("due_date"):
+            prompt += f"Fecha entrega: {project['due_date']}\n"
+        if project.get("kpis"):
+            prompt += f"KPIs: {project['kpis']}\n"
+        if project.get("active_tools"):
+            prompt += f"Herramientas activas: {', '.join(project['active_tools'])}\n"
+
+        # Team members
+        members = project.get("marketing_project_members", [])
+        if members:
+            prompt += f"\n=== EQUIPO ({len(members)} miembros) ===\n"
+            for m in members:
+                name = m.get("display_name") or m.get("agent_slug") or "Miembro"
+                role = m.get("role", "member")
+                spec = m.get("specialty", "")
+                prompt += f"- {name} ({role}{', ' + spec if spec else ''})\n"
+        prompt += "\n"
+
+    if not site and not project:
+        prompt += "CONTEXTO: Estas en el dashboard de Marketing del workspace, sin ningun proyecto seleccionado. Solo puedes leer datos, no ejecutar acciones de escritura. Sugiere al usuario que seleccione un proyecto para trabajar.\n"
+        return prompt
+
     if not site:
-        prompt += "CONTEXTO: Estas en el dashboard de Marketing del workspace, sin ningun sitio seleccionado. Solo puedes leer datos, no ejecutar acciones de escritura. Sugiere al usuario que seleccione un sitio para trabajar.\n"
+        prompt += "CONTEXTO: El proyecto no tiene un sitio web vinculado. Puedes gestionar tareas y rutinas, pero no ejecutar acciones de SEO/Analytics/Deploy. Sugiere al usuario que vincule un sitio en Conexiones.\n"
         return prompt
 
     prompt += f"=== SITIO ACTIVO ===\n"
@@ -223,21 +255,42 @@ async def chat_stream(
     user_id: str,
     user_jwt: str,
     user_message: str,
+    project_id: Optional[str] = None,
 ) -> AsyncIterator[str]:
     """Main chat streaming loop with OpenAI and tool calling.
 
     Yields SSE-formatted events.
     """
+    supabase = await get_authenticated_async_client(user_jwt)
+
+    # Load project if provided
+    project = None
+    if project_id:
+        try:
+            proj_result = await supabase.table("marketing_projects")\
+                .select("*, marketing_project_members(id, display_name, agent_slug, specialty, role)")\
+                .eq("id", project_id)\
+                .single()\
+                .execute()
+            project = proj_result.data
+            # If project has a site_id and we don't have one, use it
+            if project and project.get("site_id") and not site_id:
+                site_id = project["site_id"]
+        except Exception as e:
+            logger.warning(f"Failed to load project {project_id}: {e}")
+
     # Load site if provided
     site = None
     if site_id:
-        supabase = await get_authenticated_async_client(user_jwt)
-        site_result = await supabase.table("marketing_sites")\
-            .select("*")\
-            .eq("id", site_id)\
-            .single()\
-            .execute()
-        site = site_result.data
+        try:
+            site_result = await supabase.table("marketing_sites")\
+                .select("*")\
+                .eq("id", site_id)\
+                .single()\
+                .execute()
+            site = site_result.data
+        except Exception:
+            pass
 
     # Get/create conversation
     conversation = await get_or_create_conversation(workspace_id, site_id, user_id, user_jwt)
@@ -251,7 +304,7 @@ async def chat_stream(
     history = await get_conversation_history(conv_id, user_jwt)
 
     # Build system prompt with live context
-    system_prompt = await build_system_prompt(site, user_id, user_jwt)
+    system_prompt = await build_system_prompt(site, user_id, user_jwt, project=project)
 
     # Build OpenAI messages
     messages: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]

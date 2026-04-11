@@ -53,6 +53,8 @@ export interface MarketingSiteContext {
   gsc_site_url?: string;
   repository_url?: string;
   last_audit_score?: number;
+  projectId?: string;
+  siteId?: string;
 }
 
 export type ViewType = "email" | "projects" | "crm" | "files" | "messages" | "calendar" | "agents" | "dashboard" | "marketing" | null;

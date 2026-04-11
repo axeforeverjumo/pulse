@@ -58,6 +58,13 @@ if (( HOUR == 2 && MINUTE == 0 )); then
     curl -sf -m 300 "$API/daily-verification" -H "$AUTH" >> "$LOG" 2>&1 || log "WARN: daily-verification failed"
 fi
 
+# Every 30 minutes: Marketing overdue routines
+MKTG_API="http://127.0.0.1:3010/api/marketing"
+if (( MINUTE % 30 == 0 )); then
+    log "Running marketing overdue routines"
+    curl -sf -m 60 -X POST "$MKTG_API/cron/overdue-routines" -H "$AUTH" >> "$LOG" 2>&1 || log "WARN: marketing overdue routines failed"
+fi
+
 # Weekly Monday at 3 AM: SEO keyword snapshot
 DOW=$(date +%u)  # 1=Monday
 if (( DOW == 1 && HOUR == 3 && MINUTE == 0 )); then

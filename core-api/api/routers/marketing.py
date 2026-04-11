@@ -1350,6 +1350,7 @@ async def api_list_gsc_sites(
 class PulseMarkChatRequest(BaseModel):
     workspace_id: str
     site_id: Optional[str] = None
+    project_id: Optional[str] = None
     message: str = Field(..., min_length=1)
 
 
@@ -1367,6 +1368,7 @@ async def api_pulsemark_chat(
             async for event in chat_stream(
                 workspace_id=body.workspace_id,
                 site_id=body.site_id,
+                project_id=body.project_id,
                 user_id=user_id,
                 user_jwt=user_jwt,
                 user_message=body.message,
@@ -1426,3 +1428,39 @@ async def api_pulsemark_chat_clear(
         await query.execute()
     except Exception as e:
         handle_api_exception(e, "Failed to clear chat", logger)
+
+
+# ============================================================================
+# Cron: Overdue routines
+# ============================================================================
+
+@router.post("/cron/overdue-routines")
+async def api_cron_overdue_routines(
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Find routines with next_due_at <= now() and routine_active=true, reset to todo."""
+    try:
+        from lib.supabase_client import get_service_role_client
+        supabase = get_service_role_client()
+
+        # Find overdue active routines
+        result = supabase.table("marketing_tasks")\
+            .select("id, title, next_due_at")\
+            .eq("task_type", "routine")\
+            .eq("routine_active", True)\
+            .neq("status", "todo")\
+            .lte("next_due_at", "now()")\
+            .execute()
+
+        overdue = result.data or []
+        updated = 0
+        for task in overdue:
+            supabase.table("marketing_tasks")\
+                .update({"status": "todo"})\
+                .eq("id", task["id"])\
+                .execute()
+            updated += 1
+
+        return {"overdue_found": len(overdue), "reset_to_todo": updated}
+    except Exception as e:
+        handle_api_exception(e, "Failed to process overdue routines", logger)
