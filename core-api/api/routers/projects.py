@@ -2483,6 +2483,8 @@ async def _process_single_agent_job(
             if task_completed:
                 # Auto-enqueue next pending task for this agent on the same board
                 await _auto_enqueue_next_task(supabase, job)
+                # Cross-agent pipeline: enqueue tasks assigned to OTHER agents whose deps are now met
+                await _auto_enqueue_cross_agent_dependents(supabase, job)
             else:
                 if next_status == "blocked":
                     logger.info(
@@ -2666,6 +2668,142 @@ async def _auto_enqueue_next_task(supabase: Any, completed_job: Dict[str, Any]) 
 
     except Exception as e:
         logger.warning("Auto-enqueue failed for agent %s: %s", agent_id, e)
+
+
+async def _auto_enqueue_cross_agent_dependents(supabase: Any, completed_job: Dict[str, Any]) -> None:
+    """After an agent completes a task, find downstream issues assigned to OTHER
+    agents whose dependencies are now ALL satisfied, and enqueue them.
+    This enables cross-agent pipelines: Agent A finishes → Agent B starts."""
+    completed_issue_id = completed_job.get("issue_id")
+    board_id = completed_job.get("board_id")
+    if not completed_issue_id or not board_id:
+        return
+    try:
+        # Find all issues that depend on the completed issue
+        downstream_res = await supabase.table("project_issue_dependencies")\
+            .select("issue_id")\
+            .eq("depends_on_issue_id", completed_issue_id)\
+            .execute()
+        downstream_ids = [d["issue_id"] for d in (downstream_res.data or [])]
+        if not downstream_ids:
+            return
+
+        # Get those issues
+        issues_res = await supabase.table("project_issues")\
+            .select("id, title, workspace_id, workspace_app_id, board_id, created_by, priority, completed_at")\
+            .in_("id", downstream_ids)\
+            .is_("completed_at", "null")\
+            .execute()
+        pending_issues = issues_res.data or []
+        if not pending_issues:
+            return
+
+        # Check ALL deps for each pending issue
+        all_deps_res = await supabase.table("project_issue_dependencies")\
+            .select("issue_id, depends_on_issue_id")\
+            .in_("issue_id", [p["id"] for p in pending_issues])\
+            .execute()
+        deps_by_issue: Dict[str, List[str]] = {}
+        for d in (all_deps_res.data or []):
+            deps_by_issue.setdefault(d["issue_id"], []).append(d["depends_on_issue_id"])
+
+        # Get completed issues on this board
+        dep_issue_ids = set()
+        for deps in deps_by_issue.values():
+            dep_issue_ids.update(deps)
+        if dep_issue_ids:
+            completed_check = await supabase.table("project_issues")\
+                .select("id")\
+                .in_("id", list(dep_issue_ids))\
+                .not_.is_("completed_at", "null")\
+                .execute()
+            completed_ids = set(c["id"] for c in (completed_check.data or []))
+        else:
+            completed_ids = set()
+        # The just-completed issue is also completed
+        completed_ids.add(completed_issue_id)
+
+        # Find unblocked issues
+        unblocked = []
+        for issue in pending_issues:
+            deps = deps_by_issue.get(issue["id"], [])
+            if all(d in completed_ids for d in deps):
+                unblocked.append(issue)
+
+        if not unblocked:
+            return
+
+        # Get predecessor context (last agent comment on completed issue)
+        pred_context = []
+        try:
+            comments_res = await supabase.table("project_comments")\
+                .select("content, created_at")\
+                .eq("issue_id", completed_issue_id)\
+                .order("created_at", desc=True)\
+                .limit(1)\
+                .execute()
+            if comments_res.data:
+                completed_issue_res = await supabase.table("project_issues")\
+                    .select("title")\
+                    .eq("id", completed_issue_id)\
+                    .single()\
+                    .execute()
+                pred_context.append({
+                    "title": (completed_issue_res.data or {}).get("title", ""),
+                    "summary": (comments_res.data[0].get("content") or "")[:500],
+                })
+        except Exception:
+            pass
+
+        # Enqueue each unblocked issue for its assigned agents
+        enqueued = 0
+        for issue in unblocked:
+            # Get agents assigned to this issue
+            agents_res = await supabase.table("project_issue_assignees")\
+                .select("agent_id")\
+                .eq("issue_id", issue["id"])\
+                .eq("assignee_type", "agent")\
+                .execute()
+            agent_ids = [a["agent_id"] for a in (agents_res.data or []) if a.get("agent_id")]
+
+            for aid in agent_ids:
+                # Skip if already has active job
+                active_res = await supabase.table("project_agent_queue_jobs")\
+                    .select("id")\
+                    .eq("issue_id", issue["id"])\
+                    .eq("agent_id", aid)\
+                    .in_("status", ["queued", "running"])\
+                    .execute()
+                if active_res.data:
+                    continue
+
+                payload = {"pipeline_predecessor_context": pred_context} if pred_context else {}
+                try:
+                    await enqueue_project_agent_job(
+                        supabase, issue, aid,
+                        requested_by=issue.get("created_by"),
+                        source="auto_next_task_dag",
+                        payload=payload,
+                        max_attempts=4,
+                    )
+                    enqueued += 1
+                    logger.info(
+                        "Cross-agent pipeline: enqueued '%s' for agent %s (unblocked by %s)",
+                        issue.get("title", "?"), aid, completed_issue_id,
+                    )
+                except Exception as e:
+                    logger.warning("Cross-agent enqueue failed for issue %s agent %s: %s", issue["id"], aid, e)
+
+        if enqueued > 0:
+            try:
+                asyncio.create_task(
+                    _process_project_agent_queue_background(user_jwt=None, fallback_user_id=None, max_jobs=enqueued)
+                )
+            except Exception:
+                pass
+
+    except Exception as e:
+        logger.warning("Cross-agent auto-enqueue failed: %s", e)
 
 
 async def _create_deploy_fix_issue(
@@ -5191,3 +5329,293 @@ async def apply_workspace_template(
         "assigned_agents": assigned_agents,
         "created_routines": len(created_routines),
     }
+
+
+# =============================================================================
+# PIPELINE TEMPLATES
+# =============================================================================
+
+class PipelineStepRequest(BaseModel):
+    index: int
+    title: str = Field(..., min_length=1, max_length=500)
+    description: Optional[str] = None
+    agent_id: Optional[str] = None
+    priority: int = Field(default=3, ge=0, le=4)
+    depends_on: List[int] = Field(default_factory=list)
+
+
+class CreatePipelineTemplateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+    steps: List[PipelineStepRequest] = Field(..., min_length=1, max_length=20)
+
+
+class RunPipelineRequest(BaseModel):
+    template_id: str
+    context_text: Optional[str] = None
+    auto_start: bool = True
+
+
+@router.get("/projects/boards/{board_id}/pipeline-templates")
+async def list_pipeline_templates(
+    board_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """List pipeline templates for a board."""
+    supabase = await get_authenticated_async_client(user_jwt)
+    try:
+        result = await supabase.table("project_pipeline_templates")\
+            .select("*")\
+            .or_(f"board_id.eq.{board_id},board_id.is.null")\
+            .order("created_at", desc=True)\
+            .execute()
+        templates = result.data or []
+        return {"templates": templates, "count": len(templates)}
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+
+@router.post("/projects/boards/{board_id}/pipeline-templates")
+async def create_pipeline_template(
+    board_id: str,
+    request: CreatePipelineTemplateRequest,
+    user_id: str = Depends(get_current_user_id),
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Create a pipeline template."""
+    supabase = await get_authenticated_async_client(user_jwt)
+    try:
+        # Get workspace_id from board
+        board_res = await supabase.table("project_boards")\
+            .select("workspace_id")\
+            .eq("id", board_id)\
+            .single()\
+            .execute()
+        workspace_id = board_res.data["workspace_id"]
+
+        result = await supabase.table("project_pipeline_templates")\
+            .insert({
+                "workspace_id": workspace_id,
+                "board_id": board_id,
+                "name": request.name,
+                "description": request.description,
+                "steps": [s.model_dump() for s in request.steps],
+                "created_by": user_id,
+            })\
+            .execute()
+        return result.data[0]
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+
+@router.patch("/projects/pipeline-templates/{template_id}")
+async def update_pipeline_template(
+    template_id: str,
+    request: CreatePipelineTemplateRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Update a pipeline template."""
+    supabase = await get_authenticated_async_client(user_jwt)
+    try:
+        updates: Dict[str, Any] = {}
+        if request.name:
+            updates["name"] = request.name
+        if request.description is not None:
+            updates["description"] = request.description
+        if request.steps:
+            updates["steps"] = [s.model_dump() for s in request.steps]
+        result = await supabase.table("project_pipeline_templates")\
+            .update(updates)\
+            .eq("id", template_id)\
+            .execute()
+        return result.data[0]
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+
+@router.delete("/projects/pipeline-templates/{template_id}")
+async def delete_pipeline_template(
+    template_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Delete a pipeline template."""
+    supabase = await get_authenticated_async_client(user_jwt)
+    try:
+        await supabase.table("project_pipeline_templates")\
+            .delete()\
+            .eq("id", template_id)\
+            .execute()
+        return {"status": "deleted"}
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+
+@router.post("/projects/boards/{board_id}/run-pipeline")
+async def run_pipeline(
+    board_id: str,
+    request: RunPipelineRequest,
+    user_id: str = Depends(get_current_user_id),
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Instantiate a pipeline: creates issues with dependencies and agent assignments."""
+    supabase = await get_authenticated_async_client(user_jwt)
+    try:
+        # Get template
+        tpl_res = await supabase.table("project_pipeline_templates")\
+            .select("*")\
+            .eq("id", request.template_id)\
+            .single()\
+            .execute()
+        template = tpl_res.data
+        steps = template.get("steps", [])
+
+        # Get board info
+        board_res = await supabase.table("project_boards")\
+            .select("*, states:project_states(*)")\
+            .eq("id", board_id)\
+            .single()\
+            .execute()
+        board = board_res.data
+        workspace_id = board["workspace_id"]
+
+        # Find workspace_app_id
+        app_res = await supabase.table("workspace_apps")\
+            .select("id")\
+            .eq("workspace_id", workspace_id)\
+            .eq("app_type", "projects")\
+            .limit(1)\
+            .execute()
+        workspace_app_id = (app_res.data or [{}])[0].get("id")
+
+        # Find "To Do" state
+        todo_state_id = None
+        for s in (board.get("states") or []):
+            name = (s.get("name") or "").lower().strip()
+            if name in ("to do", "todo", "backlog", "pendiente"):
+                todo_state_id = s["id"]
+                break
+        if not todo_state_id:
+            # Use first non-done state
+            for s in (board.get("states") or []):
+                if not s.get("is_done"):
+                    todo_state_id = s["id"]
+                    break
+
+        # Create issues for each step
+        PRIORITY_MAP = {0: "urgent", 1: "high", 2: "high", 3: "medium", 4: "low"}
+        index_to_issue_id: Dict[int, str] = {}
+        created_issues = []
+
+        for step in sorted(steps, key=lambda s: s.get("index", 0)):
+            idx = step.get("index", 0)
+            issue_data = {
+                "workspace_id": workspace_id,
+                "workspace_app_id": workspace_app_id,
+                "board_id": board_id,
+                "title": step.get("title", f"Pipeline paso {idx + 1}"),
+                "description": step.get("description") or "",
+                "state_id": todo_state_id,
+                "priority": PRIORITY_MAP.get(step.get("priority", 3), "medium"),
+                "position": idx * 1000,
+                "created_by": user_id,
+            }
+            issue_res = await supabase.table("project_issues")\
+                .insert(issue_data)\
+                .execute()
+            issue = issue_res.data[0]
+            index_to_issue_id[idx] = issue["id"]
+            created_issues.append(issue)
+
+            # Assign agent
+            agent_id = step.get("agent_id")
+            if agent_id:
+                try:
+                    await supabase.table("project_issue_assignees")\
+                        .insert({
+                            "workspace_app_id": workspace_app_id,
+                            "workspace_id": workspace_id,
+                            "issue_id": issue["id"],
+                            "agent_id": agent_id,
+                            "assignee_type": "agent",
+                        })\
+                        .execute()
+                except Exception:
+                    pass
+
+        # Create dependencies
+        deps_created = 0
+        for step in steps:
+            idx = step.get("index", 0)
+            issue_id = index_to_issue_id.get(idx)
+            for dep_idx in step.get("depends_on", []):
+                dep_issue_id = index_to_issue_id.get(dep_idx)
+                if issue_id and dep_issue_id:
+                    try:
+                        await supabase.table("project_issue_dependencies")\
+                            .insert({
+                                "issue_id": issue_id,
+                                "depends_on_issue_id": dep_issue_id,
+                                "dependency_type": "finish_to_start",
+                            })\
+                            .execute()
+                        deps_created += 1
+                    except Exception:
+                        pass
+
+        # Add context as comment on first step
+        if request.context_text and created_issues:
+            try:
+                await supabase.table("project_comments")\
+                    .insert({
+                        "workspace_id": workspace_id,
+                        "workspace_app_id": workspace_app_id,
+                        "issue_id": created_issues[0]["id"],
+                        "content": f"**Contexto del pipeline:**\n\n{request.context_text}",
+                        "author_id": user_id,
+                    })\
+                    .execute()
+            except Exception:
+                pass
+
+        # Auto-start root steps (no dependencies)
+        enqueued = 0
+        if request.auto_start:
+            for step in steps:
+                if not step.get("depends_on"):
+                    idx = step.get("index", 0)
+                    issue_id = index_to_issue_id.get(idx)
+                    agent_id = step.get("agent_id")
+                    if issue_id and agent_id:
+                        issue = next((i for i in created_issues if i["id"] == issue_id), None)
+                        if issue:
+                            try:
+                                await enqueue_project_agent_job(
+                                    supabase, issue, agent_id,
+                                    requested_by=user_id,
+                                    source="pipeline_run",
+                                    max_attempts=4,
+                                )
+                                enqueued += 1
+                            except Exception as e:
+                                logger.warning(f"Pipeline enqueue failed: {e}")
+
+            if enqueued > 0:
+                try:
+                    asyncio.create_task(
+                        _process_project_agent_queue_background(
+                            user_jwt=user_jwt,
+                            fallback_user_id=user_id,
+                            max_jobs=enqueued,
+                        )
+                    )
+                except Exception:
+                    pass
+
+        return {
+            "status": "ok",
+            "pipeline": template["name"],
+            "issues_created": len(created_issues),
+            "dependencies_created": deps_created,
+            "enqueued": enqueued,
+            "issues": created_issues,
+        }

@@ -2916,6 +2916,45 @@ export async function searchBoardIssues(boardId: string, q: string): Promise<{ i
   return api(`/projects/boards/${boardId}/issues/search?q=${encodeURIComponent(q)}`);
 }
 
+// --- Pipeline Templates ---
+
+export interface PipelineStep {
+  index: number;
+  title: string;
+  description?: string;
+  agent_id?: string;
+  priority?: number;
+  depends_on: number[];
+}
+
+export interface PipelineTemplate {
+  id: string;
+  workspace_id: string;
+  board_id?: string;
+  name: string;
+  description?: string;
+  steps: PipelineStep[];
+  created_by?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export async function listPipelineTemplates(boardId: string): Promise<{ templates: PipelineTemplate[]; count: number }> {
+  return api(`/projects/boards/${boardId}/pipeline-templates`);
+}
+
+export async function createPipelineTemplate(boardId: string, data: { name: string; description?: string; steps: PipelineStep[] }): Promise<PipelineTemplate> {
+  return api(`/projects/boards/${boardId}/pipeline-templates`, { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function deletePipelineTemplate(templateId: string): Promise<{ status: string }> {
+  return api(`/projects/pipeline-templates/${templateId}`, { method: 'DELETE' });
+}
+
+export async function runPipeline(boardId: string, data: { template_id: string; context_text?: string; auto_start?: boolean }): Promise<{ status: string; issues_created: number; enqueued: number; issues: any[] }> {
+  return api(`/projects/boards/${boardId}/run-pipeline`, { method: 'POST', body: JSON.stringify(data) });
+}
+
 // --- Labels ---
 
 export async function getProjectLabels(boardId: string): Promise<{ labels: ProjectLabel[]; count: number }> {

@@ -36,6 +36,7 @@ import KanbanCard from "./KanbanCard";
 import CardDetailModal from "./CardDetailModal";
 import AddColumnForm from "./AddColumnForm";
 import PlanWithAIModal from "./PlanWithAIModal";
+import PipelineBuilderModal from "./PipelineBuilderModal";
 
 // Wrapper to make columns sortable
 function SortableColumn({
@@ -491,6 +492,7 @@ export default function KanbanBoard() {
   };
 
   const [showPlanAI, setShowPlanAI] = useState(false);
+  const [showPipeline, setShowPipeline] = useState(false);
 
   return (
     <DndContext
@@ -511,12 +513,27 @@ export default function KanbanBoard() {
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" /></svg>
             Planificar con IA
           </button>
+          <button
+            onClick={() => setShowPipeline(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-emerald-600 hover:text-emerald-800 border border-emerald-200 hover:border-emerald-300 rounded-lg transition-colors hover:bg-emerald-50"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
+            Pipeline
+          </button>
         </div>
         {showPlanAI && (
           <PlanWithAIModal
             boardId={project.id}
             onClose={() => setShowPlanAI(false)}
             onCreated={() => { queryClient.invalidateQueries({ queryKey: ['board-data'] }); }}
+          />
+        )}
+        {showPipeline && (
+          <PipelineBuilderModal
+            boardId={project.id}
+            workspaceId={project.workspace_id}
+            onClose={() => setShowPipeline(false)}
+            onCreated={() => { queryClient.invalidateQueries({ queryKey: ['board-data'] }); setShowPipeline(false); }}
           />
         )}
         {/* Board Content */}
