@@ -57,6 +57,7 @@ async def create_agent(
     created_by: str,
     user_jwt: str,
     template_id: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create a new agent in a workspace."""
     supabase = await get_authenticated_async_client(user_jwt)
@@ -69,6 +70,7 @@ async def create_agent(
             "config": config,
             "avatar_url": avatar_url,
             "created_by": created_by,
+            "model": model or "gpt-5.4-mini",
         }
         if template_id:
             row["template_id"] = template_id
@@ -270,11 +272,27 @@ async def invoke_agent(
         )
         agent = agent_result.data
 
+        # Resolve model for this task
+        agent_full = await (
+            supabase.table("agent_instances")
+            .select("model, config")
+            .eq("id", agent_id)
+            .single()
+            .execute()
+        )
+        agent_data = agent_full.data
+        task_model = (
+            agent_data.get("model")
+            or (agent_data.get("config") or {}).get("model")
+            or "gpt-5.4-mini"
+        )
+
         # Create task
         task_row = {
             "agent_id": agent_id,
             "workspace_id": agent["workspace_id"],
             "trigger": "user_message",
+            "model": task_model,
             "input": {
                 "instruction": instruction,
                 "channel_id": channel_id,

@@ -156,22 +156,22 @@ export default function CrmView() {
         {/* Main Content */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-bg-white">
           <ViewTopBar
-            title="Comercial · CRM"
-            pill={{ label: 'Pipeline', color: 'amber' }}
+            title="CRM"
+            pill={{ label: 'Comercial', color: 'accent' }}
             settingsButtonRef={settingsButtonRef}
           />
 
           {/* Search + Tabs bar */}
-          <div className="px-4 pt-3 pb-2 space-y-3 border-b border-[#e4edf8]">
+          <div className="px-5 pt-3 pb-2 space-y-3 border-b border-border-light">
             {/* Search */}
-            <div className="relative max-w-md">
-              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <div className="relative max-w-sm">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar contactos, empresas..."
-                className="w-full pl-9 pr-8 py-2 text-[13px] rounded-[10px] border border-border-light bg-bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary/40 transition-all placeholder:text-text-tertiary"
+                placeholder="Buscar contactos, empresas, deals..."
+                className="w-full pl-9 pr-8 py-2 text-[13px] rounded-lg border border-border-gray bg-bg-gray/50 focus:bg-bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary/40 transition-all placeholder:text-text-tertiary"
               />
               {searchQuery && (
                 <button

@@ -5,10 +5,10 @@ type IconProps = LucideProps & {
   active?: boolean;
 };
 
-export function Icon({ icon: IconComponent, strokeWidth = 1.6, active, ...props }: IconProps) {
+export function Icon({ icon: IconComponent, strokeWidth = 1.8, active, ...props }: IconProps) {
   return (
     <IconComponent
-      strokeWidth={active ? 1.8 : strokeWidth}
+      strokeWidth={active ? 2.0 : strokeWidth}
       {...props}
     />
   );

@@ -32,6 +32,7 @@ VALID_APP_TYPES = (
     "office",
     "mentors",
     "finance",
+    "agencia",
 )
 
 

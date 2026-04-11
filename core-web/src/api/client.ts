@@ -3120,6 +3120,12 @@ export interface AgentTemplate {
   default_system_prompt: string;
   default_enabled_tools: string[];
   default_config: Record<string, unknown>;
+  department?: string;
+  emoji?: string;
+  color?: string;
+  tags?: string[];
+  is_featured?: boolean;
+  install_count?: number;
 }
 
 export interface AgentInstance {
@@ -3139,6 +3145,19 @@ export interface AgentInstance {
   sandbox_status?: 'off' | 'starting' | 'running' | 'paused' | 'idle' | 'error';
   sandbox_created_at?: string;
   last_active_at?: string;
+  model?: string;
+}
+
+export interface AgentSkill {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description?: string;
+  content: string;
+  config: Record<string, unknown>;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface AgentTask {

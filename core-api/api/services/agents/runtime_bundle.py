@@ -834,7 +834,7 @@ def main():
         logger.info(f"Using identity-based prompt for '{identity.get('name', agent['name'])}'")
     else:
         base_prompt = (agent.get("system_prompt") or "") + build_workspace_prompt(ws_sync.app_types)
-    model = agent.get("config", {}).get("model", config.MODEL)
+    model = agent.get("model") or agent.get("config", {}).get("model") or config.MODEL
 
     total_boot_ms = int((time.perf_counter() - boot_start) * 1000)
     logger.info(f"Agent '{agent['name']}' ready. Model: {model}. Boot: {total_boot_ms}ms. Watching for tasks...")
@@ -858,9 +858,21 @@ def main():
             # Refresh workspace data in background (non-blocking)
             ws_sync.refresh_if_stale(max_age_seconds=30, blocking=False)
 
-            # Build effective prompt with current personal file context
+            # Build effective prompt with skills + personal file context
+            skills_ctx = ""
+            try:
+                skills_result = supabase.table("agent_skill_assignments") \
+                    .select("skill:agent_skills(name, content)") \
+                    .eq("agent_id", config.AGENT_ID) \
+                    .execute()
+                for row in (skills_result.data or []):
+                    skill = row.get("skill")
+                    if skill and skill.get("content"):
+                        skills_ctx += f"\\n\\n## Skill: {skill['name']}\\n{skill['content']}"
+            except Exception as skills_err:
+                logger.warning(f"Failed to load skills (non-fatal): {skills_err}")
             personal_ctx = load_personal_context()
-            effective_prompt = base_prompt + personal_ctx
+            effective_prompt = base_prompt + skills_ctx + personal_ctx
 
             try:
                 result = run_agent_loop(

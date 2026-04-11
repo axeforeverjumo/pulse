@@ -899,18 +899,15 @@ export default function Sidebar() {
 
   // Icon button styles
   const iconBtn =
-    "group/icon w-[38px] h-[38px] flex items-center justify-center rounded-[10px] transition-all duration-150 relative outline-none focus:outline-none";
+    "group/icon w-[36px] h-[36px] flex items-center justify-center rounded-[10px] transition-all duration-150 relative outline-none focus:outline-none overflow-hidden";
   const iconBtnActive =
     "bg-text-dark text-white shadow-sm";
   const iconBtnInactive =
     "text-text-tertiary hover:text-text-secondary hover:bg-bg-gray-dark/30";
 
-  // Section label style
-  const sectionLabel =
-    "font-display text-[7px] font-extrabold tracking-[0.16em] uppercase text-text-tertiary/60 mt-2 mb-1";
-  // Separator
+  // Separator only (no text labels - they get cut off at 58px)
   const sectionSep =
-    "w-7 h-px bg-border-gray my-2";
+    "w-6 h-px bg-border-gray-dark/40 my-2.5";
 
   return (
     <>
@@ -919,7 +916,7 @@ export default function Sidebar() {
         tabIndex={0}
         onKeyDown={handleSidebarKeyDown}
         onFocus={() => setActiveZone("main-sidebar")}
-        className="sidebar-main w-[58px] shrink-0 text-text-secondary h-full flex flex-col items-center pb-3 outline-none pt-3.5 bg-gradient-to-b from-[#e8f1fc]/95 via-[#f2f8ff]/95 to-[#eaf3fd]/95 border-r border-[#d7e4f3] shadow-[inset_-1px_0_0_rgba(255,255,255,0.65)]"
+        className="sidebar-main w-[58px] shrink-0 text-text-secondary h-full flex flex-col items-center pb-3 outline-none pt-3.5 overflow-hidden bg-gradient-to-b from-[#e8f1fc]/95 via-[#f2f8ff]/95 to-[#eaf3fd]/95 border-r border-[#d7e4f3] shadow-[inset_-1px_0_0_rgba(255,255,255,0.65)]"
       >
         {/* Product & Workspace Selector */}
         <div className="relative mb-4">
@@ -1189,7 +1186,6 @@ export default function Sidebar() {
           })()}
 
           <div className={sectionSep} />
-          <span className={sectionLabel}>Utilidades</span>
 
           {/* ── Utilidades section ── */}
           {utilityApps.map((app) => {
@@ -1224,7 +1220,6 @@ export default function Sidebar() {
           })}
 
           <div className={sectionSep} />
-          <span className={sectionLabel}>Espacios</span>
 
           {/* ── Espacios section ── */}
           {[...espacioApps, ...uncategorized].map((app) => {

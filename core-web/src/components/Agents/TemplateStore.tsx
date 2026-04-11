@@ -45,6 +45,7 @@ export default function TemplateStore({ workspaceId, onClose, onCreated }: Templ
   const [personality, setPersonality] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState("gpt-5.4-mini");
 
   useEffect(() => {
     getAgentTemplates()
@@ -73,6 +74,7 @@ export default function TemplateStore({ workspaceId, onClose, onCreated }: Templ
       const agent = await createAgent(workspaceId, {
         name: agentName.trim(),
         template_slug: selectedTemplate.slug,
+        model: selectedModel,
         ...(supportsIdentity ? {
           role: selectedTemplate.name,
           backstory: backstory.trim() || undefined,
@@ -194,6 +196,22 @@ export default function TemplateStore({ workspaceId, onClose, onCreated }: Templ
                   className="w-full text-sm px-3 py-2 rounded-lg border border-border-gray bg-white focus:outline-none focus:ring-1 focus:ring-brand-primary"
                   autoFocus
                 />
+              </div>
+
+              {/* Model selector */}
+              <div>
+                <label className="block text-xs font-medium text-text-secondary mb-1.5">
+                  Modelo
+                </label>
+                <select
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  className="w-full text-sm px-3 py-2 rounded-lg border border-border-gray bg-white focus:outline-none focus:ring-1 focus:ring-brand-primary"
+                >
+                  <option value="gpt-5.4-mini">GPT-5.4 Mini (rapido)</option>
+                  <option value="gpt-5.3-codex">GPT-5.3 Codex (codigo)</option>
+                  <option value="gpt-5.4">GPT-5.4 (avanzado)</option>
+                </select>
               </div>
 
               {/* Identity fields (only for templates that support it) */}

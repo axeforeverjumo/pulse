@@ -191,7 +191,14 @@ export default function AgentConfigPanel({ agent, onAgentUpdate, onAgentDelete }
     }
   };
 
-  const model = (agent.config as { model?: string })?.model || "claude-opus-4-6";
+  const AVAILABLE_MODELS = [
+    { value: "gpt-5.4-mini", label: "GPT-5.4 Mini (rapido)" },
+    { value: "gpt-5.3-codex", label: "GPT-5.3 Codex (codigo)" },
+    { value: "gpt-5.4", label: "GPT-5.4 (avanzado)" },
+  ];
+  const [selectedModel, setSelectedModel] = useState(
+    agent.model || (agent.config as { model?: string })?.model || "gpt-5.4-mini"
+  );
 
   return (
     <div className="w-[280px] shrink-0 flex flex-col border-l border-border-light bg-[#FAFAFA] overflow-y-auto">
@@ -337,7 +344,24 @@ export default function AgentConfigPanel({ agent, onAgentUpdate, onAgentDelete }
         {/* Modelo */}
         <div>
           <p className="text-[11px] uppercase tracking-wide text-text-tertiary mb-1">Modelo</p>
-          <p className="text-xs text-text-body font-mono">{model}</p>
+          <select
+            value={selectedModel}
+            onChange={async (e) => {
+              const newModel = e.target.value;
+              setSelectedModel(newModel);
+              try {
+                const updated = await updateAgent(agent.id, { model: newModel } as any);
+                onAgentUpdate(updated);
+              } catch (err) {
+                console.error("Failed to update model:", err);
+              }
+            }}
+            className="w-full text-xs px-2 py-1.5 rounded-lg border border-border-light bg-white focus:outline-none focus:ring-1 focus:ring-brand-primary"
+          >
+            {AVAILABLE_MODELS.map((m) => (
+              <option key={m.value} value={m.value}>{m.label}</option>
+            ))}
+          </select>
         </div>
 
         {/* Tools */}

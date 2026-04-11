@@ -27,7 +27,17 @@ from api.services.agents.agents import (
     upload_agent_identity,
     upload_agent_avatar_to_storage,
 )
-from api.services.agents.templates import get_templates, get_template_by_slug
+from api.services.agents.templates import get_templates, get_template_by_slug, get_templates_by_department, increment_template_install_count
+from api.services.agents.skills import (
+    get_skills,
+    get_skill,
+    create_skill,
+    update_skill,
+    delete_skill,
+    get_agent_skills,
+    assign_skill,
+    unassign_skill,
+)
 from api.services.agents.sandbox_files import list_sandbox_files, read_sandbox_file
 
 logger = logging.getLogger(__name__)
@@ -69,6 +79,7 @@ class CreateAgentRequest(BaseModel):
     enabled_tools: Optional[List[str]] = None
     config: Optional[Dict[str, Any]] = None
     avatar_url: Optional[str] = None
+    model: Optional[str] = None
     # Identity fields (stored in identity.json in agent's personal Storage)
     role: Optional[str] = None
     backstory: Optional[str] = None
@@ -83,6 +94,23 @@ class UpdateAgentRequest(BaseModel):
     enabled_tools: Optional[List[str]] = None
     config: Optional[Dict[str, Any]] = None
     avatar_url: Optional[str] = None
+    model: Optional[str] = None
+
+
+class CreateSkillRequest(BaseModel):
+    """Request to create a new skill."""
+    name: str = Field(..., min_length=1, max_length=200)
+    content: str = Field(..., min_length=1)
+    description: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
+
+
+class UpdateSkillRequest(BaseModel):
+    """Request to update a skill."""
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    content: Optional[str] = None
+    description: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
 
 
 class InvokeAgentRequest(BaseModel):
@@ -238,6 +266,24 @@ async def list_templates(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/agent-templates/agencia", response_model=TemplateListResponse)
+async def list_agencia_templates(
+    department: Optional[str] = None,
+    search: Optional[str] = None,
+    featured: bool = False,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """List templates for the Agencia marketplace, with department/search filters."""
+    try:
+        templates = await get_templates_by_department(
+            user_jwt, department=department, search=search, featured_only=featured,
+        )
+        return {"templates": templates, "count": len(templates)}
+    except Exception as e:
+        logger.error(f"Error listing agencia templates: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/agent-templates/{slug}", response_model=TemplateResponse)
 async def get_template(
     slug: str,
@@ -331,7 +377,15 @@ async def create_new_agent(
             created_by=user_id,
             user_jwt=user_jwt,
             template_id=template_id,
+            model=request.model,
         )
+
+        # Increment template install count if created from template
+        if template_id:
+            try:
+                await increment_template_install_count(template_id, user_jwt)
+            except Exception:
+                pass  # Non-fatal
 
         # Upload identity.json to Storage if identity fields provided
         has_identity = any([request.backstory, request.objective, request.personality, request.role])
@@ -624,3 +678,123 @@ async def read_sandbox_file_endpoint(
     except Exception as e:
         logger.error(f"Error reading sandbox file: {e}")
         raise HTTPException(status_code=500, detail="Failed to read sandbox file")
+
+
+# =============================================================================
+# SKILLS ENDPOINTS
+# =============================================================================
+
+@router.get("/workspaces/{workspace_id}/skills")
+async def list_workspace_skills(
+    workspace_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """List all skills in a workspace."""
+    try:
+        skills = await get_skills(workspace_id, user_jwt)
+        return {"skills": skills, "count": len(skills)}
+    except Exception as e:
+        logger.error(f"Error listing skills: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/workspaces/{workspace_id}/skills")
+async def create_workspace_skill(
+    workspace_id: str,
+    request: CreateSkillRequest,
+    user_id: str = Depends(get_current_user_id),
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Create a new skill in a workspace."""
+    try:
+        skill = await create_skill(
+            workspace_id=workspace_id,
+            name=request.name,
+            content=request.content,
+            created_by=user_id,
+            user_jwt=user_jwt,
+            description=request.description,
+            config=request.config,
+        )
+        return skill
+    except Exception as e:
+        logger.error(f"Error creating skill: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.patch("/skills/{skill_id}")
+async def update_skill_endpoint(
+    skill_id: str,
+    request: UpdateSkillRequest,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Update a skill."""
+    try:
+        updates = request.model_dump(exclude_none=True)
+        if not updates:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        skill = await update_skill(skill_id, updates, user_jwt)
+        return skill
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating skill: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/skills/{skill_id}")
+async def delete_skill_endpoint(
+    skill_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Delete a skill."""
+    try:
+        await delete_skill(skill_id, user_jwt)
+        return {"status": "deleted"}
+    except Exception as e:
+        logger.error(f"Error deleting skill: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/agents/{agent_id}/skills")
+async def list_agent_skills_endpoint(
+    agent_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """List all skills assigned to an agent."""
+    try:
+        assignments = await get_agent_skills(agent_id, user_jwt)
+        return {"skills": assignments, "count": len(assignments)}
+    except Exception as e:
+        logger.error(f"Error listing agent skills: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/agents/{agent_id}/skills/{skill_id}/assign")
+async def assign_skill_endpoint(
+    agent_id: str,
+    skill_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Assign a skill to an agent."""
+    try:
+        assignment = await assign_skill(agent_id, skill_id, user_jwt)
+        return assignment
+    except Exception as e:
+        logger.error(f"Error assigning skill: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/agents/{agent_id}/skills/{skill_id}/unassign")
+async def unassign_skill_endpoint(
+    agent_id: str,
+    skill_id: str,
+    user_jwt: str = Depends(get_current_user_jwt),
+):
+    """Remove a skill from an agent."""
+    try:
+        await unassign_skill(agent_id, skill_id, user_jwt)
+        return {"status": "unassigned"}
+    except Exception as e:
+        logger.error(f"Error unassigning skill: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
